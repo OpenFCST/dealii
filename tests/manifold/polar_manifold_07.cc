@@ -13,7 +13,7 @@
 //
 // ---------------------------------------------------------------------
 
-// test get_normals_at_vertices for a SphericalManifold.
+// test get_normals_at_vertices for a PolarManifold.
 
 #include "../tests.h"
 #include <deal.II/base/logstream.h>
@@ -35,7 +35,7 @@ void test ()
 
   GridGenerator::hyper_ball(triangulation);
 
-  static const SphericalManifold<dim, spacedim> manifold;
+  static const PolarManifold<dim, spacedim> manifold;
   triangulation.set_all_manifold_ids_on_boundary(0);
   triangulation.set_manifold (0, manifold);
 
@@ -56,23 +56,33 @@ void test ()
       typename Manifold<dim,spacedim>::FaceVertexNormals n;
 
       for (unsigned int f=0; f<GeometryInfo<dim>::faces_per_cell; ++f)
-        if (cell->face(f)->at_boundary())
-          {
-            manifold.get_normals_at_vertices(cell->face(f), n);
+        {
+          const double xc = cell->face(f)->center()[0];
+          const double yc = cell->face(f)->center()[1];
+          const double rc = xc*xc + yc*yc;
 
-            for (unsigned int v=0; v<GeometryInfo<dim>::vertices_per_face; ++v)
-              {
-                Tensor<1,spacedim> dn = n[v]-manifold.normal_vector
-                                        (cell->face(f), cell->face(f)->vertex(v));
+          // We remove the cell on the top and on the bottom because verteces of thesese faces
+          // lie on the same parallel. This implies that normals in these points are not
+          // well defined in the case of polar coordinates.
 
-                if ( dn.norm() > 1e-10)
-                  deallog << "Error on vertex " << f << ", face "
-                          << cell->face(f) << ": " << dn << std::endl;
+          if (cell->face(f)->at_boundary() && rc>0.5)
+            {
+              manifold.get_normals_at_vertices(cell->face(f), n);
 
-                deallog.get_file_stream() << cell->face(f)->vertex(v)
-                                          << " " << n[v]*.1 << std::endl;
-              }
-          }
+              for (unsigned int v=0; v<GeometryInfo<dim>::vertices_per_face; ++v)
+                {
+                  Tensor<1,spacedim> dn = n[v]-manifold.normal_vector
+                                          (cell->face(f), cell->face(f)->vertex(v));
+
+                  if ( dn.norm() > 1e-10)
+                    deallog << "Error on vertex " << f << ", face "
+                            << cell->face(f) << ": " << dn << std::endl;
+
+                  deallog.get_file_stream() << cell->face(f)->vertex(v)
+                                            << " " << n[v]*.1 << std::endl;
+                }
+            }
+        }
     }
   deallog.get_file_stream() << "e" << std::endl;
 }
