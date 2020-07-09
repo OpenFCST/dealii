@@ -4,6 +4,7 @@ Why this fork of deal.II?
 This fork of deal.II is meant to add features to deal.II, the parent library of OpenFCST, in order to make the features the OpenFCST developers add to deal.II are included in the library.
 
 The fork contains the following key branches:
+
     * master: This branch is to be sync with the parent project dealii/master.
     * current: This branch is sync with master, but it also contains all new deal.II features developed by the OpenFCST group. This is the version that OpenFCST uses.
     * feature branches: Each one of these branches will implement a new feature which, once it is finalized, will be merged with dealii/master via pull request. The name of the branch should be person/feature
