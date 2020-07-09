@@ -25,6 +25,7 @@
 #include <deal.II/base/point.h>
 
 #include <deal.II/grid/cell_id.h>
+#include <deal.II/grid/reference_cell.h>
 #include <deal.II/grid/tria_iterator_base.h>
 #include <deal.II/grid/tria_iterator_selector.h>
 
@@ -1606,15 +1607,21 @@ public:
     const TriaIterator<TriaAccessor<structdim, dim, spacedim>> &o) const;
 
   /**
+   * Reference cell type of the current object.
+   */
+  ReferenceCell::Type
+  reference_cell_type() const;
+
+  /**
    * Number of vertices.
    */
-  inline unsigned int
+  unsigned int
   n_vertices() const;
 
   /**
    * Number of lines.
    */
-  inline unsigned int
+  unsigned int
   n_lines() const;
 
   /**
@@ -1622,21 +1629,21 @@ public:
    *
    * @note Only implemented for cells (dim==spacedim).
    */
-  inline unsigned int
+  unsigned int
   n_faces() const;
 
   /**
    * Return an object that can be thought of as an array containing all indices
    * from zero to n_vertices().
    */
-  inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  std_cxx20::ranges::iota_view<unsigned int, unsigned int>
   vertex_indices() const;
 
   /**
    * Return an object that can be thought of as an array containing all indices
    * from zero to n_lines().
    */
-  inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  std_cxx20::ranges::iota_view<unsigned int, unsigned int>
   line_indices() const;
 
   /**
@@ -1645,13 +1652,20 @@ public:
    *
    * @note Only implemented for cells (dim==spacedim).
    */
-  inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  std_cxx20::ranges::iota_view<unsigned int, unsigned int>
   face_indices() const;
 
   /**
    * @}
    */
 
+protected:
+  /**
+   * Return additional information related to the current geometric entity
+   * type.
+   */
+  inline const ReferenceCell::internal::Info::Base &
+  reference_cell_info() const;
 
 private:
   /**
@@ -2672,29 +2686,35 @@ public:
   used() const;
 
   /**
+   * Reference cell type of the current object.
+   */
+  ReferenceCell::Type
+  reference_cell_type() const;
+
+  /**
    * Number of vertices.
    */
-  inline unsigned int
+  unsigned int
   n_vertices() const;
 
   /**
    * Number of lines.
    */
-  inline unsigned int
+  unsigned int
   n_lines() const;
 
   /**
    * Return an object that can be thought of as an array containing all indices
    * from zero to n_vertices().
    */
-  inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  std_cxx20::ranges::iota_view<unsigned int, unsigned int>
   vertex_indices() const;
 
   /**
    * Return an object that can be thought of as an array containing all indices
    * from zero to n_lines().
    */
-  inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  std_cxx20::ranges::iota_view<unsigned int, unsigned int>
   line_indices() const;
 
 protected:
