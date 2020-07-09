@@ -59,17 +59,12 @@ DEAL_II_NAMESPACE_OPEN
 
 namespace FETools
 {
-  template <int dim,
-            int spacedim,
-            template <int, int> class DoFHandlerType1,
-            template <int, int> class DoFHandlerType2,
-            class InVector,
-            class OutVector>
+  template <int dim, int spacedim, class InVector, class OutVector>
   void
-  interpolate(const DoFHandlerType1<dim, spacedim> &dof1,
-              const InVector &                      u1,
-              const DoFHandlerType2<dim, spacedim> &dof2,
-              OutVector &                           u2)
+  interpolate(const DoFHandler<dim, spacedim> &dof1,
+              const InVector &                 u1,
+              const DoFHandler<dim, spacedim> &dof2,
+              OutVector &                      u2)
   {
     AffineConstraints<typename OutVector::value_type> dummy;
     dummy.close();
@@ -78,17 +73,12 @@ namespace FETools
 
 
 
-  template <int dim,
-            int spacedim,
-            template <int, int> class DoFHandlerType1,
-            template <int, int> class DoFHandlerType2,
-            class InVector,
-            class OutVector>
+  template <int dim, int spacedim, class InVector, class OutVector>
   void
   interpolate(
-    const DoFHandlerType1<dim, spacedim> &                   dof1,
+    const DoFHandler<dim, spacedim> &                        dof1,
     const InVector &                                         u1,
-    const DoFHandlerType2<dim, spacedim> &                   dof2,
+    const DoFHandler<dim, spacedim> &                        dof2,
     const AffineConstraints<typename OutVector::value_type> &constraints,
     OutVector &                                              u2)
   {
@@ -120,9 +110,9 @@ namespace FETools
     // this does not lead to
     // reallocation of memory
     Vector<typename OutVector::value_type> u1_local(
-      DoFTools::max_dofs_per_cell(dof1));
+      dof1.get_fe_collection().max_dofs_per_cell());
     Vector<typename OutVector::value_type> u2_local(
-      DoFTools::max_dofs_per_cell(dof2));
+      dof2.get_fe_collection().max_dofs_per_cell());
 
     // have a map for interpolation matrices.
     // Using a unique_ptr makes sure that the
@@ -132,16 +122,16 @@ namespace FETools
                       std::unique_ptr<FullMatrix<double>>>>
       interpolation_matrices;
 
-    typename DoFHandlerType1<dim, spacedim>::active_cell_iterator
+    typename DoFHandler<dim, spacedim>::active_cell_iterator
       cell1 = dof1.begin_active(),
       endc1 = dof1.end();
-    typename DoFHandlerType2<dim, spacedim>::active_cell_iterator
+    typename DoFHandler<dim, spacedim>::active_cell_iterator
       cell2 = dof2.begin_active(),
       endc2 = dof2.end();
     (void)endc2;
 
     std::vector<types::global_dof_index> dofs;
-    dofs.reserve(DoFTools::max_dofs_per_cell(dof2));
+    dofs.reserve(dof2.get_fe_collection().max_dofs_per_cell());
 
     u2 = typename OutVector::value_type(0.);
     OutVector touch_count(u2);
@@ -267,16 +257,12 @@ namespace FETools
 
 
 
-  template <int dim,
-            template <int, int> class DoFHandlerType,
-            class InVector,
-            class OutVector,
-            int spacedim>
+  template <int dim, class InVector, class OutVector, int spacedim>
   void
-  back_interpolate(const DoFHandlerType<dim, spacedim> &dof1,
-                   const InVector &                     u1,
-                   const FiniteElement<dim, spacedim> & fe2,
-                   OutVector &                          u1_interpolated)
+  back_interpolate(const DoFHandler<dim, spacedim> &   dof1,
+                   const InVector &                    u1,
+                   const FiniteElement<dim, spacedim> &fe2,
+                   OutVector &                         u1_interpolated)
   {
     Assert(dof1.get_fe(0).n_components() == fe2.n_components(),
            ExcDimensionMismatch(dof1.get_fe(0).n_components(),
@@ -300,14 +286,14 @@ namespace FETools
 #endif
 
     Vector<typename OutVector::value_type> u1_local(
-      DoFTools::max_dofs_per_cell(dof1));
+      dof1.get_fe_collection().max_dofs_per_cell());
     Vector<typename OutVector::value_type> u1_int_local(
-      DoFTools::max_dofs_per_cell(dof1));
+      dof1.get_fe_collection().max_dofs_per_cell());
 
     const types::subdomain_id subdomain_id =
       dof1.get_triangulation().locally_owned_subdomain();
 
-    typename DoFHandlerType<dim, spacedim>::active_cell_iterator
+    typename DoFHandler<dim, spacedim>::active_cell_iterator
       cell = dof1.begin_active(),
       endc = dof1.end();
 

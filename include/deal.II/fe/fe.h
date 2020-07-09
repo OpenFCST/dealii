@@ -640,9 +640,6 @@ class FESystem;
  * discussion above for details of this numbering.
  *
  * @ingroup febase fe
- *
- * @author Wolfgang Bangerth, Guido Kanschat, Ralf Hartmann, 1998, 2000, 2001,
- * 2005, 2015
  */
 template <int dim, int spacedim = dim>
 class FiniteElement : public Subscriptor, public FiniteElementData<dim>
@@ -676,8 +673,6 @@ public:
    * derived class that wants to store information computed once at the
    * beginning, needs to derive its own InternalData class from this class,
    * and return an object of the derived type through its get_data() function.
-   *
-   * @author Guido Kanschat, 2001; Wolfgang Bangerth, 2015.
    */
   class InternalDataBase
   {
@@ -1347,21 +1342,6 @@ public:
    */
   virtual std::vector<std::pair<unsigned int, unsigned int>>
   hp_quad_dof_identities(const FiniteElement<dim, spacedim> &fe_other) const;
-
-  /**
-   * Return whether this element dominates the one given as argument when they
-   * meet at a common face, whether it is the other way around, whether
-   * neither dominates, or if either could dominate.
-   *
-   * For a definition of domination, see FiniteElementDomination::Domination
-   * and in particular the
-   * @ref hp_paper "hp paper".
-   *
-   * @deprecated Use compare_for_domination() with `codim=1` instead.
-   */
-  DEAL_II_DEPRECATED virtual FiniteElementDomination::Domination
-  compare_for_face_domination(
-    const FiniteElement<dim, spacedim> &fe_other) const final;
 
   /**
    * Return whether this element dominates another one given as argument

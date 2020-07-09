@@ -128,8 +128,6 @@ class MappingQCache;
  * qualities if the transition between curved boundaries and flat interior
  * domains is spread over a larger range as the mesh is refined. This is
  * provided by the special manifold TransfiniteInterpolationManifold.
- *
- * @author Wolfgang Bangerth, 2015, Martin Kronbichler, 2017
  */
 template <int dim, int spacedim = dim>
 class MappingQGeneric : public Mapping<dim, spacedim>
@@ -410,7 +408,7 @@ public:
      * Unit tangential vectors. Used for the computation of boundary forms and
      * normal vectors.
      *
-     * This array has (dim-1)*GeometryInfo%<dim%>::%faces_per_cell entries. The
+     * This array has `(dim-1) * GeometryInfo::faces_per_cell` entries. The
      * first GeometryInfo::faces_per_cell contain the vectors in the first
      * tangential direction for each face; the second set of
      * GeometryInfo::faces_per_cell entries contain the vectors in the second

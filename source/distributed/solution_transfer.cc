@@ -161,7 +161,7 @@ namespace parallel
             cell_iterator &cell_,
           const typename Triangulation<dim, DoFHandlerType::space_dimension>::
             CellStatus status) { return this->pack_callback(cell_, status); },
-        /*returns_variable_size_data=*/DoFHandlerType::is_hp_dof_handler);
+        /*returns_variable_size_data=*/dof_handler->hp_capability_enabled);
     }
 
 
@@ -194,26 +194,6 @@ namespace parallel
       prepare_for_serialization(const std::vector<const VectorType *> &all_in)
     {
       prepare_for_coarsening_and_refinement(all_in);
-    }
-
-
-
-    template <int dim, typename VectorType, typename DoFHandlerType>
-    void
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::prepare_serialization(
-      const VectorType &in)
-    {
-      prepare_for_serialization(in);
-    }
-
-
-
-    template <int dim, typename VectorType, typename DoFHandlerType>
-    void
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::prepare_serialization(
-      const std::vector<const VectorType *> &all_in)
-    {
-      prepare_for_serialization(all_in);
     }
 
 
@@ -309,7 +289,7 @@ namespace parallel
         input_vectors.size());
 
       unsigned int fe_index = 0;
-      if (DoFHandlerType::is_hp_dof_handler)
+      if (dof_handler->hp_capability_enabled)
         {
           switch (status)
             {
@@ -365,6 +345,9 @@ namespace parallel
       const unsigned int dofs_per_cell =
         dof_handler->get_fe(fe_index).dofs_per_cell;
 
+      if (dofs_per_cell == 0)
+        return std::vector<char>(); // nothing to do for FE_Nothing
+
       auto it_input  = input_vectors.cbegin();
       auto it_output = dof_values.begin();
       for (; it_input != input_vectors.cend(); ++it_input, ++it_output)
@@ -394,7 +377,7 @@ namespace parallel
       typename DoFHandlerType::cell_iterator cell(*cell_, dof_handler);
 
       unsigned int fe_index = 0;
-      if (DoFHandlerType::is_hp_dof_handler)
+      if (dof_handler->hp_capability_enabled)
         {
           switch (status)
             {
@@ -436,6 +419,9 @@ namespace parallel
 
       const unsigned int dofs_per_cell =
         dof_handler->get_fe(fe_index).dofs_per_cell;
+
+      if (dofs_per_cell == 0)
+        return; // nothing to do for FE_Nothing
 
       const std::vector<::dealii::Vector<typename VectorType::value_type>>
         dof_values =

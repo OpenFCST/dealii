@@ -560,11 +560,11 @@ namespace MGTools
 
 
 
-  template <typename DoFHandlerType, typename SparsityPatternType>
+  template <int dim, int spacedim, typename SparsityPatternType>
   void
-  make_sparsity_pattern(const DoFHandlerType &dof,
-                        SparsityPatternType & sparsity,
-                        const unsigned int    level)
+  make_sparsity_pattern(const DoFHandler<dim, spacedim> &dof,
+                        SparsityPatternType &            sparsity,
+                        const unsigned int               level)
   {
     const types::global_dof_index n_dofs = dof.n_dofs(level);
     (void)n_dofs;
@@ -575,9 +575,9 @@ namespace MGTools
            ExcDimensionMismatch(sparsity.n_cols(), n_dofs));
 
     const unsigned int dofs_per_cell = dof.get_fe().dofs_per_cell;
-    std::vector<types::global_dof_index>   dofs_on_this_cell(dofs_per_cell);
-    typename DoFHandlerType::cell_iterator cell = dof.begin(level),
-                                           endc = dof.end(level);
+    std::vector<types::global_dof_index> dofs_on_this_cell(dofs_per_cell);
+    typename DoFHandler<dim, spacedim>::cell_iterator cell = dof.begin(level),
+                                                      endc = dof.end(level);
     for (; cell != endc; ++cell)
       if (dof.get_triangulation().locally_owned_subdomain() ==
             numbers::invalid_subdomain_id ||
@@ -1018,9 +1018,9 @@ namespace MGTools
 
 
 
-  template <typename DoFHandlerType, typename SparsityPatternType>
+  template <int dim, int spacedim, typename SparsityPatternType>
   void
-  make_interface_sparsity_pattern(const DoFHandlerType &   dof,
+  make_interface_sparsity_pattern(const DoFHandler<dim, spacedim> &dof,
                                   const MGConstrainedDoFs &mg_constrained_dofs,
                                   SparsityPatternType &    sparsity,
                                   const unsigned int       level)
@@ -1034,9 +1034,9 @@ namespace MGTools
            ExcDimensionMismatch(sparsity.n_cols(), n_dofs));
 
     const unsigned int dofs_per_cell = dof.get_fe().dofs_per_cell;
-    std::vector<types::global_dof_index>   dofs_on_this_cell(dofs_per_cell);
-    typename DoFHandlerType::cell_iterator cell = dof.begin(level),
-                                           endc = dof.end(level);
+    std::vector<types::global_dof_index> dofs_on_this_cell(dofs_per_cell);
+    typename DoFHandler<dim, spacedim>::cell_iterator cell = dof.begin(level),
+                                                      endc = dof.end(level);
     for (; cell != endc; ++cell)
       if (cell->is_locally_owned_on_level())
         {
@@ -1105,7 +1105,7 @@ namespace MGTools
                                 const DoFHandler<dim, spacedim> &,
                                 const ComponentMask &,
                                 std::vector<bool> &) =
-                  &DoFTools::extract_level_dofs<DoFHandler<dim, spacedim>>;
+                  &DoFTools::extract_level_dofs<dim, spacedim>;
 
                 std::vector<bool> tmp(n_components, false);
                 tmp[i]              = true;
@@ -1153,18 +1153,16 @@ namespace MGTools
 
 
 
-  template <typename DoFHandlerType>
+  template <int dim, int spacedim>
   void
   count_dofs_per_block(
-    const DoFHandlerType &                             dof_handler,
+    const DoFHandler<dim, spacedim> &                  dof_handler,
     std::vector<std::vector<types::global_dof_index>> &dofs_per_block,
     std::vector<unsigned int>                          target_block)
   {
-    const FiniteElement<DoFHandlerType::dimension,
-                        DoFHandlerType::space_dimension> &fe =
-      dof_handler.get_fe();
-    const unsigned int n_blocks = fe.n_blocks();
-    const unsigned int n_levels =
+    const FiniteElement<dim, spacedim> &fe       = dof_handler.get_fe();
+    const unsigned int                  n_blocks = fe.n_blocks();
+    const unsigned int                  n_levels =
       dof_handler.get_triangulation().n_global_levels();
 
     AssertDimension(dofs_per_block.size(), n_levels);
@@ -1213,10 +1211,10 @@ namespace MGTools
         for (unsigned int i = 0; i < n_blocks; ++i)
           {
             void (*fun_ptr)(const unsigned int level,
-                            const DoFHandlerType &,
+                            const DoFHandler<dim, spacedim> &,
                             const BlockMask &,
                             std::vector<bool> &) =
-              &DoFTools::extract_level_dofs<DoFHandlerType>;
+              &DoFTools::extract_level_dofs<dim, spacedim>;
 
             std::vector<bool> tmp(n_blocks, false);
             tmp[i]          = true;
@@ -1301,11 +1299,11 @@ namespace MGTools
       if (boundary_indices[i].size() == 0)
         boundary_indices[i] = IndexSet(dof.n_dofs(i));
 
-    const unsigned int n_components = DoFTools::n_components(dof);
+    const unsigned int n_components = dof.get_fe_collection().n_components();
     const bool         fe_is_system = (n_components != 1);
 
     std::vector<types::global_dof_index> local_dofs;
-    local_dofs.reserve(DoFTools::max_dofs_per_face(dof));
+    local_dofs.reserve(dof.get_fe_collection().max_dofs_per_face());
     std::fill(local_dofs.begin(), local_dofs.end(), numbers::invalid_dof_index);
 
     std::vector<std::vector<types::global_dof_index>> dofs_by_level(

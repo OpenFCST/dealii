@@ -38,8 +38,6 @@
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/tria_iterator.h>
 
-#include <deal.II/hp/dof_handler.h>
-
 #include <algorithm>
 #include <memory>
 #include <type_traits>
@@ -1253,8 +1251,6 @@ namespace FEValuesViews
    * FESubfaceValues object.
    *
    * @ingroup feaccess vector_valued
-   *
-   * @author Andrew McBride, 2009
    */
   template <int dim, int spacedim>
   class SymmetricTensor<2, dim, spacedim>
@@ -1542,8 +1538,6 @@ namespace FEValuesViews
    * to an FEValues, FEFaceValues or FESubfaceValues object.
    *
    * @ingroup feaccess vector_valued
-   *
-   * @author Denis Davydov, 2013, 2018
    */
   template <int dim, int spacedim>
   class Tensor<2, dim, spacedim>
@@ -1878,8 +1872,6 @@ namespace internal
     /**
      * A class whose specialization is used to define what FEValuesViews
      * object corresponds to the given FEValuesExtractors object.
-     *
-     * @author Luca Heltai, 2019.
      */
     template <int dim, int spacedim, typename Extractor>
     struct ViewType
@@ -1972,8 +1964,6 @@ namespace FEValuesViews
   /**
    * A templated alias that associates to a given Extractor class
    * the corresponding view in FEValuesViews.
-   *
-   * @author Luca Heltai, 2019.
    */
   template <int dim, int spacedim, typename Extractor>
   using View = typename dealii::internal::FEValuesViews::
@@ -2079,7 +2069,6 @@ namespace FEValuesViews
  *
  *
  * @ingroup feaccess
- * @author Wolfgang Bangerth, 1998, 2003, Guido Kanschat, 2001
  */
 template <int dim, int spacedim>
 class FEValuesBase : public Subscriptor
@@ -3444,8 +3433,6 @@ protected:
    * @note This class is an example of the
    * <a href="https://www.artima.com/cppsource/type_erasure.html">type
    * erasure</a> design pattern.
-   *
-   * @author Wolfgang Bangerth, 2003
    */
   class CellIteratorBase;
 
@@ -3610,7 +3597,6 @@ private:
  * see this class.
  *
  * @ingroup feaccess
- * @author Wolfgang Bangerth, 1998, Guido Kanschat, 2001
  */
 template <int dim, int spacedim = dim>
 class FEValues : public FEValuesBase<dim, spacedim>
@@ -3646,10 +3632,10 @@ public:
    * associated with this object. It is assumed that the finite element used
    * by the given cell is also the one used by this FEValues object.
    */
-  template <template <int, int> class DoFHandlerType, bool level_dof_access>
+  template <bool level_dof_access>
   void
-  reinit(const TriaIterator<DoFCellAccessor<DoFHandlerType<dim, spacedim>,
-                                            level_dof_access>> &cell);
+  reinit(
+    const TriaIterator<DoFCellAccessor<dim, spacedim, level_dof_access>> &cell);
 
   /**
    * Reinitialize the gradients, Jacobi determinants, etc for the given cell
@@ -3729,7 +3715,6 @@ private:
  * See FEValuesBase
  *
  * @ingroup feaccess
- * @author Wolfgang Bangerth, 1998, Guido Kanschat, 2000, 2001
  */
 template <int dim, int spacedim = dim>
 class FEFaceValuesBase : public FEValuesBase<dim, spacedim>
@@ -3826,7 +3811,6 @@ protected:
  * either of the neighboring cells.
  *
  * @ingroup feaccess
- * @author Wolfgang Bangerth, 1998, Guido Kanschat, 2000, 2001
  */
 template <int dim, int spacedim = dim>
 class FEFaceValues : public FEFaceValuesBase<dim, spacedim>
@@ -3868,11 +3852,11 @@ public:
    * Reinitialize the gradients, Jacobi determinants, etc for the face with
    * number @p face_no of @p cell and the given finite element.
    */
-  template <template <int, int> class DoFHandlerType, bool level_dof_access>
+  template <bool level_dof_access>
   void
-  reinit(const TriaIterator<DoFCellAccessor<DoFHandlerType<dim, spacedim>,
-                                            level_dof_access>> &cell,
-         const unsigned int                                     face_no);
+  reinit(
+    const TriaIterator<DoFCellAccessor<dim, spacedim, level_dof_access>> &cell,
+    const unsigned int face_no);
 
   /**
    * Reinitialize the gradients, Jacobi determinants, etc for face @p face
@@ -3880,11 +3864,11 @@ public:
    *
    * @note @p face must be one of @p cell's face iterators.
    */
-  template <template <int, int> class DoFHandlerType, bool level_dof_access>
+  template <bool level_dof_access>
   void
-  reinit(const TriaIterator<DoFCellAccessor<DoFHandlerType<dim, spacedim>,
-                                            level_dof_access>> &     cell,
-         const typename Triangulation<dim, spacedim>::face_iterator &face);
+  reinit(
+    const TriaIterator<DoFCellAccessor<dim, spacedim, level_dof_access>> &cell,
+    const typename Triangulation<dim, spacedim>::face_iterator &          face);
 
   /**
    * Reinitialize the gradients, Jacobi determinants, etc for the given face
@@ -3972,7 +3956,6 @@ private:
  * number corresponds to the number of the child of the neighboring face.
  *
  * @ingroup feaccess
- * @author Wolfgang Bangerth, 1998, Guido Kanschat, 2000, 2001
  */
 template <int dim, int spacedim = dim>
 class FESubfaceValues : public FEFaceValuesBase<dim, spacedim>
@@ -4018,23 +4001,23 @@ public:
    * associated with this object. It is assumed that the finite element used
    * by the given cell is also the one used by this FESubfaceValues object.
    */
-  template <template <int, int> class DoFHandlerType, bool level_dof_access>
+  template <bool level_dof_access>
   void
-  reinit(const TriaIterator<DoFCellAccessor<DoFHandlerType<dim, spacedim>,
-                                            level_dof_access>> &cell,
-         const unsigned int                                     face_no,
-         const unsigned int                                     subface_no);
+  reinit(
+    const TriaIterator<DoFCellAccessor<dim, spacedim, level_dof_access>> &cell,
+    const unsigned int face_no,
+    const unsigned int subface_no);
 
   /**
    * Alternative reinitialization function that takes, as arguments, iterators
    * to the face and subface instead of their numbers.
    */
-  template <template <int, int> class DoFHandlerType, bool level_dof_access>
+  template <bool level_dof_access>
   void
-  reinit(const TriaIterator<DoFCellAccessor<DoFHandlerType<dim, spacedim>,
-                                            level_dof_access>> &     cell,
-         const typename Triangulation<dim, spacedim>::face_iterator &face,
-         const typename Triangulation<dim, spacedim>::face_iterator &subface);
+  reinit(
+    const TriaIterator<DoFCellAccessor<dim, spacedim, level_dof_access>> &cell,
+    const typename Triangulation<dim, spacedim>::face_iterator &          face,
+    const typename Triangulation<dim, spacedim>::face_iterator &subface);
 
   /**
    * Reinitialize the gradients, Jacobi determinants, etc for the given

@@ -270,6 +270,15 @@ namespace Particles
      * function on the calling mpi process, and that falls within the part of
      * triangulation owned by this mpi process.
      *
+     * The ids of the resulting particles are assigned from the optional
+     * argument @p ids. If the vector of @p ids is empty, then the ids are
+     * computed automatically from the get_next_free_particle_index() onward.
+     * For example, if the method get_next_free_particle_index() returns n0,
+     * calling this function with two MPI processes each adding n1 and n2
+     * particles will result in the n1 particles added by process zero having
+     * ids equal to `[n0,n0+n1)`, and the n2 particles added by process one
+     * having ids `[n0+n1, n0+n1+n2)`.
+     *
      * @param[in] positions A vector of points that do not need to be on the
      * local processor, but have to be in the triangulation that is associated
      * with this ParticleHandler object.
@@ -290,19 +299,59 @@ namespace Particles
      * process that will own each of the particles, and it may therefore be
      * communication intensive.
      *
+     * @param[in] ids (Optional) A vector of ids to associate to each particle.
+     * If the vector is empty, the ids are assigned as a continuous range
+     * from the first available index, as documented above. If the vector is not
+     * empty, then its size must match the size of the @p positions vector.
+     *
      * @return A map from owner to IndexSet, that contains the local indices
      * of the points that were passed to this function on the calling mpi
      * process, and that falls within the part of triangulation owned by this
      * mpi process.
-     *
-     * @author Bruno Blais, Luca Heltai 2019
      */
     std::map<unsigned int, IndexSet>
     insert_global_particles(
       const std::vector<Point<spacedim>> &positions,
       const std::vector<std::vector<BoundingBox<spacedim>>>
-        &                                     global_bounding_boxes,
-      const std::vector<std::vector<double>> &properties = {});
+        &                                       global_bounding_boxes,
+      const std::vector<std::vector<double>> &  properties = {},
+      const std::vector<types::particle_index> &ids        = {});
+
+    /**
+     * Insert a number of particles into the collection of particles. This
+     * function takes a list of particles for which we don't know the associated
+     * cell iterator, and distributes them to the correct local particle
+     * collection of a procesor, by unpacking the locations, figuring out where
+     * to send the particles by calling
+     * GridTools::distributed_compute_point_locations(), and sending the
+     * particles to the corresponding process.
+     *
+     * In order to keep track of what mpi process received what particles, a map
+     * from mpi process to IndexSet is returned by the function. This IndexSet
+     * contains the local indices of the particles that were passed to this
+     * function on the calling mpi process, and that falls within the part of
+     * the triangulation owned by this mpi process.
+     *
+     * @param[in] particles A vector of particles that do not need to be on the
+     * local processor.
+     *
+     * @param[in] global_bounding_boxes A vector of vectors of bounding boxes.
+     * The bounding boxes `global_bboxes[rk]` describe which part of the mesh is
+     * locally owned by the mpi process with rank `rk`. The local description
+     * can be obtained from GridTools::compute_mesh_predicate_bounding_box(),
+     * and the global one can be obtained by passing the local ones to
+     * Utilities::MPI::all_gather().
+     *
+     * @return A map from owner to IndexSet, that contains the local indices
+     * of the points that were passed to this function on the calling mpi
+     * process, and that falls within the part of triangulation owned by this
+     * mpi process.
+     */
+    std::map<unsigned int, IndexSet>
+    insert_global_particles(
+      const std::vector<Particle<dim, spacedim>> &particles,
+      const std::vector<std::vector<BoundingBox<spacedim>>>
+        &global_bounding_boxes);
 
     /**
      * Set the position of the particles by using the values contained in the
@@ -346,8 +395,6 @@ namespace Particles
      * @param[in] displace_particles Control if the @p input_vector should
      * be interpreted as a displacement vector, or a vector of absolute
      * positions.
-     *
-     * @authors Luca Heltai, Bruno Blais, 2019.
      */
     template <class VectorType>
     typename std::enable_if<
@@ -375,8 +422,6 @@ namespace Particles
      * current position of the particle, thus displacing them by the
      * amount given by the function. When false, the position of the
      * particle is replaced by the value in the vector.
-     *
-     * @authors Bruno Blais, Luca Heltai (2019)
      */
     void
     set_particle_positions(const std::vector<Point<spacedim>> &new_positions,
@@ -400,8 +445,6 @@ namespace Particles
      * of the function to the current position of the particle, thus displacing
      * them by the amount given by the function. When false, the position of the
      * particle is replaced by the value of the function.
-     *
-     * @authors Bruno Blais, Luca Heltai (2019)
      */
     void
     set_particle_positions(const Function<spacedim> &function,
@@ -433,8 +476,6 @@ namespace Particles
      *
      * @param[in] add_to_output_vector Control if the function should set the
      * entries of the @p output_vector or if should add to them.
-     *
-     * @author Luca Heltai, Bruno Blais, 2019.
      */
     template <class VectorType>
     void
@@ -454,9 +495,6 @@ namespace Particles
      * the particles is added to the positions vector. When false,
      * the value of the points in the positions vector are replaced by the
      * position of the particles.
-     *
-     * @authors Bruno Blais, Luca Heltai (2019)
-     *
      */
     void
     get_particle_positions(std::vector<Point<spacedim>> &positions,
@@ -546,8 +584,6 @@ namespace Particles
      *
      * @return An IndexSet of size get_next_free_particle_index(), containing
      * n_locally_owned_particle() indices.
-     *
-     * @author Luca Heltai, Bruno Blais, 2019.
      */
     IndexSet
     locally_relevant_ids() const;
@@ -572,6 +608,12 @@ namespace Particles
      * After this function call every particle is either on its current
      * process and in its current cell, or deleted (if it could not find
      * its new process or cell).
+     *
+     * The user may attach a function to the signal
+     * Particles::ParticleHandler::Signals::particle_lost(). The signal is
+     * triggered whenever a particle is deleted, and the connected functions
+     * are called passing an iterator to the particle in question, and its last
+     * known cell association.
      */
     void
     sort_particles_into_subdomains_and_cells();

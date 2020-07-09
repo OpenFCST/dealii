@@ -24,13 +24,11 @@
 #include <deal.II/matrix_free/task_info.h>
 
 
-#ifdef DEAL_II_WITH_THREADS
+#ifdef DEAL_II_WITH_TBB
 #  include <tbb/blocked_range.h>
 #  include <tbb/parallel_for.h>
-#  define TBB_SUPPRESS_DEPRECATED_MESSAGES 1
 #  include <tbb/task.h>
 #  include <tbb/task_scheduler_init.h>
-#  undef TBB_SUPPRESS_DEPRECATED_MESSAGES
 #endif
 
 #include <iostream>
@@ -45,7 +43,7 @@ namespace internal
 {
   namespace MatrixFreeFunctions
   {
-#ifdef DEAL_II_WITH_THREADS
+#ifdef DEAL_II_WITH_TBB
 
     // This defines the TBB data structures that are needed to schedule the
     // partition-partition variant
@@ -331,7 +329,7 @@ namespace internal
       const bool         do_compress;
     };
 
-#endif // DEAL_II_WITH_THREADS
+#endif // DEAL_II_WITH_TBB
 
 
 
@@ -350,7 +348,7 @@ namespace internal
 
       funct.vector_update_ghosts_start();
 
-#ifdef DEAL_II_WITH_THREADS
+#ifdef DEAL_II_WITH_TBB
 
       if (scheme != none)
         {

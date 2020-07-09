@@ -40,8 +40,6 @@ namespace internal
   /**
    * An interface for the worker object that runs the various operations we
    * want to perform during the matrix-free loop.
-   *
-   * @author Katharina Kormann, Martin Kronbichler, 2018
    */
   struct MFWorkerInterface
   {
@@ -99,8 +97,6 @@ namespace internal
      * A struct that collects all information related to parallelization with
      * threads: The work is subdivided into tasks that can be done
      * independently.
-     *
-     * @author Katharina Kormann, Martin Kronbichler, 2011, 2018
      */
     struct TaskInfo
     {
@@ -579,11 +575,6 @@ namespace internal
        */
       unsigned int n_procs;
     };
-
-    /**
-     * Typedef to deprecated name.
-     */
-    using SizeInfo DEAL_II_DEPRECATED = TaskInfo;
 
   } // end of namespace MatrixFreeFunctions
 } // end of namespace internal

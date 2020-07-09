@@ -107,8 +107,6 @@ DEAL_II_NAMESPACE_OPEN
  * @ref matrixfree "matrix-free module".
  *
  * @ingroup matrixfree
- *
- * @author Katharina Kormann, Martin Kronbichler, 2010, 2011
  */
 
 template <int dim,
@@ -209,6 +207,9 @@ public:
       color = internal::MatrixFreeFunctions::TaskInfo::color
     };
 
+    // remove with level_mg_handler
+    DEAL_II_DISABLE_EXTRA_DIAGNOSTICS
+
     /**
      * Constructor for AdditionalData.
      */
@@ -268,6 +269,9 @@ public:
       , cell_vectorization_categories_strict(
           other.cell_vectorization_categories_strict)
     {}
+
+    // remove with level_mg_handler
+    DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
 
     /**
      * Copy assignment.
@@ -558,10 +562,10 @@ public:
    * not allowed. In that case, use the initialization function with
    * several DoFHandler arguments.
    */
-  template <typename DoFHandlerType, typename QuadratureType, typename number2>
+  template <typename QuadratureType, typename number2>
   void
   reinit(const Mapping<dim> &              mapping,
-         const DoFHandlerType &            dof_handler,
+         const DoFHandler<dim> &           dof_handler,
          const AffineConstraints<number2> &constraint,
          const QuadratureType &            quad,
          const AdditionalData &            additional_data = AdditionalData());
@@ -570,26 +574,10 @@ public:
    * Initializes the data structures. Same as above, but using a $Q_1$
    * mapping.
    */
-  template <typename DoFHandlerType, typename QuadratureType, typename number2>
+  template <typename QuadratureType, typename number2>
   void
-  reinit(const DoFHandlerType &            dof_handler,
+  reinit(const DoFHandler<dim> &           dof_handler,
          const AffineConstraints<number2> &constraint,
-         const QuadratureType &            quad,
-         const AdditionalData &            additional_data = AdditionalData());
-
-  /**
-   * Same as above.
-   *
-   * @deprecated Setting the index set specifically is not supported any
-   * more. Use the reinit function without index set argument to choose the
-   * one provided by DoFHandler::locally_owned_dofs().
-   */
-  template <typename DoFHandlerType, typename QuadratureType, typename number2>
-  DEAL_II_DEPRECATED void
-  reinit(const Mapping<dim> &              mapping,
-         const DoFHandlerType &            dof_handler,
-         const AffineConstraints<number2> &constraint,
-         const IndexSet &                  locally_owned_dofs,
          const QuadratureType &            quad,
          const AdditionalData &            additional_data = AdditionalData());
 
@@ -614,10 +602,23 @@ public:
    * can be sets independently from the number of DoFHandlers, when several
    * elements are always integrated with the same quadrature formula.
    */
-  template <typename DoFHandlerType, typename QuadratureType, typename number2>
+  template <typename QuadratureType, typename number2>
   void
   reinit(const Mapping<dim> &                                   mapping,
-         const std::vector<const DoFHandlerType *> &            dof_handler,
+         const std::vector<const DoFHandler<dim> *> &           dof_handler,
+         const std::vector<const AffineConstraints<number2> *> &constraint,
+         const std::vector<QuadratureType> &                    quad,
+         const AdditionalData &additional_data = AdditionalData());
+
+  /**
+   * Initializes the data structures. Same as above, but  using hp::DoFHandlers.
+   *
+   * @deprecated Use the overload taking a DoFHandler object instead.
+   */
+  template <typename QuadratureType, typename number2>
+  DEAL_II_DEPRECATED void
+  reinit(const Mapping<dim> &                                   mapping,
+         const std::vector<const hp::DoFHandler<dim> *> &       dof_handler_hp,
          const std::vector<const AffineConstraints<number2> *> &constraint,
          const std::vector<QuadratureType> &                    quad,
          const AdditionalData &additional_data = AdditionalData());
@@ -626,28 +627,24 @@ public:
    * Initializes the data structures. Same as above, but  using a $Q_1$
    * mapping.
    */
-  template <typename DoFHandlerType, typename QuadratureType, typename number2>
+  template <typename QuadratureType, typename number2>
   void
-  reinit(const std::vector<const DoFHandlerType *> &            dof_handler,
+  reinit(const std::vector<const DoFHandler<dim> *> &           dof_handler,
          const std::vector<const AffineConstraints<number2> *> &constraint,
          const std::vector<QuadratureType> &                    quad,
          const AdditionalData &additional_data = AdditionalData());
 
   /**
-   * Same as above.
+   * Initializes the data structures. Same as above, but  using hp::DoFHandlers.
    *
-   * @deprecated Setting the index set specifically is not supported any
-   * more. Use the reinit function without index set argument to choose the
-   * one provided by DoFHandler::locally_owned_dofs().
+   * @deprecated Use the overload taking a DoFHandler object instead.
    */
-  template <typename DoFHandlerType, typename QuadratureType, typename number2>
-  DEAL_II_DEPRECATED void
-  reinit(const Mapping<dim> &                                   mapping,
-         const std::vector<const DoFHandlerType *> &            dof_handler,
+  template <typename QuadratureType, typename number2>
+  void
+  reinit(const std::vector<const hp::DoFHandler<dim> *> &       dof_handler_hp,
          const std::vector<const AffineConstraints<number2> *> &constraint,
-         const std::vector<IndexSet> &      locally_owned_set,
-         const std::vector<QuadratureType> &quad,
-         const AdditionalData &             additional_data = AdditionalData());
+         const std::vector<QuadratureType> &                    quad,
+         const AdditionalData &additional_data = AdditionalData());
 
   /**
    * Initializes the data structures. Same as before, but now the index set
@@ -656,10 +653,23 @@ public:
    * as might be necessary when several components in a vector-valued problem
    * are integrated together based on the same quadrature formula.
    */
-  template <typename DoFHandlerType, typename QuadratureType, typename number2>
+  template <typename QuadratureType, typename number2>
   void
   reinit(const Mapping<dim> &                                   mapping,
-         const std::vector<const DoFHandlerType *> &            dof_handler,
+         const std::vector<const DoFHandler<dim> *> &           dof_handler,
+         const std::vector<const AffineConstraints<number2> *> &constraint,
+         const QuadratureType &                                 quad,
+         const AdditionalData &additional_data = AdditionalData());
+
+  /**
+   * Initializes the data structures. Same as above, but  using hp::DoFHandlers.
+   *
+   * @deprecated Use the overload taking a DoFHandler object instead.
+   */
+  template <typename QuadratureType, typename number2>
+  DEAL_II_DEPRECATED void
+  reinit(const Mapping<dim> &                                   mapping,
+         const std::vector<const hp::DoFHandler<dim> *> &       dof_handler_hp,
          const std::vector<const AffineConstraints<number2> *> &constraint,
          const QuadratureType &                                 quad,
          const AdditionalData &additional_data = AdditionalData());
@@ -668,9 +678,21 @@ public:
    * Initializes the data structures. Same as above, but  using a $Q_1$
    * mapping.
    */
-  template <typename DoFHandlerType, typename QuadratureType, typename number2>
+  template <typename QuadratureType, typename number2>
   void
-  reinit(const std::vector<const DoFHandlerType *> &            dof_handler,
+  reinit(const std::vector<const DoFHandler<dim> *> &           dof_handler,
+         const std::vector<const AffineConstraints<number2> *> &constraint,
+         const QuadratureType &                                 quad,
+         const AdditionalData &additional_data = AdditionalData());
+
+  /**
+   * Initializes the data structures. Same as above, but  using hp::DoFHandlers.
+   *
+   * @deprecated Use the overload taking a DoFHandler object instead.
+   */
+  template <typename QuadratureType, typename number2>
+  DEAL_II_DEPRECATED void
+  reinit(const std::vector<const hp::DoFHandler<dim> *> &       dof_handler_hp,
          const std::vector<const AffineConstraints<number2> *> &constraint,
          const QuadratureType &                                 quad,
          const AdditionalData &additional_data = AdditionalData());
@@ -728,12 +750,13 @@ public:
 
     /**
      * The loop does only involve FEFaceEvaluation access into neighbors by
-     * function values, such as `FEFaceEvaluation::gather_evaluate(src, true,
-     * false)`, but no access to shape function derivatives (which typically
-     * need to access more data). For FiniteElement types where only some of
-     * the shape functions have support on a face, such as an FE_DGQ element
-     * with Lagrange polynomials with nodes on the element surface, the data
-     * exchange is reduced from `(k+1)^dim` to `(k+1)^(dim-1)`.
+     * function values, such as FEFaceEvaluation::gather_evaluate() with
+     * argument EvaluationFlags::values, but no access to shape function
+     * derivatives (which typically need to access more data). For FiniteElement
+     * types where only some of the shape functions have support on a face, such
+     * as an FE_DGQ element with Lagrange polynomials with nodes on the element
+     * surface, the data exchange is reduced from `(k+1)^dim` to
+     * `(k+1)^(dim-1)`.
      */
     values,
 
@@ -750,12 +773,12 @@ public:
     /**
      * The loop does involve FEFaceEvaluation access into neighbors by
      * function values and gradients, but no second derivatives, such as
-     * `FEFaceEvaluation::gather_evaluate(src, true, true)`. For
-     * FiniteElement types where only some of the shape functions have
-     * non-zero value and first derivative on a face, such as an FE_DGQHermite
-     * element, the data exchange is reduced, e.g. from `(k+1)^dim` to
-     * `2(k+1)^(dim-1)`. Note that for bases that do not have this special
-     * property, the full neighboring data is sent anyway.
+     * FEFaceEvaluation::gather_evaluate() with EvaluationFlags::values and
+     * EvaluationFlags::gradients set. For FiniteElement types where only some
+     * of the shape functions have non-zero value and first derivative on a
+     * face, such as an FE_DGQHermite element, the data exchange is reduced,
+     * e.g. from `(k+1)^dim` to `2(k+1)^(dim-1)`. Note that for bases that do
+     * not have this special property, the full neighboring data is sent anyway.
      */
     gradients,
 
@@ -1707,7 +1730,7 @@ public:
    * different MPI processors need to be accessed at a certain time when
    * accessing remote data and overlapping communication with computation.
    */
-  typename hp::DoFHandler<dim>::active_cell_iterator
+  typename DoFHandler<dim>::active_cell_iterator
   get_hp_cell_iterator(const unsigned int macro_cell_number,
                        const unsigned int vector_number,
                        const unsigned int dof_handler_index = 0) const;
@@ -1984,11 +2007,11 @@ private:
    * This is the actual reinit function that sets up the indices for the
    * DoFHandler case.
    */
-  template <typename number2, template <int, int> class DoFHandlerType>
+  template <typename number2>
   void
   internal_reinit(
     const Mapping<dim> &                                   mapping,
-    const std::vector<const DoFHandlerType<dim, dim> *> &  dof_handler,
+    const std::vector<const DoFHandler<dim, dim> *> &      dof_handlers,
     const std::vector<const AffineConstraints<number2> *> &constraint,
     const std::vector<IndexSet> &                          locally_owned_set,
     const std::vector<hp::QCollection<1>> &                quad,
@@ -2012,56 +2035,13 @@ private:
    */
   void
   initialize_dof_handlers(
-    const std::vector<const DoFHandler<dim> *> &dof_handlers,
-    const AdditionalData &                      additional_data);
-
-  /**
-   * Initializes the DoFHandlers based on a hp::DoFHandler<dim> argument.
-   */
-  void
-  initialize_dof_handlers(
-    const std::vector<const hp::DoFHandler<dim> *> &dof_handlers,
-    const AdditionalData &                          additional_data);
-
-  /**
-   * Setup connectivity graph with information on the dependencies between
-   * block due to shared faces.
-   */
-  void
-  make_connectivity_graph_faces(DynamicSparsityPattern &connectivity);
-
-  /**
-   * This struct defines which DoFHandler has actually been given at
-   * construction, in order to define the correct behavior when querying the
-   * underlying DoFHandler.
-   */
-  struct DoFHandlers
-  {
-    DoFHandlers()
-      : active_dof_handler(usual)
-      , n_dof_handlers(0)
-    {}
-
-    std::vector<SmartPointer<const DoFHandler<dim>>>     dof_handler;
-    std::vector<SmartPointer<const hp::DoFHandler<dim>>> hp_dof_handler;
-    enum ActiveDoFHandler
-    {
-      /**
-       * Use DoFHandler.
-       */
-      usual,
-      /**
-       * Use hp::DoFHandler.
-       */
-      hp
-    } active_dof_handler;
-    unsigned int n_dof_handlers;
-  };
+    const std::vector<const DoFHandler<dim, dim> *> &dof_handlers,
+    const AdditionalData &                           additional_data);
 
   /**
    * Pointers to the DoFHandlers underlying the current problem.
    */
-  DoFHandlers dof_handlers;
+  std::vector<SmartPointer<const DoFHandler<dim>>> dof_handlers;
 
   /**
    * Contains the information about degrees of freedom on the individual cells
@@ -2221,8 +2201,8 @@ template <int dim, typename Number, typename VectorizedArrayType>
 inline unsigned int
 MatrixFree<dim, Number, VectorizedArrayType>::n_components() const
 {
-  AssertDimension(dof_handlers.n_dof_handlers, dof_info.size());
-  return dof_handlers.n_dof_handlers;
+  AssertDimension(dof_handlers.size(), dof_info.size());
+  return dof_handlers.size();
 }
 
 
@@ -2232,9 +2212,9 @@ inline unsigned int
 MatrixFree<dim, Number, VectorizedArrayType>::n_base_elements(
   const unsigned int dof_no) const
 {
-  AssertDimension(dof_handlers.n_dof_handlers, dof_info.size());
-  AssertIndexRange(dof_no, dof_handlers.n_dof_handlers);
-  return dof_handlers.dof_handler[dof_no]->get_fe().n_base_elements();
+  AssertDimension(dof_handlers.size(), dof_info.size());
+  AssertIndexRange(dof_no, dof_handlers.size());
+  return dof_handlers[dof_no]->get_fe().n_base_elements();
 }
 
 
@@ -2803,22 +2783,6 @@ namespace internal
 {
   namespace MatrixFreeImplementation
   {
-    template <typename DoFHandlerType>
-    inline std::vector<IndexSet>
-    extract_locally_owned_index_sets(
-      const std::vector<const DoFHandlerType *> &dofh,
-      const unsigned int                         level)
-    {
-      std::vector<IndexSet> locally_owned_set;
-      locally_owned_set.reserve(dofh.size());
-      for (unsigned int j = 0; j < dofh.size(); j++)
-        if (level == numbers::invalid_unsigned_int)
-          locally_owned_set.push_back(dofh[j]->locally_owned_dofs());
-        else
-          AssertThrow(false, ExcNotImplemented());
-      return locally_owned_set;
-    }
-
     template <int dim, int spacedim>
     inline std::vector<IndexSet>
     extract_locally_owned_index_sets(
@@ -2840,16 +2804,16 @@ namespace internal
 
 
 template <int dim, typename Number, typename VectorizedArrayType>
-template <typename DoFHandlerType, typename QuadratureType, typename number2>
+template <typename QuadratureType, typename number2>
 void
 MatrixFree<dim, Number, VectorizedArrayType>::reinit(
-  const DoFHandlerType &            dof_handler,
+  const DoFHandler<dim> &           dof_handler,
   const AffineConstraints<number2> &constraints_in,
   const QuadratureType &            quad,
   const typename MatrixFree<dim, Number, VectorizedArrayType>::AdditionalData
     &additional_data)
 {
-  std::vector<const DoFHandlerType *>             dof_handlers;
+  std::vector<const DoFHandler<dim, dim> *>       dof_handlers;
   std::vector<const AffineConstraints<number2> *> constraints;
   std::vector<QuadratureType>                     quads;
 
@@ -2875,17 +2839,17 @@ MatrixFree<dim, Number, VectorizedArrayType>::reinit(
 
 
 template <int dim, typename Number, typename VectorizedArrayType>
-template <typename DoFHandlerType, typename QuadratureType, typename number2>
+template <typename QuadratureType, typename number2>
 void
 MatrixFree<dim, Number, VectorizedArrayType>::reinit(
   const Mapping<dim> &              mapping,
-  const DoFHandlerType &            dof_handler,
+  const DoFHandler<dim> &           dof_handler,
   const AffineConstraints<number2> &constraints_in,
   const QuadratureType &            quad,
   const typename MatrixFree<dim, Number, VectorizedArrayType>::AdditionalData
     &additional_data)
 {
-  std::vector<const DoFHandlerType *>             dof_handlers;
+  std::vector<const DoFHandler<dim, dim> *>       dof_handlers;
   std::vector<const AffineConstraints<number2> *> constraints;
 
   dof_handlers.push_back(&dof_handler);
@@ -2909,10 +2873,10 @@ MatrixFree<dim, Number, VectorizedArrayType>::reinit(
 
 
 template <int dim, typename Number, typename VectorizedArrayType>
-template <typename DoFHandlerType, typename QuadratureType, typename number2>
+template <typename QuadratureType, typename number2>
 void
 MatrixFree<dim, Number, VectorizedArrayType>::reinit(
-  const std::vector<const DoFHandlerType *> &            dof_handler,
+  const std::vector<const DoFHandler<dim> *> &           dof_handler,
   const std::vector<const AffineConstraints<number2> *> &constraint,
   const std::vector<QuadratureType> &                    quad,
   const typename MatrixFree<dim, Number, VectorizedArrayType>::AdditionalData
@@ -2935,10 +2899,30 @@ MatrixFree<dim, Number, VectorizedArrayType>::reinit(
 
 
 template <int dim, typename Number, typename VectorizedArrayType>
-template <typename DoFHandlerType, typename QuadratureType, typename number2>
+template <typename QuadratureType, typename number2>
 void
 MatrixFree<dim, Number, VectorizedArrayType>::reinit(
-  const std::vector<const DoFHandlerType *> &            dof_handler,
+  const Mapping<dim> &                                   mapping,
+  const std::vector<const hp::DoFHandler<dim> *> &       dof_handler_hp,
+  const std::vector<const AffineConstraints<number2> *> &constraint,
+  const std::vector<QuadratureType> &                    quad,
+  const AdditionalData &                                 additional_data)
+{
+  std::vector<const DoFHandler<dim> *> dof_handlers;
+
+  for (const auto dof_handler : dof_handler_hp)
+    dof_handlers.push_back(dof_handler);
+
+  this->reinit(mapping, dof_handlers, constraint, quad, additional_data);
+}
+
+
+
+template <int dim, typename Number, typename VectorizedArrayType>
+template <typename QuadratureType, typename number2>
+void
+MatrixFree<dim, Number, VectorizedArrayType>::reinit(
+  const std::vector<const DoFHandler<dim> *> &           dof_handler,
   const std::vector<const AffineConstraints<number2> *> &constraint,
   const QuadratureType &                                 quad,
   const typename MatrixFree<dim, Number, VectorizedArrayType>::AdditionalData
@@ -2960,11 +2944,30 @@ MatrixFree<dim, Number, VectorizedArrayType>::reinit(
 
 
 template <int dim, typename Number, typename VectorizedArrayType>
-template <typename DoFHandlerType, typename QuadratureType, typename number2>
+template <typename QuadratureType, typename number2>
+void
+MatrixFree<dim, Number, VectorizedArrayType>::reinit(
+  const std::vector<const hp::DoFHandler<dim> *> &       dof_handler_hp,
+  const std::vector<const AffineConstraints<number2> *> &constraint,
+  const std::vector<QuadratureType> &                    quad,
+  const AdditionalData &                                 additional_data)
+{
+  std::vector<const DoFHandler<dim> *> dof_handlers;
+
+  for (const auto dof_handler : dof_handler_hp)
+    dof_handlers.push_back(dof_handler);
+
+  this->reinit(dof_handlers, constraint, quad, additional_data);
+}
+
+
+
+template <int dim, typename Number, typename VectorizedArrayType>
+template <typename QuadratureType, typename number2>
 void
 MatrixFree<dim, Number, VectorizedArrayType>::reinit(
   const Mapping<dim> &                                   mapping,
-  const std::vector<const DoFHandlerType *> &            dof_handler,
+  const std::vector<const DoFHandler<dim> *> &           dof_handler,
   const std::vector<const AffineConstraints<number2> *> &constraint,
   const QuadratureType &                                 quad,
   const typename MatrixFree<dim, Number, VectorizedArrayType>::AdditionalData
@@ -2986,11 +2989,11 @@ MatrixFree<dim, Number, VectorizedArrayType>::reinit(
 
 
 template <int dim, typename Number, typename VectorizedArrayType>
-template <typename DoFHandlerType, typename QuadratureType, typename number2>
+template <typename QuadratureType, typename number2>
 void
 MatrixFree<dim, Number, VectorizedArrayType>::reinit(
   const Mapping<dim> &                                   mapping,
-  const std::vector<const DoFHandlerType *> &            dof_handler,
+  const std::vector<const DoFHandler<dim> *> &           dof_handler,
   const std::vector<const AffineConstraints<number2> *> &constraint,
   const std::vector<QuadratureType> &                    quad,
   const typename MatrixFree<dim, Number, VectorizedArrayType>::AdditionalData
@@ -3013,27 +3016,40 @@ MatrixFree<dim, Number, VectorizedArrayType>::reinit(
 
 
 template <int dim, typename Number, typename VectorizedArrayType>
-template <typename DoFHandlerType, typename QuadratureType, typename number2>
+template <typename QuadratureType, typename number2>
 void
 MatrixFree<dim, Number, VectorizedArrayType>::reinit(
   const Mapping<dim> &                                   mapping,
-  const std::vector<const DoFHandlerType *> &            dof_handler,
+  const std::vector<const hp::DoFHandler<dim> *> &       dof_handler_hp,
   const std::vector<const AffineConstraints<number2> *> &constraint,
-  const std::vector<IndexSet> &                          locally_owned_set,
-  const std::vector<QuadratureType> &                    quad,
-  const typename MatrixFree<dim, Number, VectorizedArrayType>::AdditionalData
-    &additional_data)
+  const QuadratureType &                                 quad,
+  const AdditionalData &                                 additional_data)
 {
-  // find out whether we use a hp Quadrature or a standard quadrature
-  std::vector<hp::QCollection<1>> quad_hp;
-  for (unsigned int q = 0; q < quad.size(); ++q)
-    quad_hp.emplace_back(quad[q]);
-  internal_reinit(mapping,
-                  dof_handler,
-                  constraint,
-                  locally_owned_set,
-                  quad_hp,
-                  additional_data);
+  std::vector<const DoFHandler<dim> *> dof_handlers;
+
+  for (const auto dof_handler : dof_handler_hp)
+    dof_handlers.push_back(dof_handler);
+
+  this->reinit(mapping, dof_handlers, constraint, quad, additional_data);
+}
+
+
+
+template <int dim, typename Number, typename VectorizedArrayType>
+template <typename QuadratureType, typename number2>
+void
+MatrixFree<dim, Number, VectorizedArrayType>::reinit(
+  const std::vector<const hp::DoFHandler<dim> *> &       dof_handler_hp,
+  const std::vector<const AffineConstraints<number2> *> &constraint,
+  const QuadratureType &                                 quad,
+  const AdditionalData &                                 additional_data)
+{
+  std::vector<const DoFHandler<dim> *> dof_handlers;
+
+  for (const auto dof_handler : dof_handler_hp)
+    dof_handlers.push_back(dof_handler);
+
+  this->reinit(dof_handlers, constraint, quad, additional_data);
 }
 
 

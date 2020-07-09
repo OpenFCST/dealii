@@ -27,7 +27,7 @@
 #  include <deal.II/base/thread_local_storage.h>
 #  include <deal.II/base/thread_management.h>
 
-#  ifdef DEAL_II_WITH_THREADS
+#  ifdef DEAL_II_WITH_TBB
 #    include <tbb/pipeline.h>
 #  endif
 
@@ -152,11 +152,10 @@ DEAL_II_NAMESPACE_OPEN
  * simply work on each item sequentially.
  *
  * @ingroup threads
- * @author Wolfgang Bangerth, 2007, 2008, 2009, 2013. Bruno Turcksin, 2013.
  */
 namespace WorkStream
 {
-#  ifdef DEAL_II_WITH_THREADS
+#  ifdef DEAL_II_WITH_TBB
 
   namespace internal
   {
@@ -209,6 +208,13 @@ namespace WorkStream
             ScratchDataObject(ScratchData *p, const bool in_use)
               : scratch_data(p)
               , currently_in_use(in_use)
+            {}
+
+            // Provide a copy constructor that actually doesn't copy the
+            // internal state. This makes handling ScratchAndCopyDataObjects
+            // easier to handle with STL containers.
+            ScratchDataObject(const ScratchDataObject &)
+              : currently_in_use(false)
             {}
 
             ScratchDataObject(ScratchDataObject &&o) noexcept = default;
@@ -710,19 +716,11 @@ namespace WorkStream
           , currently_in_use(in_use)
         {}
 
-        // TODO: when we push back an object to the list of scratch objects, in
-        //      Worker::operator(), we first create an object and then copy
-        //      it to the end of this list. this involves having two objects
-        //      of the current type having pointers to it, each with their own
-        //      currently_in_use flag. there is probably little harm in this
-        //      because the original one goes out of scope right away again, but
-        //      it's certainly awkward. one way to avoid this would be to use
-        //      unique_ptr but we'd need to figure out a way to use it in
-        //      non-C++11 mode
-        ScratchAndCopyDataObjects(const ScratchAndCopyDataObjects &o)
-          : scratch_data(o.scratch_data)
-          , copy_data(o.copy_data)
-          , currently_in_use(o.currently_in_use)
+        // Provide a copy constructor that actually doesn't copy the
+        // internal state. This makes handling ScratchAndCopyDataObjects
+        // easier to handle with STL containers.
+        ScratchAndCopyDataObjects(const ScratchAndCopyDataObjects &)
+          : currently_in_use(false)
         {}
       };
 
@@ -881,7 +879,7 @@ namespace WorkStream
   } // namespace internal
 
 
-#  endif // DEAL_II_WITH_THREADS
+#  endif // DEAL_II_WITH_TBB
 
 
   /**
@@ -1024,7 +1022,7 @@ namespace WorkStream
 
       // we want to use TBB if we have support and if it is not disabled at
       // runtime:
-#  ifdef DEAL_II_WITH_THREADS
+#  ifdef DEAL_II_WITH_TBB
     if (MultithreadInfo::n_threads() == 1)
 #  endif
       {
@@ -1044,7 +1042,7 @@ namespace WorkStream
               copier(copy_data);
           }
       }
-#  ifdef DEAL_II_WITH_THREADS
+#  ifdef DEAL_II_WITH_TBB
     else // have TBB and use more than one thread
       {
         // Check that the copier exist
@@ -1199,7 +1197,7 @@ namespace WorkStream
 
     // we want to use TBB if we have support and if it is not disabled at
     // runtime:
-#  ifdef DEAL_II_WITH_THREADS
+#  ifdef DEAL_II_WITH_TBB
     if (MultithreadInfo::n_threads() == 1)
 #  endif
       {
@@ -1223,7 +1221,7 @@ namespace WorkStream
                 copier(copy_data);
             }
       }
-#  ifdef DEAL_II_WITH_THREADS
+#  ifdef DEAL_II_WITH_TBB
     else // have TBB and use more than one thread
       {
         // loop over the various colors of what we're given

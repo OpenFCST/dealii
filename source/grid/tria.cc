@@ -421,10 +421,7 @@ namespace
       {
         std::vector<unsigned int> line_cell_count(triangulation.n_raw_lines(),
                                                   0);
-        typename Triangulation<dim, spacedim>::cell_iterator
-          cell = triangulation.begin(),
-          endc = triangulation.end();
-        for (; cell != endc; ++cell)
+        for (const auto &cell : triangulation.cell_iterators())
           for (unsigned int l = 0; l < GeometryInfo<dim>::lines_per_cell; ++l)
             ++line_cell_count[cell->line_index(l)];
         return line_cell_count;
@@ -449,10 +446,7 @@ namespace
       {
         std::vector<unsigned int> quad_cell_count(triangulation.n_raw_quads(),
                                                   0);
-        typename Triangulation<dim, spacedim>::cell_iterator
-          cell = triangulation.begin(),
-          endc = triangulation.end();
-        for (; cell != endc; ++cell)
+        for (const auto &cell : triangulation.cell_iterators())
           for (unsigned int q : GeometryInfo<dim>::face_indices())
             ++quad_cell_count[cell->quad_index(q)];
         return quad_cell_count;
@@ -634,10 +628,7 @@ namespace
   collect_distorted_coarse_cells(const Triangulation<dim, dim> &triangulation)
   {
     typename Triangulation<dim, dim>::DistortedCellList distorted_cells;
-    for (typename Triangulation<dim, dim>::cell_iterator cell =
-           triangulation.begin(0);
-         cell != triangulation.end(0);
-         ++cell)
+    for (const auto &cell : triangulation.cell_iterators_on_level(0))
       {
         Point<dim> vertices[GeometryInfo<dim>::vertices_per_cell];
         for (const unsigned int i : GeometryInfo<dim>::vertex_indices())
@@ -798,11 +789,7 @@ namespace
     std::vector<typename Triangulation<dim, spacedim>::cell_iterator>
       adjacent_cells(2 * triangulation.n_raw_faces(), dummy);
 
-    typename Triangulation<dim, spacedim>::cell_iterator cell = triangulation
-                                                                  .begin(),
-                                                         endc =
-                                                           triangulation.end();
-    for (; cell != endc; ++cell)
+    for (const auto &cell : triangulation.cell_iterators())
       for (auto f : GeometryInfo<dim>::face_indices())
         {
           const typename Triangulation<dim, spacedim>::face_iterator face =
@@ -882,7 +869,7 @@ namespace
     // have to use the opposite of the
     // left_right_offset in this case as we want
     // the offset of the neighbor, not our own.
-    for (cell = triangulation.begin(); cell != endc; ++cell)
+    for (const auto &cell : triangulation.cell_iterators())
       for (auto f : GeometryInfo<dim>::face_indices())
         {
           const unsigned int offset =
@@ -1305,6 +1292,473 @@ namespace internal
       << ", " << arg2 << ", " << arg3 << " and " << arg4
       << " appears multiple times with different (valid) " << arg5
       << ". This is not allowed.");
+
+    /*
+     * Reserve space for TriaFaces. Details:
+     *
+     * Reserve space for line_orientations.
+     *
+     * @note Used only for dim=3.
+     */
+    void
+    reserve_space(TriaFaces &        tria_faces,
+                  const unsigned int new_quads_in_pairs,
+                  const unsigned int new_quads_single)
+    {
+      AssertDimension(tria_faces.dim, 3);
+
+      Assert(new_quads_in_pairs % 2 == 0, ExcInternalError());
+
+      unsigned int next_free_single = 0;
+      unsigned int next_free_pair   = 0;
+
+      // count the number of objects, of unused single objects and of
+      // unused pairs of objects
+      unsigned int n_quads          = 0;
+      unsigned int n_unused_pairs   = 0;
+      unsigned int n_unused_singles = 0;
+      for (unsigned int i = 0; i < tria_faces.quads.used.size(); ++i)
+        {
+          if (tria_faces.quads.used[i])
+            ++n_quads;
+          else if (i + 1 < tria_faces.quads.used.size())
+            {
+              if (tria_faces.quads.used[i + 1])
+                {
+                  ++n_unused_singles;
+                  if (next_free_single == 0)
+                    next_free_single = i;
+                }
+              else
+                {
+                  ++n_unused_pairs;
+                  if (next_free_pair == 0)
+                    next_free_pair = i;
+                  ++i;
+                }
+            }
+          else
+            ++n_unused_singles;
+        }
+      Assert(n_quads + 2 * n_unused_pairs + n_unused_singles ==
+               tria_faces.quads.used.size(),
+             ExcInternalError());
+
+      // how many single quads are needed in addition to n_unused_quads?
+      const int additional_single_quads = new_quads_single - n_unused_singles;
+
+      unsigned int new_size =
+        tria_faces.quads.used.size() + new_quads_in_pairs - 2 * n_unused_pairs;
+      if (additional_single_quads > 0)
+        new_size += additional_single_quads;
+
+      // see above...
+      if (new_size > tria_faces.quads.n_objects())
+        {
+          // reserve the field of the derived class
+          tria_faces.quads_line_orientations.reserve(
+            new_size * GeometryInfo<2>::lines_per_cell);
+          tria_faces.quads_line_orientations.insert(
+            tria_faces.quads_line_orientations.end(),
+            new_size * GeometryInfo<2>::lines_per_cell -
+              tria_faces.quads_line_orientations.size(),
+            true);
+        }
+    }
+
+
+
+    /**
+     * Reserve space for TriaLevel. Details:
+     *
+     * Reserve enough space to accommodate @p total_cells cells on this
+     * level. Since there are no @p used flags on this level, you have to
+     * give the total number of cells, not only the number of newly to
+     * accommodate ones, like in the <tt>TriaLevel<N>::reserve_space</tt>
+     * functions, with <tt>N>0</tt>.
+     *
+     * Since the number of neighbors per cell depends on the dimensions, you
+     * have to pass that additionally.
+     */
+
+    void
+    reserve_space(TriaLevel &        tria_level,
+                  const unsigned int total_cells,
+                  const unsigned int dimension,
+                  const unsigned int space_dimension)
+    {
+      // we need space for total_cells cells. Maybe we have more already
+      // with those cells which are unused, so only allocate new space if
+      // needed.
+      //
+      // note that all arrays should have equal sizes (checked by
+      // @p{monitor_memory}
+      if (total_cells > tria_level.refine_flags.size())
+        {
+          tria_level.refine_flags.reserve(total_cells);
+          tria_level.refine_flags.insert(tria_level.refine_flags.end(),
+                                         total_cells -
+                                           tria_level.refine_flags.size(),
+                                         /*RefinementCase::no_refinement=*/0);
+
+          tria_level.coarsen_flags.reserve(total_cells);
+          tria_level.coarsen_flags.insert(tria_level.coarsen_flags.end(),
+                                          total_cells -
+                                            tria_level.coarsen_flags.size(),
+                                          false);
+
+          tria_level.active_cell_indices.reserve(total_cells);
+          tria_level.active_cell_indices.insert(
+            tria_level.active_cell_indices.end(),
+            total_cells - tria_level.active_cell_indices.size(),
+            numbers::invalid_unsigned_int);
+
+          tria_level.subdomain_ids.reserve(total_cells);
+          tria_level.subdomain_ids.insert(tria_level.subdomain_ids.end(),
+                                          total_cells -
+                                            tria_level.subdomain_ids.size(),
+                                          0);
+
+          tria_level.level_subdomain_ids.reserve(total_cells);
+          tria_level.level_subdomain_ids.insert(
+            tria_level.level_subdomain_ids.end(),
+            total_cells - tria_level.level_subdomain_ids.size(),
+            0);
+
+          if (dimension < space_dimension)
+            {
+              tria_level.direction_flags.reserve(total_cells);
+              tria_level.direction_flags.insert(
+                tria_level.direction_flags.end(),
+                total_cells - tria_level.direction_flags.size(),
+                true);
+            }
+          else
+            tria_level.direction_flags.clear();
+
+          tria_level.parents.reserve((total_cells + 1) / 2);
+          tria_level.parents.insert(tria_level.parents.end(),
+                                    (total_cells + 1) / 2 -
+                                      tria_level.parents.size(),
+                                    -1);
+
+          tria_level.neighbors.reserve(total_cells * (2 * dimension));
+          tria_level.neighbors.insert(tria_level.neighbors.end(),
+                                      total_cells * (2 * dimension) -
+                                        tria_level.neighbors.size(),
+                                      std::make_pair(-1, -1));
+
+
+          if (tria_level.dim == 3)
+            {
+              tria_level.face_orientations.reserve(
+                total_cells * GeometryInfo<3>::faces_per_cell);
+              tria_level.face_orientations.insert(
+                tria_level.face_orientations.end(),
+                total_cells * GeometryInfo<3>::faces_per_cell -
+                  tria_level.face_orientations.size(),
+                true);
+            }
+        }
+    }
+
+
+
+    /**
+     * Exception
+     */
+    DeclException2(ExcMemoryInexact,
+                   int,
+                   int,
+                   << "The containers have sizes " << arg1 << " and " << arg2
+                   << ", which is not as expected.");
+
+    /**
+     * Check the memory consistency of the different containers. Should only
+     * be called with the preprocessor flag @p DEBUG set. The function
+     * should be called from the functions of the higher TriaLevel classes.
+     */
+    void
+    monitor_memory(const TriaLevel &  tria_level,
+                   const unsigned int true_dimension)
+    {
+      (void)tria_level;
+      (void)true_dimension;
+      Assert(2 * true_dimension * tria_level.refine_flags.size() ==
+               tria_level.neighbors.size(),
+             ExcMemoryInexact(tria_level.refine_flags.size(),
+                              tria_level.neighbors.size()));
+      Assert(2 * true_dimension * tria_level.coarsen_flags.size() ==
+               tria_level.neighbors.size(),
+             ExcMemoryInexact(tria_level.coarsen_flags.size(),
+                              tria_level.neighbors.size()));
+    }
+
+
+
+    /**
+     * Reserve space for TriaObjects. Details:
+     *
+     * Assert that enough space is allocated to accommodate
+     * <code>new_objs_in_pairs</code> new objects, stored in pairs, plus
+     * <code>new_obj_single</code> stored individually. This function does
+     * not only call <code>vector::reserve()</code>, but does really append
+     * the needed elements.
+     *
+     * In 2D e.g. refined lines have to be stored in pairs, whereas new
+     * lines in the interior of refined cells can be stored as single lines.
+     */
+    void
+    reserve_space(TriaObjects &      tria_objects,
+                  const unsigned int new_objects_in_pairs,
+                  const unsigned int new_objects_single = 0)
+    {
+      if (tria_objects.structdim <= 2)
+        {
+          Assert(new_objects_in_pairs % 2 == 0, ExcInternalError());
+
+          tria_objects.next_free_single               = 0;
+          tria_objects.next_free_pair                 = 0;
+          tria_objects.reverse_order_next_free_single = false;
+
+          // count the number of objects, of unused single objects and of
+          // unused pairs of objects
+          unsigned int n_objects        = 0;
+          unsigned int n_unused_pairs   = 0;
+          unsigned int n_unused_singles = 0;
+          for (unsigned int i = 0; i < tria_objects.used.size(); ++i)
+            {
+              if (tria_objects.used[i])
+                ++n_objects;
+              else if (i + 1 < tria_objects.used.size())
+                {
+                  if (tria_objects.used[i + 1])
+                    {
+                      ++n_unused_singles;
+                      if (tria_objects.next_free_single == 0)
+                        tria_objects.next_free_single = i;
+                    }
+                  else
+                    {
+                      ++n_unused_pairs;
+                      if (tria_objects.next_free_pair == 0)
+                        tria_objects.next_free_pair = i;
+                      ++i;
+                    }
+                }
+              else
+                ++n_unused_singles;
+            }
+          Assert(n_objects + 2 * n_unused_pairs + n_unused_singles ==
+                   tria_objects.used.size(),
+                 ExcInternalError());
+
+          // how many single objects are needed in addition to
+          // n_unused_objects?
+          const int additional_single_objects =
+            new_objects_single - n_unused_singles;
+
+          unsigned int new_size = tria_objects.used.size() +
+                                  new_objects_in_pairs - 2 * n_unused_pairs;
+          if (additional_single_objects > 0)
+            new_size += additional_single_objects;
+
+          // only allocate space if necessary
+          if (new_size > tria_objects.n_objects())
+            {
+              unsigned int faces_per_cell        = 1;
+              unsigned int max_children_per_cell = 1;
+
+              if (tria_objects.structdim == 1)
+                faces_per_cell = GeometryInfo<1>::faces_per_cell;
+              else if (tria_objects.structdim == 2)
+                faces_per_cell = GeometryInfo<2>::faces_per_cell;
+              else if (tria_objects.structdim == 3)
+                faces_per_cell = GeometryInfo<3>::faces_per_cell;
+              else
+                AssertThrow(false, ExcNotImplemented());
+
+              if (tria_objects.structdim == 1)
+                max_children_per_cell = GeometryInfo<1>::max_children_per_cell;
+              else if (tria_objects.structdim == 2)
+                max_children_per_cell = GeometryInfo<2>::max_children_per_cell;
+              else if (tria_objects.structdim == 3)
+                max_children_per_cell = GeometryInfo<3>::max_children_per_cell;
+              else
+                AssertThrow(false, ExcNotImplemented());
+
+              tria_objects.cells.reserve(new_size * faces_per_cell);
+              tria_objects.cells.insert(tria_objects.cells.end(),
+                                        (new_size - tria_objects.n_objects()) *
+                                          faces_per_cell,
+                                        -1);
+
+              tria_objects.used.reserve(new_size);
+              tria_objects.used.insert(tria_objects.used.end(),
+                                       new_size - tria_objects.used.size(),
+                                       false);
+
+              tria_objects.user_flags.reserve(new_size);
+              tria_objects.user_flags.insert(tria_objects.user_flags.end(),
+                                             new_size -
+                                               tria_objects.user_flags.size(),
+                                             false);
+
+              const unsigned int factor = max_children_per_cell / 2;
+              tria_objects.children.reserve(factor * new_size);
+              tria_objects.children.insert(tria_objects.children.end(),
+                                           factor * new_size -
+                                             tria_objects.children.size(),
+                                           -1);
+
+              if (tria_objects.structdim > 1)
+                {
+                  tria_objects.refinement_cases.reserve(new_size);
+                  tria_objects.refinement_cases.insert(
+                    tria_objects.refinement_cases.end(),
+                    new_size - tria_objects.refinement_cases.size(),
+                    /*RefinementCase::no_refinement=*/0);
+                }
+
+              // first reserve, then resize. Otherwise the std library can
+              // decide to allocate more entries.
+              tria_objects.boundary_or_material_id.reserve(new_size);
+              tria_objects.boundary_or_material_id.resize(new_size);
+
+              tria_objects.user_data.reserve(new_size);
+              tria_objects.user_data.resize(new_size);
+
+              tria_objects.manifold_id.reserve(new_size);
+              tria_objects.manifold_id.insert(tria_objects.manifold_id.end(),
+                                              new_size -
+                                                tria_objects.manifold_id.size(),
+                                              numbers::flat_manifold_id);
+            }
+
+          if (n_unused_singles == 0)
+            {
+              tria_objects.next_free_single               = new_size - 1;
+              tria_objects.reverse_order_next_free_single = true;
+            }
+        }
+      else
+        {
+          const unsigned int new_hexes = new_objects_in_pairs;
+
+          const unsigned int new_size =
+            new_hexes + std::count(tria_objects.used.begin(),
+                                   tria_objects.used.end(),
+                                   true);
+
+          // see above...
+          if (new_size > tria_objects.n_objects())
+            {
+              unsigned int faces_per_cell = 1;
+
+              if (tria_objects.structdim == 1)
+                faces_per_cell = GeometryInfo<1>::faces_per_cell;
+              else if (tria_objects.structdim == 2)
+                faces_per_cell = GeometryInfo<2>::faces_per_cell;
+              else if (tria_objects.structdim == 3)
+                faces_per_cell = GeometryInfo<3>::faces_per_cell;
+              else
+                AssertThrow(false, ExcNotImplemented());
+
+              tria_objects.cells.reserve(new_size * faces_per_cell);
+              tria_objects.cells.insert(tria_objects.cells.end(),
+                                        (new_size - tria_objects.n_objects()) *
+                                          faces_per_cell,
+                                        -1);
+
+              tria_objects.used.reserve(new_size);
+              tria_objects.used.insert(tria_objects.used.end(),
+                                       new_size - tria_objects.used.size(),
+                                       false);
+
+              tria_objects.user_flags.reserve(new_size);
+              tria_objects.user_flags.insert(tria_objects.user_flags.end(),
+                                             new_size -
+                                               tria_objects.user_flags.size(),
+                                             false);
+
+              tria_objects.children.reserve(4 * new_size);
+              tria_objects.children.insert(tria_objects.children.end(),
+                                           4 * new_size -
+                                             tria_objects.children.size(),
+                                           -1);
+
+              // for the following fields, we know exactly how many elements
+              // we need, so first reserve then resize (resize itself, at least
+              // with some compiler libraries, appears to round up the size it
+              // actually reserves)
+              tria_objects.boundary_or_material_id.reserve(new_size);
+              tria_objects.boundary_or_material_id.resize(new_size);
+
+              tria_objects.manifold_id.reserve(new_size);
+              tria_objects.manifold_id.insert(tria_objects.manifold_id.end(),
+                                              new_size -
+                                                tria_objects.manifold_id.size(),
+                                              numbers::flat_manifold_id);
+
+              tria_objects.user_data.reserve(new_size);
+              tria_objects.user_data.resize(new_size);
+
+              tria_objects.refinement_cases.reserve(new_size);
+              tria_objects.refinement_cases.insert(
+                tria_objects.refinement_cases.end(),
+                new_size - tria_objects.refinement_cases.size(),
+                /*RefinementCase::no_refinement=*/0);
+            }
+          tria_objects.next_free_single = tria_objects.next_free_pair = 0;
+        }
+    }
+
+
+
+    /**
+     * Check the memory consistency of the different containers. Should only
+     * be called with the preprocessor flag @p DEBUG set. The function
+     * should be called from the functions of the higher TriaLevel classes.
+     */
+    void
+    monitor_memory(const TriaObjects &tria_object, const unsigned int)
+    {
+      Assert(tria_object.n_objects() == tria_object.used.size(),
+             ExcMemoryInexact(tria_object.n_objects(),
+                              tria_object.used.size()));
+      Assert(tria_object.n_objects() == tria_object.user_flags.size(),
+             ExcMemoryInexact(tria_object.n_objects(),
+                              tria_object.user_flags.size()));
+      Assert(tria_object.n_objects() ==
+               tria_object.boundary_or_material_id.size(),
+             ExcMemoryInexact(tria_object.n_objects(),
+                              tria_object.boundary_or_material_id.size()));
+      Assert(tria_object.n_objects() == tria_object.manifold_id.size(),
+             ExcMemoryInexact(tria_object.n_objects(),
+                              tria_object.manifold_id.size()));
+      Assert(tria_object.n_objects() == tria_object.user_data.size(),
+             ExcMemoryInexact(tria_object.n_objects(),
+                              tria_object.user_data.size()));
+
+      if (tria_object.structdim == 1)
+        {
+          Assert(1 * tria_object.n_objects() == tria_object.children.size(),
+                 ExcMemoryInexact(tria_object.n_objects(),
+                                  tria_object.children.size()));
+        }
+      else if (tria_object.structdim == 2)
+        {
+          Assert(2 * tria_object.n_objects() == tria_object.children.size(),
+                 ExcMemoryInexact(tria_object.n_objects(),
+                                  tria_object.children.size()));
+        }
+      else if (tria_object.structdim == 3)
+        {
+          Assert(4 * tria_object.n_objects() == tria_object.children.size(),
+                 ExcMemoryInexact(tria_object.n_objects(),
+                                  tria_object.children.size()));
+        }
+    }
 
     /**
      * A class into which we put many of the functions that implement
@@ -1747,9 +2201,16 @@ namespace internal
                 // throw an exception if no such cells should exist.
                 if (!triangulation.check_for_distorted_cells)
                   {
+                    unsigned int vertices[GeometryInfo<1>::vertices_per_cell];
+
+                    for (unsigned int i = 0;
+                         i < GeometryInfo<1>::vertices_per_cell;
+                         ++i)
+                      vertices[i] = cells[cell_no].vertices[i];
+
                     const double cell_measure =
                       GridTools::cell_measure<1>(triangulation.vertices,
-                                                 cells[cell_no].vertices);
+                                                 vertices);
                     AssertThrow(cell_measure > 0,
                                 ExcGridHasInvalidCell(cell_no));
                   }
@@ -1765,10 +2226,10 @@ namespace internal
 
         // reserve enough space
         triangulation.levels.push_back(
-          std::make_unique<
-            internal::TriangulationImplementation::TriaLevel<dim>>());
-        triangulation.levels[0]->reserve_space(cells.size(), dim, spacedim);
-        triangulation.levels[0]->cells.reserve_space(0, cells.size());
+          std::make_unique<internal::TriangulationImplementation::TriaLevel>(
+            dim));
+        reserve_space(*triangulation.levels[0], cells.size(), dim, spacedim);
+        reserve_space(triangulation.levels[0]->cells, 0, cells.size());
 
         // make up cells
         typename Triangulation<dim, spacedim>::raw_line_iterator
@@ -1778,9 +2239,8 @@ namespace internal
             while (next_free_line->used())
               ++next_free_line;
 
-            next_free_line->set(
-              internal::TriangulationImplementation::TriaObject<1>(
-                cells[cell].vertices[0], cells[cell].vertices[1]));
+            next_free_line->set_bounding_object_indices(
+              {cells[cell].vertices[0], cells[cell].vertices[1]});
             next_free_line->set_used_flag();
             next_free_line->set_material_id(cells[cell].material_id);
             next_free_line->set_manifold_id(cells[cell].manifold_id);
@@ -1930,9 +2390,16 @@ namespace internal
                 // See the note in the 1D function on this if statement.
                 if (!triangulation.check_for_distorted_cells)
                   {
+                    unsigned int vertices[GeometryInfo<2>::vertices_per_cell];
+
+                    for (unsigned int i = 0;
+                         i < GeometryInfo<2>::vertices_per_cell;
+                         ++i)
+                      vertices[i] = cells[cell_no].vertices[i];
+
                     const double cell_measure =
                       GridTools::cell_measure<2>(triangulation.vertices,
-                                                 cells[cell_no].vertices);
+                                                 vertices);
                     AssertThrow(cell_measure > 0,
                                 ExcGridHasInvalidCell(cell_no));
                   }
@@ -2035,13 +2502,14 @@ namespace internal
 
         // reserve enough space
         triangulation.levels.push_back(
-          std::make_unique<
-            internal::TriangulationImplementation::TriaLevel<dim>>());
-        triangulation.faces = std::make_unique<
-          internal::TriangulationImplementation::TriaFaces<dim>>();
-        triangulation.levels[0]->reserve_space(cells.size(), dim, spacedim);
-        triangulation.faces->lines.reserve_space(0, needed_lines.size());
-        triangulation.levels[0]->cells.reserve_space(0, cells.size());
+          std::make_unique<internal::TriangulationImplementation::TriaLevel>(
+            dim));
+        triangulation.faces =
+          std::make_unique<internal::TriangulationImplementation::TriaFaces>(
+            dim);
+        reserve_space(*triangulation.levels[0], cells.size(), dim, spacedim);
+        reserve_space(triangulation.faces->lines, 0, needed_lines.size());
+        reserve_space(triangulation.levels[0]->cells, 0, cells.size());
 
         // make up lines
         {
@@ -2053,8 +2521,8 @@ namespace internal
           for (i = needed_lines.begin(); line != triangulation.end_line();
                ++line, ++i)
             {
-              line->set(internal::TriangulationImplementation::TriaObject<1>(
-                i->first.first, i->first.second));
+              line->set_bounding_object_indices(
+                {i->first.first, i->first.second});
               line->set_used_flag();
               line->clear_user_flag();
               line->clear_user_data();
@@ -2087,11 +2555,10 @@ namespace internal
                   cells[c].vertices[GeometryInfo<dim>::line_to_cell_vertices(
                     line, 1)])];
 
-              cell->set(internal::TriangulationImplementation::TriaObject<2>(
-                lines[0]->index(),
-                lines[1]->index(),
-                lines[2]->index(),
-                lines[3]->index()));
+              cell->set_bounding_object_indices({lines[0]->index(),
+                                                 lines[1]->index(),
+                                                 lines[2]->index(),
+                                                 lines[3]->index()});
 
               cell->set_used_flag();
               cell->set_material_id(cells[c].material_id);
@@ -2211,10 +2678,7 @@ namespace internal
 
 
         // finally update neighborship info
-        for (typename Triangulation<dim, spacedim>::cell_iterator cell =
-               triangulation.begin();
-             cell != triangulation.end();
-             ++cell)
+        for (const auto &cell : triangulation.cell_iterators())
           for (unsigned int side = 0; side < 4; ++side)
             if (adjacent_cells[cell->line(side)->index()][0] == cell)
               // first adjacent cell is
@@ -2236,22 +2700,19 @@ namespace internal
 
 
       /**
-       * Invent an object which compares two
-       * internal::TriangulationImplementation::TriaObject<2> against each
-       * other. This comparison is needed in order to establish a map of
-       * TriaObject<2> to iterators in the
+       * Invent an object which compares two std::vector objects against each
+       * other. This comparison is needed in order to establish a map of vertex
+       * index tuples to iterators in the
        * Triangulation<3,3>::create_triangulation function.
-       *
-       * Since this comparison is not canonical, we do not include it into the
-       * general internal::TriangulationImplementation::TriaObject<2> class.
        */
       struct QuadComparator
       {
         inline bool
-        operator()(
-          const internal::TriangulationImplementation::TriaObject<2> &q1,
-          const internal::TriangulationImplementation::TriaObject<2> &q2) const
+        operator()(const std::vector<int> &q1, const std::vector<int> &q2) const
         {
+          Assert(q1.size() == 4, ExcInternalError());
+          Assert(q2.size() == 4, ExcInternalError());
+
           // here is room to
           // optimize the repeated
           // equality test of the
@@ -2259,12 +2720,10 @@ namespace internal
           // compiler will probably
           // take care of most of
           // it anyway
-          if ((q1.face(0) < q2.face(0)) ||
-              ((q1.face(0) == q2.face(0)) && (q1.face(1) < q2.face(1))) ||
-              ((q1.face(0) == q2.face(0)) && (q1.face(1) == q2.face(1)) &&
-               (q1.face(2) < q2.face(2))) ||
-              ((q1.face(0) == q2.face(0)) && (q1.face(1) == q2.face(1)) &&
-               (q1.face(2) == q2.face(2)) && (q1.face(3) < q2.face(3))))
+          if ((q1[0] < q2[0]) || ((q1[0] == q2[0]) && (q1[1] < q2[1])) ||
+              ((q1[0] == q2[0]) && (q1[1] == q2[1]) && (q1[2] < q2[2])) ||
+              ((q1[0] == q2[0]) && (q1[1] == q2[1]) && (q1[2] == q2[2]) &&
+               (q1[3] < q2[3])))
             return true;
           else
             return false;
@@ -2304,9 +2763,14 @@ namespace internal
             // See the note in the 1D function on this if statement.
             if (!triangulation.check_for_distorted_cells)
               {
+                unsigned int vertices[GeometryInfo<3>::vertices_per_cell];
+
+                for (unsigned int i = 0; i < GeometryInfo<3>::vertices_per_cell;
+                     ++i)
+                  vertices[i] = cells[cell_no].vertices[i];
+
                 const double cell_measure =
-                  GridTools::cell_measure<3>(triangulation.vertices,
-                                             cells[cell_no].vertices);
+                  GridTools::cell_measure<3>(triangulation.vertices, vertices);
                 AssertThrow(cell_measure > 0, ExcGridHasInvalidCell(cell_no));
               }
           }
@@ -2415,12 +2879,13 @@ namespace internal
         // for the lines
         // reserve enough space
         triangulation.levels.push_back(
-          std::make_unique<
-            internal::TriangulationImplementation::TriaLevel<dim>>());
-        triangulation.faces = std::make_unique<
-          internal::TriangulationImplementation::TriaFaces<dim>>();
-        triangulation.levels[0]->reserve_space(cells.size(), dim, spacedim);
-        triangulation.faces->lines.reserve_space(0, needed_lines.size());
+          std::make_unique<internal::TriangulationImplementation::TriaLevel>(
+            dim));
+        triangulation.faces =
+          std::make_unique<internal::TriangulationImplementation::TriaFaces>(
+            dim);
+        reserve_space(*triangulation.levels[0], cells.size(), dim, spacedim);
+        reserve_space(triangulation.faces->lines, 0, needed_lines.size());
 
         // make up lines
         {
@@ -2432,8 +2897,8 @@ namespace internal
           for (i = needed_lines.begin(); line != triangulation.end_line();
                ++line, ++i)
             {
-              line->set(internal::TriangulationImplementation::TriaObject<1>(
-                i->first.first, i->first.second));
+              line->set_bounding_object_indices(
+                {i->first.first, i->first.second});
               line->set_used_flag();
               line->clear_user_flag();
               line->clear_user_data();
@@ -2459,7 +2924,7 @@ namespace internal
         // note that QuadComparator is a
         // class declared and defined in
         // this file
-        std::map<internal::TriangulationImplementation::TriaObject<2>,
+        std::map<std::vector<int>,
                  std::pair<typename Triangulation<dim, spacedim>::quad_iterator,
                            std::array<bool, GeometryInfo<dim>::lines_per_face>>,
                  QuadComparator>
@@ -2542,93 +3007,44 @@ namespace internal
                     }
 
 
-                internal::TriangulationImplementation::TriaObject<2> quad(
-                  face_line_list[0],
-                  face_line_list[1],
-                  face_line_list[2],
-                  face_line_list[3]);
+                const std::vector<int> quad(
+                  {static_cast<int>(face_line_list[0]),
+                   static_cast<int>(face_line_list[1]),
+                   static_cast<int>(face_line_list[2]),
+                   static_cast<int>(face_line_list[3])});
 
-                // insert quad, with
-                // invalid iterator
+                // insert quad, with invalid iterator
                 //
-                // if quad already exists,
-                // then nothing bad happens
-                // here, as this will then
-                // simply become an
-                // interior face of the
-                // triangulation. however,
-                // we will run into major
-                // trouble if the face was
-                // already inserted in the
-                // opposite
-                // direction. there are
-                // really only two
-                // orientations for a face
-                // to be in, since the edge
-                // directions are already
-                // set. thus, vertex 0 is
-                // the one from which two
-                // edges originate, and
-                // vertex 3 is the one to
-                // which they converge. we
-                // are then left with
-                // orientations 0-1-2-3 and
-                // 2-3-0-1 for the order of
-                // lines. the
-                // corresponding quad can
-                // be easily constructed by
-                // exchanging lines. we do
-                // so here, just to check
-                // that that flipped quad
-                // isn't already in the
-                // triangulation. if it is,
-                // then don't insert the
-                // new one and instead
-                // later set the
-                // face_orientation flag
-                const internal::TriangulationImplementation::TriaObject<2>
-                  test_quad_1(quad.face(2),
-                              quad.face(3),
-                              quad.face(0),
-                              quad.face(
-                                1)), // face_orientation=false, face_flip=false,
-                                     // face_rotation=false
-                  test_quad_2(quad.face(0),
-                              quad.face(1),
-                              quad.face(3),
-                              quad.face(
-                                2)), // face_orientation=false, face_flip=false,
-                                     // face_rotation=true
-                  test_quad_3(quad.face(3),
-                              quad.face(2),
-                              quad.face(1),
-                              quad.face(
-                                0)), // face_orientation=false, face_flip=true,
-                                     // face_rotation=false
-                  test_quad_4(quad.face(1),
-                              quad.face(0),
-                              quad.face(2),
-                              quad.face(
-                                3)), // face_orientation=false, face_flip=true,
-                                     // face_rotation=true
-                  test_quad_5(quad.face(2),
-                              quad.face(3),
-                              quad.face(1),
-                              quad.face(
-                                0)), // face_orientation=true,  face_flip=false,
-                                     // face_rotation=true
-                  test_quad_6(quad.face(1),
-                              quad.face(0),
-                              quad.face(3),
-                              quad.face(
-                                2)), // face_orientation=true,  face_flip=true,
-                                     // face_rotation=false
-                  test_quad_7(quad.face(3),
-                              quad.face(2),
-                              quad.face(0),
-                              quad.face(
-                                1)); // face_orientation=true,  face_flip=true,
-                                     // face_rotation=true
+                // if quad already exists, then nothing bad happens here, as
+                // this will then simply become an interior face of the
+                // triangulation. however, we will run into major trouble if the
+                // face was already inserted in the opposite direction. there
+                // are really only two orientations for a face to be in, since
+                // the edge directions are already set. thus, vertex 0 is the
+                // one from which two edges originate, and vertex 3 is the one
+                // to which they converge. we are then left with orientations
+                // 0-1-2-3 and 2-3-0-1 for the order of lines. the corresponding
+                // quad can be easily constructed by exchanging lines. we do so
+                // here, just to check that that flipped quad isn't already in
+                // the triangulation. if it is, then don't insert the new one
+                // and instead later set the face_orientation flag
+
+                // face_orientation=false, face_flip=false, face_rotation=false
+                const std::vector<int> test_quad_1(
+                  {quad[2], quad[3], quad[0], quad[1]}),
+                  // face_orientation=false, face_flip=false, face_rotation=true
+                  test_quad_2({quad[0], quad[1], quad[3], quad[2]}),
+                  // face_orientation=false, face_flip=true, face_rotation=false
+                  test_quad_3({quad[3], quad[2], quad[1], quad[0]}),
+                  // face_orientation=false, face_flip=true, face_rotation=true
+                  test_quad_4({quad[1], quad[0], quad[2], quad[3]}),
+                  // face_orientation=true, face_flip=false, face_rotation=true
+                  test_quad_5({quad[2], quad[3], quad[1], quad[0]}),
+                  // face_orientation=true, face_flip=true, face_rotation=false
+                  test_quad_6({quad[1], quad[0], quad[3], quad[2]}),
+                  // face_orientation=true, face_flip=true, face_rotation=true
+                  test_quad_7({quad[3], quad[2], quad[0], quad[1]});
+
                 if (needed_quads.find(test_quad_1) == needed_quads.end() &&
                     needed_quads.find(test_quad_2) == needed_quads.end() &&
                     needed_quads.find(test_quad_3) == needed_quads.end() &&
@@ -2647,20 +3063,22 @@ namespace internal
         // the arrays of the Triangulation
         //
         // first reserve enough space
-        triangulation.faces->quads.reserve_space(0, needed_quads.size());
+        reserve_space(*triangulation.faces, 0, needed_quads.size());
+        reserve_space(triangulation.faces->quads, 0, needed_quads.size());
 
         {
           typename Triangulation<dim, spacedim>::raw_quad_iterator quad =
             triangulation.begin_raw_quad();
           typename std::map<
-            internal::TriangulationImplementation::TriaObject<2>,
+            std::vector<int>,
             std::pair<typename Triangulation<dim, spacedim>::quad_iterator,
                       std::array<bool, GeometryInfo<dim>::lines_per_face>>,
             QuadComparator>::iterator q;
           for (q = needed_quads.begin(); quad != triangulation.end_quad();
                ++quad, ++q)
             {
-              quad->set(q->first);
+              quad->set_bounding_object_indices(
+                {q->first[0], q->first[1], q->first[2], q->first[3]});
               quad->set_used_flag();
               quad->clear_user_flag();
               quad->clear_user_data();
@@ -2679,7 +3097,7 @@ namespace internal
 
         /////////////////////////////////
         // finally create the cells
-        triangulation.levels[0]->cells.reserve_space(cells.size());
+        reserve_space(triangulation.levels[0]->cells, cells.size());
 
         // store for each quad index the
         // adjacent cells
@@ -2752,11 +3170,11 @@ namespace internal
                                        dim>::face_to_cell_lines(face, l)]]
                           ->index();
 
-                  internal::TriangulationImplementation::TriaObject<2> quad(
-                    face_line_list[0],
-                    face_line_list[1],
-                    face_line_list[2],
-                    face_line_list[3]);
+                  const std::vector<int> quad(
+                    {static_cast<int>(face_line_list[0]),
+                     static_cast<int>(face_line_list[1]),
+                     static_cast<int>(face_line_list[2]),
+                     static_cast<int>(face_line_list[3])});
 
                   if (needed_quads.find(quad) != needed_quads.end())
                     {
@@ -2776,54 +3194,32 @@ namespace internal
                     }
                   else
                     {
-                      // face must be available in
-                      // reverse order
-                      // then. construct all
-                      // possibilities and check
-                      // them one after the other
-                      const internal::TriangulationImplementation::TriaObject<2>
-                        test_quad_1(
-                          quad.face(2),
-                          quad.face(3),
-                          quad.face(0),
-                          quad.face(1)), // face_orientation=false,
-                                         // face_flip=false, face_rotation=false
-                        test_quad_2(
-                          quad.face(0),
-                          quad.face(1),
-                          quad.face(3),
-                          quad.face(2)), // face_orientation=false,
-                                         // face_flip=false, face_rotation=true
-                        test_quad_3(
-                          quad.face(3),
-                          quad.face(2),
-                          quad.face(1),
-                          quad.face(0)), // face_orientation=false,
-                                         // face_flip=true,  face_rotation=false
-                        test_quad_4(quad.face(1),
-                                    quad.face(0),
-                                    quad.face(2),
-                                    quad.face(
-                                      3)), // face_orientation=false,
-                                           // face_flip=true, face_rotation=true
-                        test_quad_5(
-                          quad.face(2),
-                          quad.face(3),
-                          quad.face(1),
-                          quad.face(0)), // face_orientation=true,
-                                         // face_flip=false, face_rotation=true
-                        test_quad_6(
-                          quad.face(1),
-                          quad.face(0),
-                          quad.face(3),
-                          quad.face(2)), // face_orientation=true,
-                                         // face_flip=true,  face_rotation=false
-                        test_quad_7(quad.face(3),
-                                    quad.face(2),
-                                    quad.face(0),
-                                    quad.face(
-                                      1)); // face_orientation=true,
-                                           // face_flip=true, face_rotation=true
+                      // face must be available in reverse order then. construct
+                      // all possibilities and check them one after the other
+
+                      // face_orientation=false, face_flip=false,
+                      // face_rotation=false
+                      const std::vector<int> test_quad_1(
+                        {quad[2], quad[3], quad[0], quad[1]}),
+                        // face_orientation=false, face_flip=false,
+                        // face_rotation=true
+                        test_quad_2({quad[0], quad[1], quad[3], quad[2]}),
+                        // face_orientation=false, face_flip=true,
+                        // face_rotation=false
+                        test_quad_3({quad[3], quad[2], quad[1], quad[0]}),
+                        // face_orientation=false, face_flip=true,
+                        // face_rotation=true
+                        test_quad_4({quad[1], quad[0], quad[2], quad[3]}),
+                        // face_orientation=true, face_flip=false,
+                        // face_rotation=true
+                        test_quad_5({quad[2], quad[3], quad[1], quad[0]}),
+                        // face_orientation=true, face_flip=true,
+                        // face_rotation=false
+                        test_quad_6({quad[1], quad[0], quad[3], quad[2]}),
+                        // face_orientation=true, face_flip=true,
+                        // face_rotation=true
+                        test_quad_7({quad[3], quad[2], quad[0], quad[1]});
+
                       if (needed_quads.find(test_quad_1) != needed_quads.end())
                         {
                           face_iterator[face] = needed_quads[test_quad_1].first;
@@ -2891,13 +3287,12 @@ namespace internal
 
               // make the cell out of
               // these iterators
-              cell->set(internal::TriangulationImplementation::TriaObject<3>(
-                face_iterator[0]->index(),
-                face_iterator[1]->index(),
-                face_iterator[2]->index(),
-                face_iterator[3]->index(),
-                face_iterator[4]->index(),
-                face_iterator[5]->index()));
+              cell->set_bounding_object_indices({face_iterator[0]->index(),
+                                                 face_iterator[1]->index(),
+                                                 face_iterator[2]->index(),
+                                                 face_iterator[3]->index(),
+                                                 face_iterator[4]->index(),
+                                                 face_iterator[5]->index()});
 
               cell->set_used_flag();
               cell->set_material_id(cells[c].material_id);
@@ -3174,16 +3569,14 @@ namespace internal
             // and because boundary quad
             // orientation does not carry
             // any information.
-            internal::TriangulationImplementation::TriaObject<2> quad_compare_1(
-              line[0]->index(),
-              line[1]->index(),
-              line[2]->index(),
-              line[3]->index());
-            internal::TriangulationImplementation::TriaObject<2> quad_compare_2(
-              line[2]->index(),
-              line[3]->index(),
-              line[0]->index(),
-              line[1]->index());
+            std::vector<int> quad_compare_1({line[0]->index(),
+                                             line[1]->index(),
+                                             line[2]->index(),
+                                             line[3]->index()});
+            std::vector<int> quad_compare_2({line[2]->index(),
+                                             line[3]->index(),
+                                             line[0]->index(),
+                                             line[1]->index()});
 
             // try to find the quad with
             // lines situated as
@@ -3223,10 +3616,10 @@ namespace internal
                 // lexicographic ordering)
                 for (unsigned int i = 0; i < 4; ++i)
                   {
-                    quad_compare_1.set_face(
-                      i, line_counterclock[lex2cclock[i]]->index());
-                    quad_compare_2.set_face(
-                      (i + 2) % 4, line_counterclock[lex2cclock[i]]->index());
+                    quad_compare_1[i] =
+                      line_counterclock[lex2cclock[i]]->index();
+                    quad_compare_2[(i + 2) % 4] =
+                      line_counterclock[lex2cclock[i]]->index();
                   }
 
                 ++n_rotations;
@@ -3279,10 +3672,7 @@ namespace internal
 
         /////////////////////////////////////////
         // finally update neighborship info
-        for (typename Triangulation<dim, spacedim>::cell_iterator cell =
-               triangulation.begin();
-             cell != triangulation.end();
-             ++cell)
+        for (const auto &cell : triangulation.cell_iterators())
           for (unsigned int face = 0; face < 6; ++face)
             if (adjacent_cells[cell->quad(face)->index()][0] == cell)
               // first adjacent cell is
@@ -3905,23 +4295,24 @@ namespace internal
                                    l < triangulation.levels.size();
                                    ++l)
                                 for (unsigned int h = 0;
-                                     h < triangulation.levels[l]
-                                           ->cells.cells.size();
+                                     h <
+                                     triangulation.levels[l]->cells.n_objects();
                                      ++h)
                                   for (const unsigned int q :
                                        GeometryInfo<dim>::face_indices())
                                     {
-                                      const int index = triangulation.levels[l]
-                                                          ->cells.cells[h]
-                                                          .face(q);
+                                      const int index =
+                                        triangulation.levels[l]
+                                          ->cells.get_bounding_object_indices(
+                                            h)[q];
                                       if (index == switch_1_index)
                                         triangulation.levels[l]
-                                          ->cells.cells[h]
-                                          .set_face(q, switch_2_index);
+                                          ->cells.get_bounding_object_indices(
+                                            h)[q] = switch_2_index;
                                       else if (index == switch_2_index)
                                         triangulation.levels[l]
-                                          ->cells.cells[h]
-                                          .set_face(q, switch_1_index);
+                                          ->cells.get_bounding_object_indices(
+                                            h)[q] = switch_1_index;
                                     }
                               // now we have to copy
                               // all information of the
@@ -3947,12 +4338,11 @@ namespace internal
                               const bool switch_1_user_flag =
                                 switch_1->user_flag_set();
 
-                              switch_1->set(
-                                internal::TriangulationImplementation::
-                                  TriaObject<2>(switch_2->line_index(0),
-                                                switch_2->line_index(1),
-                                                switch_2->line_index(2),
-                                                switch_2->line_index(3)));
+                              switch_1->set_bounding_object_indices(
+                                {switch_2->line_index(0),
+                                 switch_2->line_index(1),
+                                 switch_2->line_index(2),
+                                 switch_2->line_index(3)});
                               switch_1->set_line_orientation(
                                 0, switch_2->line_orientation(0));
                               switch_1->set_line_orientation(
@@ -3971,12 +4361,11 @@ namespace internal
                               else
                                 switch_1->clear_user_flag();
 
-                              switch_2->set(
-                                internal::TriangulationImplementation::
-                                  TriaObject<2>(switch_1_lines[0],
-                                                switch_1_lines[1],
-                                                switch_1_lines[2],
-                                                switch_1_lines[3]));
+                              switch_2->set_bounding_object_indices(
+                                {switch_1_lines[0],
+                                 switch_1_lines[1],
+                                 switch_1_lines[2],
+                                 switch_1_lines[3]});
                               switch_2->set_line_orientation(
                                 0, switch_1_line_orientations[0]);
                               switch_2->set_line_orientation(
@@ -4198,8 +4587,8 @@ namespace internal
         typename Triangulation<2, spacedim>::raw_line_iterator
           &next_unused_line,
         typename Triangulation<2, spacedim>::raw_cell_iterator
-          &                                                 next_unused_cell,
-        typename Triangulation<2, spacedim>::cell_iterator &cell)
+          &next_unused_cell,
+        const typename Triangulation<2, spacedim>::cell_iterator &cell)
       {
         const unsigned int dim = 2;
         // clear refinement flag
@@ -4411,18 +4800,14 @@ namespace internal
                 new_lines[l] = cell->line(face_no)->child(c);
             Assert(l == 8, ExcInternalError());
 
-            new_lines[8]->set(
-              internal::TriangulationImplementation::TriaObject<1>(
-                new_vertices[6], new_vertices[8]));
-            new_lines[9]->set(
-              internal::TriangulationImplementation::TriaObject<1>(
-                new_vertices[8], new_vertices[7]));
-            new_lines[10]->set(
-              internal::TriangulationImplementation::TriaObject<1>(
-                new_vertices[4], new_vertices[8]));
-            new_lines[11]->set(
-              internal::TriangulationImplementation::TriaObject<1>(
-                new_vertices[8], new_vertices[5]));
+            new_lines[8]->set_bounding_object_indices(
+              {new_vertices[6], new_vertices[8]});
+            new_lines[9]->set_bounding_object_indices(
+              {new_vertices[8], new_vertices[7]});
+            new_lines[10]->set_bounding_object_indices(
+              {new_vertices[4], new_vertices[8]});
+            new_lines[11]->set_bounding_object_indices(
+              {new_vertices[8], new_vertices[5]});
           }
         else if (ref_case == RefinementCase<dim>::cut_x)
           {
@@ -4437,9 +4822,8 @@ namespace internal
             new_lines[3] = cell->line(2)->child(1);
             new_lines[4] = cell->line(3)->child(0);
             new_lines[5] = cell->line(3)->child(1);
-            new_lines[6]->set(
-              internal::TriangulationImplementation::TriaObject<1>(
-                new_vertices[6], new_vertices[7]));
+            new_lines[6]->set_bounding_object_indices(
+              {new_vertices[6], new_vertices[7]});
           }
         else
           {
@@ -4455,9 +4839,8 @@ namespace internal
             new_lines[3] = cell->line(1)->child(1);
             new_lines[4] = cell->line(2);
             new_lines[5] = cell->line(3);
-            new_lines[6]->set(
-              internal::TriangulationImplementation::TriaObject<1>(
-                new_vertices[4], new_vertices[5]));
+            new_lines[6]->set_bounding_object_indices(
+              {new_vertices[4], new_vertices[5]});
           }
 
         for (unsigned int l = lmin; l < lmax; ++l)
@@ -4507,30 +4890,22 @@ namespace internal
             //   .-10.11-.
             //   0   8   2
             //   .-4-.-5-.
-            subcells[0]->set(
-              internal::TriangulationImplementation::TriaObject<2>(
-                new_lines[0]->index(),
-                new_lines[8]->index(),
-                new_lines[4]->index(),
-                new_lines[10]->index()));
-            subcells[1]->set(
-              internal::TriangulationImplementation::TriaObject<2>(
-                new_lines[8]->index(),
-                new_lines[2]->index(),
-                new_lines[5]->index(),
-                new_lines[11]->index()));
-            subcells[2]->set(
-              internal::TriangulationImplementation::TriaObject<2>(
-                new_lines[1]->index(),
-                new_lines[9]->index(),
-                new_lines[10]->index(),
-                new_lines[6]->index()));
-            subcells[3]->set(
-              internal::TriangulationImplementation::TriaObject<2>(
-                new_lines[9]->index(),
-                new_lines[3]->index(),
-                new_lines[11]->index(),
-                new_lines[7]->index()));
+            subcells[0]->set_bounding_object_indices({new_lines[0]->index(),
+                                                      new_lines[8]->index(),
+                                                      new_lines[4]->index(),
+                                                      new_lines[10]->index()});
+            subcells[1]->set_bounding_object_indices({new_lines[8]->index(),
+                                                      new_lines[2]->index(),
+                                                      new_lines[5]->index(),
+                                                      new_lines[11]->index()});
+            subcells[2]->set_bounding_object_indices({new_lines[1]->index(),
+                                                      new_lines[9]->index(),
+                                                      new_lines[10]->index(),
+                                                      new_lines[6]->index()});
+            subcells[3]->set_bounding_object_indices({new_lines[9]->index(),
+                                                      new_lines[3]->index(),
+                                                      new_lines[11]->index(),
+                                                      new_lines[7]->index()});
           }
         else if (ref_case == RefinementCase<dim>::cut_x)
           {
@@ -4546,18 +4921,14 @@ namespace internal
             //   0   6   1
             //   |   |   |
             //   .-2-.-3-.
-            subcells[0]->set(
-              internal::TriangulationImplementation::TriaObject<2>(
-                new_lines[0]->index(),
-                new_lines[6]->index(),
-                new_lines[2]->index(),
-                new_lines[4]->index()));
-            subcells[1]->set(
-              internal::TriangulationImplementation::TriaObject<2>(
-                new_lines[6]->index(),
-                new_lines[1]->index(),
-                new_lines[3]->index(),
-                new_lines[5]->index()));
+            subcells[0]->set_bounding_object_indices({new_lines[0]->index(),
+                                                      new_lines[6]->index(),
+                                                      new_lines[2]->index(),
+                                                      new_lines[4]->index()});
+            subcells[1]->set_bounding_object_indices({new_lines[6]->index(),
+                                                      new_lines[1]->index(),
+                                                      new_lines[3]->index(),
+                                                      new_lines[5]->index()});
           }
         else
           {
@@ -4574,18 +4945,14 @@ namespace internal
             //   .---6---.
             //   0       2
             //   .---4---.
-            subcells[0]->set(
-              internal::TriangulationImplementation::TriaObject<2>(
-                new_lines[0]->index(),
-                new_lines[2]->index(),
-                new_lines[4]->index(),
-                new_lines[6]->index()));
-            subcells[1]->set(
-              internal::TriangulationImplementation::TriaObject<2>(
-                new_lines[1]->index(),
-                new_lines[3]->index(),
-                new_lines[6]->index(),
-                new_lines[5]->index()));
+            subcells[0]->set_bounding_object_indices({new_lines[0]->index(),
+                                                      new_lines[2]->index(),
+                                                      new_lines[4]->index(),
+                                                      new_lines[6]->index()});
+            subcells[1]->set_bounding_object_indices({new_lines[1]->index(),
+                                                      new_lines[3]->index(),
+                                                      new_lines[6]->index(),
+                                                      new_lines[5]->index()});
           }
 
         types::subdomain_id subdomainid = cell->subdomain_id();
@@ -4653,7 +5020,7 @@ namespace internal
                 {
                   triangulation.levels.push_back(
                     std::make_unique<
-                      internal::TriangulationImplementation::TriaLevel<dim>>());
+                      internal::TriangulationImplementation::TriaLevel>(dim));
                   break;
                 }
         }
@@ -4669,10 +5036,9 @@ namespace internal
             // count number of flagged
             // cells on this level
             unsigned int flagged_cells = 0;
-            typename Triangulation<dim, spacedim>::active_cell_iterator
-              acell = triangulation.begin_active(level),
-              aendc = triangulation.begin_active(level + 1);
-            for (; acell != aendc; ++acell)
+
+            for (const auto &acell :
+                 triangulation.active_cell_iterators_on_level(level))
               if (acell->refine_flag_set())
                 ++flagged_cells;
 
@@ -4686,15 +5052,17 @@ namespace internal
             // reserve space for the used_cells cells already existing
             // on the next higher level as well as for the
             // 2*flagged_cells that will be created on that level
-            triangulation.levels[level + 1]->reserve_space(
-              used_cells +
-                GeometryInfo<1>::max_children_per_cell * flagged_cells,
-              1,
-              spacedim);
+            reserve_space(*triangulation.levels[level + 1],
+                          used_cells + GeometryInfo<1>::max_children_per_cell *
+                                         flagged_cells,
+                          1,
+                          spacedim);
             // reserve space for 2*flagged_cells new lines on the next
             // higher level
-            triangulation.levels[level + 1]->cells.reserve_space(
-              GeometryInfo<1>::max_children_per_cell * flagged_cells, 0);
+            reserve_space(triangulation.levels[level + 1]->cells,
+                          GeometryInfo<1>::max_children_per_cell *
+                            flagged_cells,
+                          0);
 
             needed_vertices += flagged_cells;
           }
@@ -4722,14 +5090,11 @@ namespace internal
 
         for (int level = triangulation.levels.size() - 2; level >= 0; --level)
           {
-            typename Triangulation<dim, spacedim>::active_cell_iterator
-              cell = triangulation.begin_active(level),
-              endc = triangulation.begin_active(level + 1);
-
             typename Triangulation<dim, spacedim>::raw_cell_iterator
               next_unused_cell = triangulation.begin_raw(level + 1);
 
-            for (; (cell != endc) && (cell->level() == level); ++cell)
+            for (const auto &cell :
+                 triangulation.active_cell_iterators_on_level(level))
               if (cell->refine_flag_set())
                 {
                   // clear refinement flag
@@ -4777,9 +5142,8 @@ namespace internal
                   // insert first child
                   cell->set_children(0, first_child->index());
                   first_child->clear_children();
-                  first_child->set(
-                    internal::TriangulationImplementation::TriaObject<1>(
-                      cell->vertex_index(0), next_unused_vertex));
+                  first_child->set_bounding_object_indices(
+                    {cell->vertex_index(0), next_unused_vertex});
                   first_child->set_material_id(cell->material_id());
                   first_child->set_manifold_id(cell->manifold_id());
                   first_child->set_subdomain_id(subdomainid);
@@ -4828,9 +5192,8 @@ namespace internal
 
                   // insert second child
                   second_child->clear_children();
-                  second_child->set(
-                    internal::TriangulationImplementation::TriaObject<1>(
-                      next_unused_vertex, cell->vertex_index(1)));
+                  second_child->set_bounding_object_indices(
+                    {next_unused_vertex, cell->vertex_index(1)});
                   second_child->set_neighbor(0, first_child);
                   second_child->set_material_id(cell->material_id());
                   second_child->set_manifold_id(cell->manifold_id());
@@ -4897,7 +5260,7 @@ namespace internal
                 {
                   triangulation.levels.push_back(
                     std::make_unique<
-                      internal::TriangulationImplementation::TriaLevel<dim>>());
+                      internal::TriangulationImplementation::TriaLevel>(dim));
                   break;
                 }
         }
@@ -4932,10 +5295,8 @@ namespace internal
             // how many new vertices and new lines will be needed
             unsigned int needed_cells = 0;
 
-            typename Triangulation<dim, spacedim>::active_cell_iterator
-              cell = triangulation.begin_active(level),
-              endc = triangulation.begin_active(level + 1);
-            for (; cell != endc; ++cell)
+            for (const auto &cell :
+                 triangulation.active_cell_iterators_on_level(level))
               if (cell->refine_flag_set())
                 {
                   if (cell->refine_flag_set() == RefinementCase<dim>::cut_xy)
@@ -4993,13 +5354,16 @@ namespace internal
             // reserve space for the used_cells cells already existing
             // on the next higher level as well as for the
             // needed_cells that will be created on that level
-            triangulation.levels[level + 1]->reserve_space(
-              used_cells + needed_cells, 2, spacedim);
+            reserve_space(*triangulation.levels[level + 1],
+                          used_cells + needed_cells,
+                          2,
+                          spacedim);
 
             // reserve space for needed_cells new quads on the next
             // higher level
-            triangulation.levels[level + 1]->cells.reserve_space(needed_cells,
-                                                                 0);
+            reserve_space(triangulation.levels[level + 1]->cells,
+                          needed_cells,
+                          0);
           }
 
         // now count the lines which were flagged for refinement
@@ -5020,7 +5384,7 @@ namespace internal
         // to store all lines. memory reservation for n_single_lines
         // can only be done AFTER we refined the lines of the current
         // cells
-        triangulation.faces->lines.reserve_space(n_lines_in_pairs, 0);
+        reserve_space(triangulation.faces->lines, n_lines_in_pairs, 0);
 
         // add to needed vertices how many vertices are already in use
         needed_vertices += std::count(triangulation.vertices_used.begin(),
@@ -5105,12 +5469,10 @@ namespace internal
                   ExcMessage(
                     "Internal error: We want to use a cell during refinement that should be unused, but turns out not to be."));
 
-                children[0]->set(
-                  internal::TriangulationImplementation::TriaObject<1>(
-                    line->vertex_index(0), next_unused_vertex));
-                children[1]->set(
-                  internal::TriangulationImplementation::TriaObject<1>(
-                    next_unused_vertex, line->vertex_index(1)));
+                children[0]->set_bounding_object_indices(
+                  {line->vertex_index(0), next_unused_vertex});
+                children[1]->set_bounding_object_indices(
+                  {next_unused_vertex, line->vertex_index(1)});
 
                 children[0]->set_used_flag();
                 children[1]->set_used_flag();
@@ -5139,7 +5501,7 @@ namespace internal
 
         // reserve space for inner lines (can be stored as single
         // lines)
-        triangulation.faces->lines.reserve_space(0, n_single_lines);
+        reserve_space(triangulation.faces->lines, 0, n_single_lines);
 
         typename Triangulation<2, spacedim>::DistortedCellList
           cells_with_distorted_children;
@@ -5153,16 +5515,11 @@ namespace internal
              level < static_cast<int>(triangulation.levels.size()) - 1;
              ++level)
           {
-            // Remember: as we don't operate on the finest level,
-            // begin_*(level+1) is allowed
-            typename Triangulation<dim, spacedim>::active_cell_iterator
-              cell = triangulation.begin_active(level),
-              endc = triangulation.begin_active(level + 1);
-
             typename Triangulation<dim, spacedim>::raw_cell_iterator
               next_unused_cell = triangulation.begin_raw(level + 1);
 
-            for (; cell != endc; ++cell)
+            for (const auto &cell :
+                 triangulation.active_cell_iterators_on_level(level))
               if (cell->refine_flag_set())
                 {
                   // set the user flag to indicate, that at least one
@@ -5228,7 +5585,7 @@ namespace internal
                 {
                   triangulation.levels.push_back(
                     std::make_unique<
-                      internal::TriangulationImplementation::TriaLevel<dim>>());
+                      internal::TriangulationImplementation::TriaLevel>(dim));
                   break;
                 }
         }
@@ -5281,10 +5638,8 @@ namespace internal
             // how many new vertices and new lines will be needed
             unsigned int new_cells = 0;
 
-            typename Triangulation<dim, spacedim>::active_cell_iterator
-              acell = triangulation.begin_active(level),
-              aendc = triangulation.begin_active(level + 1);
-            for (; acell != aendc; ++acell)
+            for (const auto &acell :
+                 triangulation.active_cell_iterators_on_level(level))
               if (acell->refine_flag_set())
                 {
                   RefinementCase<dim> ref_case = acell->refine_flag_set();
@@ -5396,11 +5751,13 @@ namespace internal
             // reserve space for the used_cells cells already existing
             // on the next higher level as well as for the
             // 8*flagged_cells that will be created on that level
-            triangulation.levels[level + 1]->reserve_space(
-              used_cells + new_cells, 3, spacedim);
+            reserve_space(*triangulation.levels[level + 1],
+                          used_cells + new_cells,
+                          3,
+                          spacedim);
             // reserve space for 8*flagged_cells new hexes on the next
             // higher level
-            triangulation.levels[level + 1]->cells.reserve_space(new_cells);
+            reserve_space(triangulation.levels[level + 1]->cells, new_cells);
           } // for all levels
         // now count the quads and lines which were flagged for
         // refinement
@@ -5466,11 +5823,16 @@ namespace internal
             }
 
         // reserve space for needed_lines new lines stored in pairs
-        triangulation.faces->lines.reserve_space(needed_lines_pair,
-                                                 needed_lines_single);
+        reserve_space(triangulation.faces->lines,
+                      needed_lines_pair,
+                      needed_lines_single);
         // reserve space for needed_quads new quads stored in pairs
-        triangulation.faces->quads.reserve_space(needed_quads_pair,
-                                                 needed_quads_single);
+        reserve_space(*triangulation.faces,
+                      needed_quads_pair,
+                      needed_quads_single);
+        reserve_space(triangulation.faces->quads,
+                      needed_quads_pair,
+                      needed_quads_single);
 
 
         // add to needed vertices how many vertices are already in use
@@ -5549,7 +5911,7 @@ namespace internal
                 // two child lines (++ takes care of the end of the
                 // vector)
                 next_unused_line =
-                  triangulation.faces->lines.next_free_pair_object(
+                  triangulation.faces->lines.template next_free_pair_object<1>(
                     triangulation);
                 Assert(next_unused_line.state() == IteratorState::valid,
                        ExcInternalError());
@@ -5574,12 +5936,10 @@ namespace internal
                   ExcMessage(
                     "Internal error: We want to use a cell during refinement that should be unused, but turns out not to be."));
 
-                children[0]->set(
-                  internal::TriangulationImplementation::TriaObject<1>(
-                    line->vertex_index(0), next_unused_vertex));
-                children[1]->set(
-                  internal::TriangulationImplementation::TriaObject<1>(
-                    next_unused_vertex, line->vertex_index(1)));
+                children[0]->set_bounding_object_indices(
+                  {line->vertex_index(0), next_unused_vertex});
+                children[1]->set_bounding_object_indices(
+                  {next_unused_vertex, line->vertex_index(1)});
 
                 children[0]->set_used_flag();
                 children[1]->set_used_flag();
@@ -5677,8 +6037,8 @@ namespace internal
                       new_line;
 
                     new_line =
-                      triangulation.faces->lines.next_free_single_object(
-                        triangulation);
+                      triangulation.faces->lines
+                        .template next_free_single_object<1>(triangulation);
                     Assert(
                       new_line->used() == false,
                       ExcMessage(
@@ -5713,9 +6073,8 @@ namespace internal
                           quad->line(1)->child(0)->vertex_index(1);
                       }
 
-                    new_line->set(
-                      internal::TriangulationImplementation::TriaObject<1>(
-                        vertex_indices[0], vertex_indices[1]));
+                    new_line->set_bounding_object_indices(
+                      {vertex_indices[0], vertex_indices[1]});
                     new_line->set_used_flag();
                     new_line->clear_user_flag();
                     new_line->clear_user_data();
@@ -5739,8 +6098,8 @@ namespace internal
                       new_quads[2];
 
                     next_unused_quad =
-                      triangulation.faces->quads.next_free_pair_object(
-                        triangulation);
+                      triangulation.faces->quads
+                        .template next_free_pair_object<2>(triangulation);
                     new_quads[0] = next_unused_quad;
                     Assert(
                       new_quads[0]->used() == false,
@@ -5757,49 +6116,45 @@ namespace internal
 
                     if (aniso_quad_ref_case == RefinementCase<dim - 1>::cut_x)
                       {
-                        new_quads[0]->set(
-                          internal::TriangulationImplementation::TriaObject<2>(
-                            quad->line_index(0),
-                            new_line->index(),
-                            quad->line(2)
-                              ->child(index[0][quad->line_orientation(2)])
-                              ->index(),
-                            quad->line(3)
-                              ->child(index[0][quad->line_orientation(3)])
-                              ->index()));
-                        new_quads[1]->set(
-                          internal::TriangulationImplementation::TriaObject<2>(
-                            new_line->index(),
-                            quad->line_index(1),
-                            quad->line(2)
-                              ->child(index[1][quad->line_orientation(2)])
-                              ->index(),
-                            quad->line(3)
-                              ->child(index[1][quad->line_orientation(3)])
-                              ->index()));
+                        new_quads[0]->set_bounding_object_indices(
+                          {static_cast<int>(quad->line_index(0)),
+                           new_line->index(),
+                           quad->line(2)
+                             ->child(index[0][quad->line_orientation(2)])
+                             ->index(),
+                           quad->line(3)
+                             ->child(index[0][quad->line_orientation(3)])
+                             ->index()});
+                        new_quads[1]->set_bounding_object_indices(
+                          {new_line->index(),
+                           static_cast<int>(quad->line_index(1)),
+                           quad->line(2)
+                             ->child(index[1][quad->line_orientation(2)])
+                             ->index(),
+                           quad->line(3)
+                             ->child(index[1][quad->line_orientation(3)])
+                             ->index()});
                       }
                     else
                       {
-                        new_quads[0]->set(
-                          internal::TriangulationImplementation::TriaObject<2>(
-                            quad->line(0)
-                              ->child(index[0][quad->line_orientation(0)])
-                              ->index(),
-                            quad->line(1)
-                              ->child(index[0][quad->line_orientation(1)])
-                              ->index(),
-                            quad->line_index(2),
-                            new_line->index()));
-                        new_quads[1]->set(
-                          internal::TriangulationImplementation::TriaObject<2>(
-                            quad->line(0)
-                              ->child(index[1][quad->line_orientation(0)])
-                              ->index(),
-                            quad->line(1)
-                              ->child(index[1][quad->line_orientation(1)])
-                              ->index(),
-                            new_line->index(),
-                            quad->line_index(3)));
+                        new_quads[0]->set_bounding_object_indices(
+                          {quad->line(0)
+                             ->child(index[0][quad->line_orientation(0)])
+                             ->index(),
+                           quad->line(1)
+                             ->child(index[0][quad->line_orientation(1)])
+                             ->index(),
+                           static_cast<int>(quad->line_index(2)),
+                           new_line->index()});
+                        new_quads[1]->set_bounding_object_indices(
+                          {quad->line(0)
+                             ->child(index[1][quad->line_orientation(0)])
+                             ->index(),
+                           quad->line(1)
+                             ->child(index[1][quad->line_orientation(1)])
+                             ->index(),
+                           new_line->index(),
+                           static_cast<int>(quad->line_index(3))});
                       }
 
                     for (const auto &new_quad : new_quads)
@@ -5897,8 +6252,9 @@ namespace internal
                               new_child[2];
 
                             new_child[0] = new_child[1] =
-                              triangulation.faces->lines.next_free_pair_object(
-                                triangulation);
+                              triangulation.faces->lines
+                                .template next_free_pair_object<1>(
+                                  triangulation);
                             ++new_child[1];
 
                             new_child[0]->set_used_flag();
@@ -5912,20 +6268,23 @@ namespace internal
                             // loop over all quads and replace the old
                             // lines
                             for (unsigned int q = 0;
-                                 q < triangulation.faces->quads.cells.size();
+                                 q < triangulation.faces->quads.n_objects();
                                  ++q)
                               for (unsigned int l = 0;
                                    l < GeometryInfo<dim>::lines_per_face;
                                    ++l)
                                 {
                                   const int this_index =
-                                    triangulation.faces->quads.cells[q].face(l);
+                                    triangulation.faces->quads
+                                      .get_bounding_object_indices(q)[l];
                                   if (this_index == old_index_0)
-                                    triangulation.faces->quads.cells[q]
-                                      .set_face(l, new_index_0);
+                                    triangulation.faces->quads
+                                      .get_bounding_object_indices(q)[l] =
+                                      new_index_0;
                                   else if (this_index == old_index_1)
-                                    triangulation.faces->quads.cells[q]
-                                      .set_face(l, new_index_1);
+                                    triangulation.faces->quads
+                                      .get_bounding_object_indices(q)[l] =
+                                      new_index_1;
                                 }
                             // now we have to copy all information of
                             // the two lines
@@ -5934,11 +6293,9 @@ namespace internal
                                 Assert(!old_child[i]->has_children(),
                                        ExcInternalError());
 
-                                new_child[i]->set(
-                                  internal::TriangulationImplementation::
-                                    TriaObject<1>(old_child[i]->vertex_index(0),
-                                                  old_child[i]->vertex_index(
-                                                    1)));
+                                new_child[i]->set_bounding_object_indices(
+                                  {old_child[i]->vertex_index(0),
+                                   old_child[i]->vertex_index(1)});
                                 new_child[i]->set_boundary_id_internal(
                                   old_child[i]->boundary_id());
                                 new_child[i]->set_manifold_id(
@@ -6012,23 +6369,23 @@ namespace internal
                                  ++l)
                               for (unsigned int h = 0;
                                    h <
-                                   triangulation.levels[l]->cells.cells.size();
+                                   triangulation.levels[l]->cells.n_objects();
                                    ++h)
                                 for (const unsigned int q :
                                      GeometryInfo<dim>::face_indices())
                                   {
                                     const int face_index =
                                       triangulation.levels[l]
-                                        ->cells.cells[h]
-                                        .face(q);
+                                        ->cells.get_bounding_object_indices(
+                                          h)[q];
                                     if (face_index == switch_1_index)
                                       triangulation.levels[l]
-                                        ->cells.cells[h]
-                                        .set_face(q, switch_2_index);
+                                        ->cells.get_bounding_object_indices(
+                                          h)[q] = switch_2_index;
                                     else if (face_index == switch_2_index)
                                       triangulation.levels[l]
-                                        ->cells.cells[h]
-                                        .set_face(q, switch_1_index);
+                                        ->cells.get_bounding_object_indices(
+                                          h)[q] = switch_1_index;
                                   }
                             // now we have to copy all information of
                             // the two quads
@@ -6061,12 +6418,11 @@ namespace internal
                                  switch_1->child_index(2) :
                                  -1);
 
-                            switch_1->set(
-                              internal::TriangulationImplementation::TriaObject<
-                                2>(switch_2->line_index(0),
-                                   switch_2->line_index(1),
-                                   switch_2->line_index(2),
-                                   switch_2->line_index(3)));
+                            switch_1->set_bounding_object_indices(
+                              {switch_2->line_index(0),
+                               switch_2->line_index(1),
+                               switch_2->line_index(2),
+                               switch_2->line_index(3)});
                             switch_1->set_line_orientation(
                               0, switch_2->line_orientation(0));
                             switch_1->set_line_orientation(
@@ -6095,12 +6451,11 @@ namespace internal
                               switch_1->set_children(2,
                                                      switch_2->child_index(2));
 
-                            switch_2->set(
-                              internal::TriangulationImplementation::TriaObject<
-                                2>(switch_1_lines[0],
-                                   switch_1_lines[1],
-                                   switch_1_lines[2],
-                                   switch_1_lines[3]));
+                            switch_2->set_bounding_object_indices(
+                              {switch_1_lines[0],
+                               switch_1_lines[1],
+                               switch_1_lines[2],
+                               switch_1_lines[3]});
                             switch_2->set_line_orientation(
                               0, switch_1_line_orientations[0]);
                             switch_2->set_line_orientation(
@@ -6222,8 +6577,9 @@ namespace internal
                             // now search a slot for the two
                             // child lines
                             next_unused_line =
-                              triangulation.faces->lines.next_free_pair_object(
-                                triangulation);
+                              triangulation.faces->lines
+                                .template next_free_pair_object<1>(
+                                  triangulation);
 
                             // set the child pointer of the present
                             // line
@@ -6247,14 +6603,12 @@ namespace internal
                               ExcMessage(
                                 "Internal error: We want to use a cell during refinement that should be unused, but turns out not to be."));
 
-                            children[0]->set(
-                              internal::TriangulationImplementation::TriaObject<
-                                1>(middle_line->vertex_index(0),
-                                   next_unused_vertex));
-                            children[1]->set(
-                              internal::TriangulationImplementation::TriaObject<
-                                1>(next_unused_vertex,
-                                   middle_line->vertex_index(1)));
+                            children[0]->set_bounding_object_indices(
+                              {middle_line->vertex_index(0),
+                               next_unused_vertex});
+                            children[1]->set_bounding_object_indices(
+                              {next_unused_vertex,
+                               middle_line->vertex_index(1)});
 
                             children[0]->set_used_flag();
                             children[1]->set_used_flag();
@@ -6328,8 +6682,8 @@ namespace internal
                           // anisotropically and the two lines end up
                           // as children of new line
                           next_unused_line =
-                            triangulation.faces->lines.next_free_pair_object(
-                              triangulation);
+                            triangulation.faces->lines
+                              .template next_free_pair_object<1>(triangulation);
 
                         new_lines[i] = next_unused_line;
                         ++next_unused_line;
@@ -6364,18 +6718,14 @@ namespace internal
                       quad->line(3)->child(0)->vertex_index(1),
                       next_unused_vertex};
 
-                    new_lines[0]->set(
-                      internal::TriangulationImplementation::TriaObject<1>(
-                        vertex_indices[2], vertex_indices[4]));
-                    new_lines[1]->set(
-                      internal::TriangulationImplementation::TriaObject<1>(
-                        vertex_indices[4], vertex_indices[3]));
-                    new_lines[2]->set(
-                      internal::TriangulationImplementation::TriaObject<1>(
-                        vertex_indices[0], vertex_indices[4]));
-                    new_lines[3]->set(
-                      internal::TriangulationImplementation::TriaObject<1>(
-                        vertex_indices[4], vertex_indices[1]));
+                    new_lines[0]->set_bounding_object_indices(
+                      {vertex_indices[2], vertex_indices[4]});
+                    new_lines[1]->set_bounding_object_indices(
+                      {vertex_indices[4], vertex_indices[3]});
+                    new_lines[2]->set_bounding_object_indices(
+                      {vertex_indices[0], vertex_indices[4]});
+                    new_lines[3]->set_bounding_object_indices(
+                      {vertex_indices[4], vertex_indices[1]});
 
                     for (const auto &new_line : new_lines)
                       {
@@ -6444,8 +6794,8 @@ namespace internal
                       new_quads[4];
 
                     next_unused_quad =
-                      triangulation.faces->quads.next_free_pair_object(
-                        triangulation);
+                      triangulation.faces->quads
+                        .template next_free_pair_object<2>(triangulation);
 
                     new_quads[0] = next_unused_quad;
                     Assert(
@@ -6461,8 +6811,8 @@ namespace internal
                         "Internal error: We want to use a cell during refinement that should be unused, but turns out not to be."));
 
                     next_unused_quad =
-                      triangulation.faces->quads.next_free_pair_object(
-                        triangulation);
+                      triangulation.faces->quads
+                        .template next_free_pair_object<2>(triangulation);
                     new_quads[2] = next_unused_quad;
                     Assert(
                       new_quads[2]->used() == false,
@@ -6479,39 +6829,28 @@ namespace internal
                     // note these quads as children to the present one
                     quad->set_children(0, new_quads[0]->index());
                     quad->set_children(2, new_quads[2]->index());
-                    new_quads[0]->set(
-                      internal::TriangulationImplementation::TriaObject<2>(
-                        line_indices[0],
-                        line_indices[8],
-                        line_indices[4],
-                        line_indices[10]));
-
                     quad->set_refinement_case(RefinementCase<2>::cut_xy);
 
-                    new_quads[0]->set(
-                      internal::TriangulationImplementation::TriaObject<2>(
-                        line_indices[0],
-                        line_indices[8],
-                        line_indices[4],
-                        line_indices[10]));
-                    new_quads[1]->set(
-                      internal::TriangulationImplementation::TriaObject<2>(
-                        line_indices[8],
-                        line_indices[2],
-                        line_indices[5],
-                        line_indices[11]));
-                    new_quads[2]->set(
-                      internal::TriangulationImplementation::TriaObject<2>(
-                        line_indices[1],
-                        line_indices[9],
-                        line_indices[10],
-                        line_indices[6]));
-                    new_quads[3]->set(
-                      internal::TriangulationImplementation::TriaObject<2>(
-                        line_indices[9],
-                        line_indices[3],
-                        line_indices[11],
-                        line_indices[7]));
+                    new_quads[0]->set_bounding_object_indices(
+                      {line_indices[0],
+                       line_indices[8],
+                       line_indices[4],
+                       line_indices[10]});
+                    new_quads[1]->set_bounding_object_indices(
+                      {line_indices[8],
+                       line_indices[2],
+                       line_indices[5],
+                       line_indices[11]});
+                    new_quads[2]->set_bounding_object_indices(
+                      {line_indices[1],
+                       line_indices[9],
+                       line_indices[10],
+                       line_indices[6]});
+                    new_quads[3]->set_bounding_object_indices(
+                      {line_indices[9],
+                       line_indices[3],
+                       line_indices[11],
+                       line_indices[7]});
                     for (const auto &new_quad : new_quads)
                       {
                         new_quad->set_used_flag();
@@ -6634,8 +6973,8 @@ namespace internal
                   for (unsigned int i = 0; i < n_new_lines; ++i)
                     {
                       new_lines[i] =
-                        triangulation.faces->lines.next_free_single_object(
-                          triangulation);
+                        triangulation.faces->lines
+                          .template next_free_single_object<1>(triangulation);
 
                       Assert(
                         new_lines[i]->used() == false,
@@ -6661,8 +7000,8 @@ namespace internal
                   for (unsigned int i = 0; i < n_new_quads; ++i)
                     {
                       new_quads[i] =
-                        triangulation.faces->quads.next_free_single_object(
-                          triangulation);
+                        triangulation.faces->quads
+                          .template next_free_single_object<2>(triangulation);
 
                       Assert(
                         new_quads[i]->used() == false,
@@ -6924,12 +7263,11 @@ namespace internal
 
                           // set up the new quad, line numbering is as
                           // indicated above
-                          new_quads[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[0],
-                                 line_indices[1],
-                                 line_indices[2],
-                                 line_indices[3]));
+                          new_quads[0]->set_bounding_object_indices(
+                            {line_indices[0],
+                             line_indices[1],
+                             line_indices[2],
+                             line_indices[3]});
 
                           new_quads[0]->set_line_orientation(
                             0, line_orientation[0]);
@@ -7012,22 +7350,20 @@ namespace internal
 
                           };
 
-                          new_hexes[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[1],
-                                 quad_indices[0],
-                                 quad_indices[3],
-                                 quad_indices[5],
-                                 quad_indices[7],
-                                 quad_indices[9]));
-                          new_hexes[1]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[0],
-                                 quad_indices[2],
-                                 quad_indices[4],
-                                 quad_indices[6],
-                                 quad_indices[8],
-                                 quad_indices[10]));
+                          new_hexes[0]->set_bounding_object_indices(
+                            {quad_indices[1],
+                             quad_indices[0],
+                             quad_indices[3],
+                             quad_indices[5],
+                             quad_indices[7],
+                             quad_indices[9]});
+                          new_hexes[1]->set_bounding_object_indices(
+                            {quad_indices[0],
+                             quad_indices[2],
+                             quad_indices[4],
+                             quad_indices[6],
+                             quad_indices[8],
+                             quad_indices[10]});
                           break;
                         }
 
@@ -7153,12 +7489,11 @@ namespace internal
 
                           // set up the new quad, line numbering is as
                           // indicated above
-                          new_quads[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[2],
-                                 line_indices[3],
-                                 line_indices[0],
-                                 line_indices[1]));
+                          new_quads[0]->set_bounding_object_indices(
+                            {line_indices[2],
+                             line_indices[3],
+                             line_indices[0],
+                             line_indices[1]});
 
                           new_quads[0]->set_line_orientation(
                             0, line_orientation[2]);
@@ -7241,22 +7576,20 @@ namespace internal
 
                           };
 
-                          new_hexes[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[1],
-                                 quad_indices[3],
-                                 quad_indices[5],
-                                 quad_indices[0],
-                                 quad_indices[7],
-                                 quad_indices[9]));
-                          new_hexes[1]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[2],
-                                 quad_indices[4],
-                                 quad_indices[0],
-                                 quad_indices[6],
-                                 quad_indices[8],
-                                 quad_indices[10]));
+                          new_hexes[0]->set_bounding_object_indices(
+                            {quad_indices[1],
+                             quad_indices[3],
+                             quad_indices[5],
+                             quad_indices[0],
+                             quad_indices[7],
+                             quad_indices[9]});
+                          new_hexes[1]->set_bounding_object_indices(
+                            {quad_indices[2],
+                             quad_indices[4],
+                             quad_indices[0],
+                             quad_indices[6],
+                             quad_indices[8],
+                             quad_indices[10]});
                           break;
                         }
 
@@ -7384,12 +7717,11 @@ namespace internal
 
                           // set up the new quad, line numbering is as
                           // indicated above
-                          new_quads[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[0],
-                                 line_indices[1],
-                                 line_indices[2],
-                                 line_indices[3]));
+                          new_quads[0]->set_bounding_object_indices(
+                            {line_indices[0],
+                             line_indices[1],
+                             line_indices[2],
+                             line_indices[3]});
 
                           new_quads[0]->set_line_orientation(
                             0, line_orientation[0]);
@@ -7472,22 +7804,20 @@ namespace internal
                             hex->face(5)->index() // 10
                           };
 
-                          new_hexes[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[1],
-                                 quad_indices[3],
-                                 quad_indices[5],
-                                 quad_indices[7],
-                                 quad_indices[9],
-                                 quad_indices[0]));
-                          new_hexes[1]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[2],
-                                 quad_indices[4],
-                                 quad_indices[6],
-                                 quad_indices[8],
-                                 quad_indices[0],
-                                 quad_indices[10]));
+                          new_hexes[0]->set_bounding_object_indices(
+                            {quad_indices[1],
+                             quad_indices[3],
+                             quad_indices[5],
+                             quad_indices[7],
+                             quad_indices[9],
+                             quad_indices[0]});
+                          new_hexes[1]->set_bounding_object_indices(
+                            {quad_indices[2],
+                             quad_indices[4],
+                             quad_indices[6],
+                             quad_indices[8],
+                             quad_indices[0],
+                             quad_indices[10]});
                           break;
                         }
 
@@ -7513,12 +7843,9 @@ namespace internal
                           //
 
                           // first, create the new internal line
-                          new_lines[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              1>(middle_vertex_index<dim, spacedim>(
-                                   hex->face(4)),
-                                 middle_vertex_index<dim, spacedim>(
-                                   hex->face(5))));
+                          new_lines[0]->set_bounding_object_indices(
+                            {middle_vertex_index<dim, spacedim>(hex->face(4)),
+                             middle_vertex_index<dim, spacedim>(hex->face(5))});
 
                           // again, first collect some data about the
                           // indices of the lines, with the following
@@ -7753,30 +8080,26 @@ namespace internal
                           //  |   |   |      |   |   |
                           //  *---*---*y     *-6-*-7-*
 
-                          new_quads[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[2],
-                                 line_indices[12],
-                                 line_indices[4],
-                                 line_indices[8]));
-                          new_quads[1]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[12],
-                                 line_indices[3],
-                                 line_indices[5],
-                                 line_indices[9]));
-                          new_quads[2]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[6],
-                                 line_indices[10],
-                                 line_indices[0],
-                                 line_indices[12]));
-                          new_quads[3]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[7],
-                                 line_indices[11],
-                                 line_indices[12],
-                                 line_indices[1]));
+                          new_quads[0]->set_bounding_object_indices(
+                            {line_indices[2],
+                             line_indices[12],
+                             line_indices[4],
+                             line_indices[8]});
+                          new_quads[1]->set_bounding_object_indices(
+                            {line_indices[12],
+                             line_indices[3],
+                             line_indices[5],
+                             line_indices[9]});
+                          new_quads[2]->set_bounding_object_indices(
+                            {line_indices[6],
+                             line_indices[10],
+                             line_indices[0],
+                             line_indices[12]});
+                          new_quads[3]->set_bounding_object_indices(
+                            {line_indices[7],
+                             line_indices[11],
+                             line_indices[12],
+                             line_indices[1]});
 
                           new_quads[0]->set_line_orientation(
                             0, line_orientation[2]);
@@ -7901,38 +8224,34 @@ namespace internal
                               GeometryInfo<dim>::standard_to_real_face_vertex(
                                 3, f_or[5], f_fl[5], f_ro[5]))};
 
-                          new_hexes[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[4],
-                                 quad_indices[0],
-                                 quad_indices[8],
-                                 quad_indices[2],
-                                 quad_indices[12],
-                                 quad_indices[16]));
-                          new_hexes[1]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[0],
-                                 quad_indices[6],
-                                 quad_indices[9],
-                                 quad_indices[3],
-                                 quad_indices[13],
-                                 quad_indices[17]));
-                          new_hexes[2]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[5],
-                                 quad_indices[1],
-                                 quad_indices[2],
-                                 quad_indices[10],
-                                 quad_indices[14],
-                                 quad_indices[18]));
-                          new_hexes[3]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[1],
-                                 quad_indices[7],
-                                 quad_indices[3],
-                                 quad_indices[11],
-                                 quad_indices[15],
-                                 quad_indices[19]));
+                          new_hexes[0]->set_bounding_object_indices(
+                            {quad_indices[4],
+                             quad_indices[0],
+                             quad_indices[8],
+                             quad_indices[2],
+                             quad_indices[12],
+                             quad_indices[16]});
+                          new_hexes[1]->set_bounding_object_indices(
+                            {quad_indices[0],
+                             quad_indices[6],
+                             quad_indices[9],
+                             quad_indices[3],
+                             quad_indices[13],
+                             quad_indices[17]});
+                          new_hexes[2]->set_bounding_object_indices(
+                            {quad_indices[5],
+                             quad_indices[1],
+                             quad_indices[2],
+                             quad_indices[10],
+                             quad_indices[14],
+                             quad_indices[18]});
+                          new_hexes[3]->set_bounding_object_indices(
+                            {quad_indices[1],
+                             quad_indices[7],
+                             quad_indices[3],
+                             quad_indices[11],
+                             quad_indices[15],
+                             quad_indices[19]});
                           break;
                         }
 
@@ -7958,12 +8277,9 @@ namespace internal
                           //
 
                           // first, create the new internal line
-                          new_lines[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              1>(middle_vertex_index<dim, spacedim>(
-                                   hex->face(2)),
-                                 middle_vertex_index<dim, spacedim>(
-                                   hex->face(3))));
+                          new_lines[0]->set_bounding_object_indices(
+                            {middle_vertex_index<dim, spacedim>(hex->face(2)),
+                             middle_vertex_index<dim, spacedim>(hex->face(3))});
 
                           // again, first collect some data about the
                           // indices of the lines, with the following
@@ -8198,30 +8514,26 @@ namespace internal
                           //   /    /    /      /    /    /
                           //  *----*----*x     *--6-*--7-*
 
-                          new_quads[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[0],
-                                 line_indices[12],
-                                 line_indices[6],
-                                 line_indices[10]));
-                          new_quads[1]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[12],
-                                 line_indices[1],
-                                 line_indices[7],
-                                 line_indices[11]));
-                          new_quads[2]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[4],
-                                 line_indices[8],
-                                 line_indices[2],
-                                 line_indices[12]));
-                          new_quads[3]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[5],
-                                 line_indices[9],
-                                 line_indices[12],
-                                 line_indices[3]));
+                          new_quads[0]->set_bounding_object_indices(
+                            {line_indices[0],
+                             line_indices[12],
+                             line_indices[6],
+                             line_indices[10]});
+                          new_quads[1]->set_bounding_object_indices(
+                            {line_indices[12],
+                             line_indices[1],
+                             line_indices[7],
+                             line_indices[11]});
+                          new_quads[2]->set_bounding_object_indices(
+                            {line_indices[4],
+                             line_indices[8],
+                             line_indices[2],
+                             line_indices[12]});
+                          new_quads[3]->set_bounding_object_indices(
+                            {line_indices[5],
+                             line_indices[9],
+                             line_indices[12],
+                             line_indices[3]});
 
                           new_quads[0]->set_line_orientation(
                             0, line_orientation[0]);
@@ -8356,38 +8668,34 @@ namespace internal
                           // *---*---*
                           // | 0 | 2 |
                           // *---*---*
-                          new_hexes[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[4],
-                                 quad_indices[2],
-                                 quad_indices[8],
-                                 quad_indices[12],
-                                 quad_indices[16],
-                                 quad_indices[0]));
-                          new_hexes[1]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[5],
-                                 quad_indices[3],
-                                 quad_indices[9],
-                                 quad_indices[13],
-                                 quad_indices[0],
-                                 quad_indices[18]));
-                          new_hexes[2]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[2],
-                                 quad_indices[6],
-                                 quad_indices[10],
-                                 quad_indices[14],
-                                 quad_indices[17],
-                                 quad_indices[1]));
-                          new_hexes[3]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[3],
-                                 quad_indices[7],
-                                 quad_indices[11],
-                                 quad_indices[15],
-                                 quad_indices[1],
-                                 quad_indices[19]));
+                          new_hexes[0]->set_bounding_object_indices(
+                            {quad_indices[4],
+                             quad_indices[2],
+                             quad_indices[8],
+                             quad_indices[12],
+                             quad_indices[16],
+                             quad_indices[0]});
+                          new_hexes[1]->set_bounding_object_indices(
+                            {quad_indices[5],
+                             quad_indices[3],
+                             quad_indices[9],
+                             quad_indices[13],
+                             quad_indices[0],
+                             quad_indices[18]});
+                          new_hexes[2]->set_bounding_object_indices(
+                            {quad_indices[2],
+                             quad_indices[6],
+                             quad_indices[10],
+                             quad_indices[14],
+                             quad_indices[17],
+                             quad_indices[1]});
+                          new_hexes[3]->set_bounding_object_indices(
+                            {quad_indices[3],
+                             quad_indices[7],
+                             quad_indices[11],
+                             quad_indices[15],
+                             quad_indices[1],
+                             quad_indices[19]});
                           break;
                         }
 
@@ -8414,12 +8722,10 @@ namespace internal
 
                           // first, create the new
                           // internal line
-                          new_lines[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              1>(middle_vertex_index<dim, spacedim>(
-                                   hex->face(0)),
-                                 middle_vertex_index<dim, spacedim>(
-                                   hex->face(1))));
+                          new_lines[0]->set_bounding_object_indices(
+
+                            {middle_vertex_index<dim, spacedim>(hex->face(0)),
+                             middle_vertex_index<dim, spacedim>(hex->face(1))});
 
                           // again, first collect some data about the
                           // indices of the lines, with the following
@@ -8650,30 +8956,26 @@ namespace internal
                           //   /    0    /      6         10
                           //  *---------*x     *----0----*
 
-                          new_quads[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[6],
-                                 line_indices[10],
-                                 line_indices[0],
-                                 line_indices[12]));
-                          new_quads[1]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[7],
-                                 line_indices[11],
-                                 line_indices[12],
-                                 line_indices[1]));
-                          new_quads[2]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[2],
-                                 line_indices[12],
-                                 line_indices[4],
-                                 line_indices[8]));
-                          new_quads[3]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[12],
-                                 line_indices[3],
-                                 line_indices[5],
-                                 line_indices[9]));
+                          new_quads[0]->set_bounding_object_indices(
+                            {line_indices[6],
+                             line_indices[10],
+                             line_indices[0],
+                             line_indices[12]});
+                          new_quads[1]->set_bounding_object_indices(
+                            {line_indices[7],
+                             line_indices[11],
+                             line_indices[12],
+                             line_indices[1]});
+                          new_quads[2]->set_bounding_object_indices(
+                            {line_indices[2],
+                             line_indices[12],
+                             line_indices[4],
+                             line_indices[8]});
+                          new_quads[3]->set_bounding_object_indices(
+                            {line_indices[12],
+                             line_indices[3],
+                             line_indices[5],
+                             line_indices[9]});
 
                           new_quads[0]->set_line_orientation(
                             0, line_orientation[6]);
@@ -8799,38 +9101,34 @@ namespace internal
                               child_at_origin[hex->face(5)->refinement_case() -
                                               1][f_fl[5]][f_ro[5]])};
 
-                          new_hexes[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[4],
-                                 quad_indices[8],
-                                 quad_indices[12],
-                                 quad_indices[2],
-                                 quad_indices[16],
-                                 quad_indices[0]));
-                          new_hexes[1]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[5],
-                                 quad_indices[9],
-                                 quad_indices[2],
-                                 quad_indices[14],
-                                 quad_indices[17],
-                                 quad_indices[1]));
-                          new_hexes[2]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[6],
-                                 quad_indices[10],
-                                 quad_indices[13],
-                                 quad_indices[3],
-                                 quad_indices[0],
-                                 quad_indices[18]));
-                          new_hexes[3]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[7],
-                                 quad_indices[11],
-                                 quad_indices[3],
-                                 quad_indices[15],
-                                 quad_indices[1],
-                                 quad_indices[19]));
+                          new_hexes[0]->set_bounding_object_indices(
+                            {quad_indices[4],
+                             quad_indices[8],
+                             quad_indices[12],
+                             quad_indices[2],
+                             quad_indices[16],
+                             quad_indices[0]});
+                          new_hexes[1]->set_bounding_object_indices(
+                            {quad_indices[5],
+                             quad_indices[9],
+                             quad_indices[2],
+                             quad_indices[14],
+                             quad_indices[17],
+                             quad_indices[1]});
+                          new_hexes[2]->set_bounding_object_indices(
+                            {quad_indices[6],
+                             quad_indices[10],
+                             quad_indices[13],
+                             quad_indices[3],
+                             quad_indices[0],
+                             quad_indices[18]});
+                          new_hexes[3]->set_bounding_object_indices(
+                            {quad_indices[7],
+                             quad_indices[11],
+                             quad_indices[3],
+                             quad_indices[15],
+                             quad_indices[1],
+                             quad_indices[19]});
                           break;
                         }
 
@@ -8907,24 +9205,18 @@ namespace internal
                             middle_vertex_index<dim, spacedim>(hex->face(5)),
                             next_unused_vertex};
 
-                          new_lines[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              1>(vertex_indices[2], vertex_indices[6]));
-                          new_lines[1]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              1>(vertex_indices[6], vertex_indices[3]));
-                          new_lines[2]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              1>(vertex_indices[0], vertex_indices[6]));
-                          new_lines[3]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              1>(vertex_indices[6], vertex_indices[1]));
-                          new_lines[4]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              1>(vertex_indices[4], vertex_indices[6]));
-                          new_lines[5]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              1>(vertex_indices[6], vertex_indices[5]));
+                          new_lines[0]->set_bounding_object_indices(
+                            {vertex_indices[2], vertex_indices[6]});
+                          new_lines[1]->set_bounding_object_indices(
+                            {vertex_indices[6], vertex_indices[3]});
+                          new_lines[2]->set_bounding_object_indices(
+                            {vertex_indices[0], vertex_indices[6]});
+                          new_lines[3]->set_bounding_object_indices(
+                            {vertex_indices[6], vertex_indices[1]});
+                          new_lines[4]->set_bounding_object_indices(
+                            {vertex_indices[4], vertex_indices[6]});
+                          new_lines[5]->set_bounding_object_indices(
+                            {vertex_indices[6], vertex_indices[5]});
 
                           // again, first collect some data about the
                           // indices of the lines, with the following
@@ -9242,78 +9534,66 @@ namespace internal
                           //   / 8  / 9  /      2   24    6
                           //  *----*----*x     *--8-*--9-*
 
-                          new_quads[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[10],
-                                 line_indices[28],
-                                 line_indices[16],
-                                 line_indices[24]));
-                          new_quads[1]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[28],
-                                 line_indices[14],
-                                 line_indices[17],
-                                 line_indices[25]));
-                          new_quads[2]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[11],
-                                 line_indices[29],
-                                 line_indices[24],
-                                 line_indices[20]));
-                          new_quads[3]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[29],
-                                 line_indices[15],
-                                 line_indices[25],
-                                 line_indices[21]));
-                          new_quads[4]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[18],
-                                 line_indices[26],
-                                 line_indices[0],
-                                 line_indices[28]));
-                          new_quads[5]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[26],
-                                 line_indices[22],
-                                 line_indices[1],
-                                 line_indices[29]));
-                          new_quads[6]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[19],
-                                 line_indices[27],
-                                 line_indices[28],
-                                 line_indices[4]));
-                          new_quads[7]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[27],
-                                 line_indices[23],
-                                 line_indices[29],
-                                 line_indices[5]));
-                          new_quads[8]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[2],
-                                 line_indices[24],
-                                 line_indices[8],
-                                 line_indices[26]));
-                          new_quads[9]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[24],
-                                 line_indices[6],
-                                 line_indices[9],
-                                 line_indices[27]));
-                          new_quads[10]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[3],
-                                 line_indices[25],
-                                 line_indices[26],
-                                 line_indices[12]));
-                          new_quads[11]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              2>(line_indices[25],
-                                 line_indices[7],
-                                 line_indices[27],
-                                 line_indices[13]));
+                          new_quads[0]->set_bounding_object_indices(
+                            {line_indices[10],
+                             line_indices[28],
+                             line_indices[16],
+                             line_indices[24]});
+                          new_quads[1]->set_bounding_object_indices(
+                            {line_indices[28],
+                             line_indices[14],
+                             line_indices[17],
+                             line_indices[25]});
+                          new_quads[2]->set_bounding_object_indices(
+                            {line_indices[11],
+                             line_indices[29],
+                             line_indices[24],
+                             line_indices[20]});
+                          new_quads[3]->set_bounding_object_indices(
+                            {line_indices[29],
+                             line_indices[15],
+                             line_indices[25],
+                             line_indices[21]});
+                          new_quads[4]->set_bounding_object_indices(
+                            {line_indices[18],
+                             line_indices[26],
+                             line_indices[0],
+                             line_indices[28]});
+                          new_quads[5]->set_bounding_object_indices(
+                            {line_indices[26],
+                             line_indices[22],
+                             line_indices[1],
+                             line_indices[29]});
+                          new_quads[6]->set_bounding_object_indices(
+                            {line_indices[19],
+                             line_indices[27],
+                             line_indices[28],
+                             line_indices[4]});
+                          new_quads[7]->set_bounding_object_indices(
+                            {line_indices[27],
+                             line_indices[23],
+                             line_indices[29],
+                             line_indices[5]});
+                          new_quads[8]->set_bounding_object_indices(
+                            {line_indices[2],
+                             line_indices[24],
+                             line_indices[8],
+                             line_indices[26]});
+                          new_quads[9]->set_bounding_object_indices(
+                            {line_indices[24],
+                             line_indices[6],
+                             line_indices[9],
+                             line_indices[27]});
+                          new_quads[10]->set_bounding_object_indices(
+                            {line_indices[3],
+                             line_indices[25],
+                             line_indices[26],
+                             line_indices[12]});
+                          new_quads[11]->set_bounding_object_indices(
+                            {line_indices[25],
+                             line_indices[7],
+                             line_indices[27],
+                             line_indices[13]});
 
                           // now reset the line_orientation flags of outer
                           // lines as they cannot be set in a loop (at
@@ -9510,72 +9790,64 @@ namespace internal
                                 3, f_or[5], f_fl[5], f_ro[5]))};
 
                           // bottom children
-                          new_hexes[0]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[12],
-                                 quad_indices[0],
-                                 quad_indices[20],
-                                 quad_indices[4],
-                                 quad_indices[28],
-                                 quad_indices[8]));
-                          new_hexes[1]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[0],
-                                 quad_indices[16],
-                                 quad_indices[22],
-                                 quad_indices[6],
-                                 quad_indices[29],
-                                 quad_indices[9]));
-                          new_hexes[2]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[13],
-                                 quad_indices[1],
-                                 quad_indices[4],
-                                 quad_indices[24],
-                                 quad_indices[30],
-                                 quad_indices[10]));
-                          new_hexes[3]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[1],
-                                 quad_indices[17],
-                                 quad_indices[6],
-                                 quad_indices[26],
-                                 quad_indices[31],
-                                 quad_indices[11]));
+                          new_hexes[0]->set_bounding_object_indices(
+                            {quad_indices[12],
+                             quad_indices[0],
+                             quad_indices[20],
+                             quad_indices[4],
+                             quad_indices[28],
+                             quad_indices[8]});
+                          new_hexes[1]->set_bounding_object_indices(
+                            {quad_indices[0],
+                             quad_indices[16],
+                             quad_indices[22],
+                             quad_indices[6],
+                             quad_indices[29],
+                             quad_indices[9]});
+                          new_hexes[2]->set_bounding_object_indices(
+                            {quad_indices[13],
+                             quad_indices[1],
+                             quad_indices[4],
+                             quad_indices[24],
+                             quad_indices[30],
+                             quad_indices[10]});
+                          new_hexes[3]->set_bounding_object_indices(
+                            {quad_indices[1],
+                             quad_indices[17],
+                             quad_indices[6],
+                             quad_indices[26],
+                             quad_indices[31],
+                             quad_indices[11]});
 
                           // top children
-                          new_hexes[4]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[14],
-                                 quad_indices[2],
-                                 quad_indices[21],
-                                 quad_indices[5],
-                                 quad_indices[8],
-                                 quad_indices[32]));
-                          new_hexes[5]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[2],
-                                 quad_indices[18],
-                                 quad_indices[23],
-                                 quad_indices[7],
-                                 quad_indices[9],
-                                 quad_indices[33]));
-                          new_hexes[6]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[15],
-                                 quad_indices[3],
-                                 quad_indices[5],
-                                 quad_indices[25],
-                                 quad_indices[10],
-                                 quad_indices[34]));
-                          new_hexes[7]->set(
-                            internal::TriangulationImplementation::TriaObject<
-                              3>(quad_indices[3],
-                                 quad_indices[19],
-                                 quad_indices[7],
-                                 quad_indices[27],
-                                 quad_indices[11],
-                                 quad_indices[35]));
+                          new_hexes[4]->set_bounding_object_indices(
+                            {quad_indices[14],
+                             quad_indices[2],
+                             quad_indices[21],
+                             quad_indices[5],
+                             quad_indices[8],
+                             quad_indices[32]});
+                          new_hexes[5]->set_bounding_object_indices(
+                            {quad_indices[2],
+                             quad_indices[18],
+                             quad_indices[23],
+                             quad_indices[7],
+                             quad_indices[9],
+                             quad_indices[33]});
+                          new_hexes[6]->set_bounding_object_indices(
+                            {quad_indices[15],
+                             quad_indices[3],
+                             quad_indices[5],
+                             quad_indices[25],
+                             quad_indices[10],
+                             quad_indices[34]});
+                          new_hexes[7]->set_bounding_object_indices(
+                            {quad_indices[3],
+                             quad_indices[19],
+                             quad_indices[7],
+                             quad_indices[27],
+                             quad_indices[11],
+                             quad_indices[35]});
                           break;
                         }
                       default:
@@ -9689,10 +9961,7 @@ namespace internal
         if (spacedim > dim)
           return;
 
-        for (typename Triangulation<dim, spacedim>::cell_iterator cell =
-               triangulation.begin();
-             cell != triangulation.end();
-             ++cell)
+        for (const auto &cell : triangulation.cell_iterators())
           if (cell->at_boundary() && cell->refine_flag_set() &&
               cell->refine_flag_set() !=
                 RefinementCase<dim>::isotropic_refinement)
@@ -9801,10 +10070,7 @@ namespace internal
 
             // flag those lines that are refined and will not be
             // coarsened and those that will be refined
-            for (typename Triangulation<dim, spacedim>::cell_iterator cell =
-                   triangulation.begin();
-                 cell != triangulation.end();
-                 ++cell)
+            for (const auto &cell : triangulation.cell_iterators())
               if (cell->refine_flag_set())
                 {
                   for (unsigned int line = 0;
@@ -10234,11 +10500,7 @@ Triangulation<dim, spacedim>::set_all_manifold_ids(
     ExcMessage(
       "Error: set_all_manifold_ids() can not be called on an empty Triangulation."));
 
-  typename Triangulation<dim, spacedim>::active_cell_iterator
-    cell = this->begin_active(),
-    endc = this->end();
-
-  for (; cell != endc; ++cell)
+  for (const auto &cell : this->active_cell_iterators())
     cell->set_all_manifold_ids(m_number);
 }
 
@@ -10253,11 +10515,7 @@ Triangulation<dim, spacedim>::set_all_manifold_ids_on_boundary(
     ExcMessage(
       "Error: set_all_manifold_ids_on_boundary() can not be called on an empty Triangulation."));
 
-  typename Triangulation<dim, spacedim>::active_cell_iterator
-    cell = this->begin_active(),
-    endc = this->end();
-
-  for (; cell != endc; ++cell)
+  for (const auto &cell : this->active_cell_iterators())
     for (auto f : GeometryInfo<dim>::face_indices())
       if (cell->face(f)->at_boundary())
         cell->face(f)->set_all_manifold_ids(m_number);
@@ -10276,11 +10534,8 @@ Triangulation<dim, spacedim>::set_all_manifold_ids_on_boundary(
       "Error: set_all_manifold_ids_on_boundary() can not be called on an empty Triangulation."));
 
   bool boundary_found = false;
-  typename Triangulation<dim, spacedim>::active_cell_iterator
-    cell = this->begin_active(),
-    endc = this->end();
 
-  for (; cell != endc; ++cell)
+  for (const auto &cell : this->active_cell_iterators())
     {
       // loop on faces
       for (auto f : GeometryInfo<dim>::face_indices())
@@ -10409,9 +10664,8 @@ Triangulation<dim, spacedim>::copy_triangulation(
   smooth_grid            = other_tria.smooth_grid;
 
   if (dim > 1)
-    faces =
-      std::make_unique<internal::TriangulationImplementation::TriaFaces<dim>>(
-        *other_tria.faces);
+    faces = std::make_unique<internal::TriangulationImplementation::TriaFaces>(
+      *other_tria.faces);
 
   auto bdry_iterator = other_tria.manifold.begin();
   for (; bdry_iterator != other_tria.manifold.end(); ++bdry_iterator)
@@ -10421,7 +10675,7 @@ Triangulation<dim, spacedim>::copy_triangulation(
   levels.reserve(other_tria.levels.size());
   for (unsigned int level = 0; level < other_tria.levels.size(); ++level)
     levels.push_back(
-      std::make_unique<internal::TriangulationImplementation::TriaLevel<dim>>(
+      std::make_unique<internal::TriangulationImplementation::TriaLevel>(
         *other_tria.levels[level]));
 
   number_cache = other_tria.number_cache;
@@ -10487,8 +10741,23 @@ Triangulation<dim, spacedim>::create_triangulation(
   // because sometimes other objects are already attached to it:
   try
     {
-      internal::TriangulationImplementation::Implementation::
-        create_triangulation(v, cells, subcelldata, *this);
+      const bool arbitray_mesh_provided =
+        std::any_of(cells.begin(), cells.end(), [](const auto &cell) {
+          return cell.vertices.size() != GeometryInfo<dim>::vertices_per_cell;
+        });
+
+      if (arbitray_mesh_provided == false)
+        {
+          internal::TriangulationImplementation::Implementation::
+            create_triangulation(v, cells, subcelldata, *this);
+        }
+      else
+        {
+          AssertThrow(
+            false,
+            ExcMessage(
+              "A cell with invalid number of vertices has been provided."));
+        }
     }
   catch (...)
     {
@@ -10703,16 +10972,12 @@ Triangulation<dim, spacedim>::create_triangulation(
             while (cell_info->id != cell->id().template to_binary<dim>())
               ++cell;
             if (dim == 3)
-              for (unsigned int quad = 0;
-                   quad < GeometryInfo<dim>::quads_per_cell;
-                   ++quad)
+              for (const auto quad : cell->face_indices())
                 cell->quad(quad)->set_manifold_id(
                   cell_info->manifold_quad_ids[quad]);
 
             if (dim >= 2)
-              for (unsigned int line = 0;
-                   line < GeometryInfo<dim>::lines_per_cell;
-                   ++line)
+              for (const auto line : cell->line_indices())
                 cell->line(line)->set_manifold_id(
                   cell_info->manifold_line_ids[line]);
 
@@ -10788,9 +11053,8 @@ Triangulation<dim, spacedim>::set_all_refine_flags()
 {
   Assert(n_cells() > 0,
          ExcMessage("Error: An empty Triangulation can not be refined."));
-  active_cell_iterator cell = begin_active(), endc = end();
 
-  for (; cell != endc; ++cell)
+  for (const auto &cell : this->active_cell_iterators())
     {
       cell->clear_coarsen_flag();
       cell->set_refine_flag();
@@ -10821,9 +11085,9 @@ void
 Triangulation<dim, spacedim>::save_refine_flags(std::vector<bool> &v) const
 {
   v.resize(dim * n_active_cells(), false);
-  std::vector<bool>::iterator i    = v.begin();
-  active_cell_iterator        cell = begin_active(), endc = end();
-  for (; cell != endc; ++cell)
+  std::vector<bool>::iterator i = v.begin();
+
+  for (const auto &cell : this->active_cell_iterators())
     for (unsigned int j = 0; j < dim; ++j, ++i)
       if (cell->refine_flag_set() & (1 << j))
         *i = true;
@@ -10864,9 +11128,8 @@ Triangulation<dim, spacedim>::load_refine_flags(const std::vector<bool> &v)
 {
   AssertThrow(v.size() == dim * n_active_cells(), ExcGridReadError());
 
-  active_cell_iterator              cell = begin_active(), endc = end();
   std::vector<bool>::const_iterator i = v.begin();
-  for (; cell != endc; ++cell)
+  for (const auto &cell : this->active_cell_iterators())
     {
       unsigned int ref_case = 0;
 
@@ -10891,10 +11154,12 @@ void
 Triangulation<dim, spacedim>::save_coarsen_flags(std::vector<bool> &v) const
 {
   v.resize(n_active_cells(), false);
-  std::vector<bool>::iterator i    = v.begin();
-  active_cell_iterator        cell = begin_active(), endc = end();
-  for (; cell != endc; ++cell, ++i)
-    *i = cell->coarsen_flag_set();
+  std::vector<bool>::iterator i = v.begin();
+  for (const auto &cell : this->active_cell_iterators())
+    {
+      *i = cell->coarsen_flag_set();
+      ++i;
+    }
 
   Assert(i == v.end(), ExcInternalError());
 }
@@ -10935,13 +11200,15 @@ Triangulation<dim, spacedim>::load_coarsen_flags(const std::vector<bool> &v)
 {
   Assert(v.size() == n_active_cells(), ExcGridReadError());
 
-  active_cell_iterator              cell = begin_active(), endc = end();
   std::vector<bool>::const_iterator i = v.begin();
-  for (; cell != endc; ++cell, ++i)
-    if (*i == true)
-      cell->set_coarsen_flag();
-    else
-      cell->clear_coarsen_flag();
+  for (const auto &cell : this->active_cell_iterators())
+    {
+      if (*i == true)
+        cell->set_coarsen_flag();
+      else
+        cell->clear_coarsen_flag();
+      ++i;
+    }
 
   Assert(i == v.end(), ExcInternalError());
 }
@@ -10962,37 +11229,30 @@ Triangulation<dim, spacedim>::get_anisotropic_refinement_flag() const
 namespace
 {
   // clear user data of cells
-  template <int dim>
   void
-  clear_user_data(
-    std::vector<
-      std::unique_ptr<internal::TriangulationImplementation::TriaLevel<dim>>>
-      &levels)
+  clear_user_data(std::vector<std::unique_ptr<
+                    internal::TriangulationImplementation::TriaLevel>> &levels)
   {
-    for (unsigned int level = 0; level < levels.size(); ++level)
-      levels[level]->cells.clear_user_data();
+    for (auto &level : levels)
+      level->cells.clear_user_data();
   }
 
 
   // clear user data of faces
-  void clear_user_data(internal::TriangulationImplementation::TriaFaces<1> *)
-  {
-    // nothing to do in 1d
-  }
-
-
   void
-    clear_user_data(internal::TriangulationImplementation::TriaFaces<2> *faces)
+  clear_user_data(internal::TriangulationImplementation::TriaFaces *faces)
   {
-    faces->lines.clear_user_data();
-  }
+    if (faces->dim == 2)
+      {
+        faces->lines.clear_user_data();
+      }
 
 
-  void
-    clear_user_data(internal::TriangulationImplementation::TriaFaces<3> *faces)
-  {
-    faces->lines.clear_user_data();
-    faces->quads.clear_user_data();
+    if (faces->dim == 3)
+      {
+        faces->lines.clear_user_data();
+        faces->quads.clear_user_data();
+      }
   }
 } // namespace
 
@@ -11010,24 +11270,27 @@ Triangulation<dim, spacedim>::clear_user_data()
 
 namespace
 {
-  void clear_user_flags_line(
-    std::vector<
-      std::unique_ptr<internal::TriangulationImplementation::TriaLevel<1>>>
-      &levels,
-    internal::TriangulationImplementation::TriaFaces<1> *)
-  {
-    for (const auto &level : levels)
-      level->cells.clear_user_flags();
-  }
-
-  template <int dim>
   void
   clear_user_flags_line(
+    unsigned int dim,
     std::vector<
-      std::unique_ptr<internal::TriangulationImplementation::TriaLevel<dim>>> &,
-    internal::TriangulationImplementation::TriaFaces<dim> *faces)
+      std::unique_ptr<internal::TriangulationImplementation::TriaLevel>>
+      &                                               levels,
+    internal::TriangulationImplementation::TriaFaces *faces)
   {
-    faces->lines.clear_user_flags();
+    if (dim == 1)
+      {
+        for (const auto &level : levels)
+          level->cells.clear_user_flags();
+      }
+    else if (dim == 2 || dim == 3)
+      {
+        faces->lines.clear_user_flags();
+      }
+    else
+      {
+        Assert(false, ExcNotImplemented())
+      }
   }
 } // namespace
 
@@ -11036,39 +11299,38 @@ template <int dim, int spacedim>
 void
 Triangulation<dim, spacedim>::clear_user_flags_line()
 {
-  dealii::clear_user_flags_line(levels, faces.get());
+  dealii::clear_user_flags_line(dim, levels, faces.get());
 }
 
 
 
 namespace
 {
-  void clear_user_flags_quad(
-    std::vector<
-      std::unique_ptr<internal::TriangulationImplementation::TriaLevel<1>>> &,
-    internal::TriangulationImplementation::TriaFaces<1> *)
-  {
-    // nothing to do in 1d
-  }
-
-  void clear_user_flags_quad(
-    std::vector<
-      std::unique_ptr<internal::TriangulationImplementation::TriaLevel<2>>>
-      &levels,
-    internal::TriangulationImplementation::TriaFaces<2> *)
-  {
-    for (const auto &level : levels)
-      level->cells.clear_user_flags();
-  }
-
-  template <int dim>
   void
   clear_user_flags_quad(
+    unsigned int dim,
     std::vector<
-      std::unique_ptr<internal::TriangulationImplementation::TriaLevel<dim>>> &,
-    internal::TriangulationImplementation::TriaFaces<dim> *faces)
+      std::unique_ptr<internal::TriangulationImplementation::TriaLevel>>
+      &                                               levels,
+    internal::TriangulationImplementation::TriaFaces *faces)
   {
-    faces->quads.clear_user_flags();
+    if (dim == 1)
+      {
+        // nothing to do in 1d
+      }
+    else if (dim == 2)
+      {
+        for (const auto &level : levels)
+          level->cells.clear_user_flags();
+      }
+    else if (dim == 3)
+      {
+        faces->quads.clear_user_flags();
+      }
+    else
+      {
+        Assert(false, ExcNotImplemented())
+      }
   }
 } // namespace
 
@@ -11077,38 +11339,38 @@ template <int dim, int spacedim>
 void
 Triangulation<dim, spacedim>::clear_user_flags_quad()
 {
-  dealii::clear_user_flags_quad(levels, faces.get());
+  dealii::clear_user_flags_quad(dim, levels, faces.get());
 }
 
 
 
 namespace
 {
-  void clear_user_flags_hex(
+  void
+  clear_user_flags_hex(
+    unsigned int dim,
     std::vector<
-      std::unique_ptr<internal::TriangulationImplementation::TriaLevel<1>>> &,
-    internal::TriangulationImplementation::TriaFaces<1> *)
-  {
-    // nothing to do in 1d
-  }
-
-
-  void clear_user_flags_hex(
-    std::vector<
-      std::unique_ptr<internal::TriangulationImplementation::TriaLevel<2>>> &,
-    internal::TriangulationImplementation::TriaFaces<2> *)
-  {
-    // nothing to do in 2d
-  }
-
-  void clear_user_flags_hex(
-    std::vector<
-      std::unique_ptr<internal::TriangulationImplementation::TriaLevel<3>>>
+      std::unique_ptr<internal::TriangulationImplementation::TriaLevel>>
       &levels,
-    internal::TriangulationImplementation::TriaFaces<3> *)
+    internal::TriangulationImplementation::TriaFaces *)
   {
-    for (const auto &level : levels)
-      level->cells.clear_user_flags();
+    if (dim == 1)
+      {
+        // nothing to do in 1d
+      }
+    else if (dim == 2)
+      {
+        // nothing to do in 2d
+      }
+    else if (dim == 3)
+      {
+        for (const auto &level : levels)
+          level->cells.clear_user_flags();
+      }
+    else
+      {
+        Assert(false, ExcNotImplemented())
+      }
   }
 } // namespace
 
@@ -11117,7 +11379,7 @@ template <int dim, int spacedim>
 void
 Triangulation<dim, spacedim>::clear_user_flags_hex()
 {
-  dealii::clear_user_flags_hex(levels, faces.get());
+  dealii::clear_user_flags_hex(dim, levels, faces.get());
 }
 
 
@@ -11986,14 +12248,14 @@ typename Triangulation<dim, spacedim>::cell_iterator
 Triangulation<dim, spacedim>::last() const
 {
   const unsigned int level = levels.size() - 1;
-  if (levels[level]->cells.cells.size() == 0)
+  if (levels[level]->cells.n_objects() == 0)
     return end(level);
 
   // find the last raw iterator on
   // this level
   raw_cell_iterator ri(const_cast<Triangulation<dim, spacedim> *>(this),
                        level,
-                       levels[level]->cells.cells.size() - 1);
+                       levels[level]->cells.n_objects() - 1);
 
   // then move to the last used one
   if (ri->used() == true)
@@ -12312,7 +12574,7 @@ Triangulation<dim, spacedim>::begin_raw_line(const unsigned int level) const
         // triangulation.
         Assert(level < levels.size(), ExcInvalidLevel(level, levels.size()));
 
-        if (level >= levels.size() || levels[level]->cells.cells.size() == 0)
+        if (level >= levels.size() || levels[level]->cells.n_objects() == 0)
           return end_line();
 
         return raw_line_iterator(
@@ -12402,7 +12664,7 @@ Triangulation<dim, spacedim>::begin_raw_quad(const unsigned int level) const
           // triangulation.
           Assert(level < levels.size(), ExcInvalidLevel(level, levels.size()));
 
-          if (level >= levels.size() || levels[level]->cells.cells.size() == 0)
+          if (level >= levels.size() || levels[level]->cells.n_objects() == 0)
             return end_quad();
 
           return raw_quad_iterator(
@@ -12502,7 +12764,7 @@ Triangulation<dim, spacedim>::begin_raw_hex(const unsigned int level) const
           // triangulation.
           Assert(level < levels.size(), ExcInvalidLevel(level, levels.size()));
 
-          if (level >= levels.size() || levels[level]->cells.cells.size() == 0)
+          if (level >= levels.size() || levels[level]->cells.n_objects() == 0)
             return end_hex();
 
           return raw_hex_iterator(
@@ -12775,66 +13037,17 @@ Triangulation<dim, spacedim>::n_lines() const
 }
 
 
-// TODO: Merge the following 6 functions somehow
-template <>
-unsigned int
-Triangulation<1, 1>::n_raw_lines(const unsigned int level) const
-{
-  AssertIndexRange(level, n_levels());
-  return levels[level]->cells.cells.size();
-}
-
-
-template <>
-unsigned int
-Triangulation<1, 1>::n_raw_lines() const
-{
-  Assert(false, ExcNotImplemented());
-  return 0;
-}
-
-
-
-template <>
-unsigned int
-Triangulation<1, 2>::n_raw_lines(const unsigned int level) const
-{
-  AssertIndexRange(level, n_levels());
-  return levels[level]->cells.cells.size();
-}
-
-
-template <>
-unsigned int
-Triangulation<1, 2>::n_raw_lines() const
-{
-  Assert(false, ExcNotImplemented());
-  return 0;
-}
-
-
-template <>
-unsigned int
-Triangulation<1, 3>::n_raw_lines(const unsigned int level) const
-{
-  AssertIndexRange(level, n_levels());
-  return levels[level]->cells.cells.size();
-}
-
-template <>
-unsigned int
-Triangulation<1, 3>::n_raw_lines() const
-{
-  Assert(false, ExcNotImplemented());
-  return 0;
-}
-
-
 
 template <int dim, int spacedim>
 unsigned int
-Triangulation<dim, spacedim>::n_raw_lines(const unsigned int) const
+Triangulation<dim, spacedim>::n_raw_lines(const unsigned int level) const
 {
+  if (dim == 1)
+    {
+      AssertIndexRange(level, n_levels());
+      return levels[level]->cells.n_objects();
+    }
+
   Assert(false, ExcFacesHaveNoLevel());
   return 0;
 }
@@ -12844,7 +13057,13 @@ template <int dim, int spacedim>
 unsigned int
 Triangulation<dim, spacedim>::n_raw_lines() const
 {
-  return faces->lines.cells.size();
+  if (dim == 1)
+    {
+      Assert(false, ExcNotImplemented());
+      return 0;
+    }
+
+  return faces->lines.n_objects();
 }
 
 
@@ -13047,7 +13266,7 @@ unsigned int
 Triangulation<2, 2>::n_raw_quads(const unsigned int level) const
 {
   AssertIndexRange(level, n_levels());
-  return levels[level]->cells.cells.size();
+  return levels[level]->cells.n_objects();
 }
 
 
@@ -13057,7 +13276,7 @@ unsigned int
 Triangulation<2, 3>::n_raw_quads(const unsigned int level) const
 {
   AssertIndexRange(level, n_levels());
-  return levels[level]->cells.cells.size();
+  return levels[level]->cells.n_objects();
 }
 
 
@@ -13085,7 +13304,7 @@ template <>
 unsigned int
 Triangulation<3, 3>::n_raw_quads() const
 {
-  return faces->quads.cells.size();
+  return faces->quads.n_objects();
 }
 
 
@@ -13177,7 +13396,7 @@ unsigned int
 Triangulation<3, 3>::n_raw_hexs(const unsigned int level) const
 {
   AssertIndexRange(level, n_levels());
-  return levels[level]->cells.cells.size();
+  return levels[level]->cells.n_objects();
 }
 
 
@@ -13486,16 +13705,15 @@ Triangulation<dim, spacedim>::execute_refinement()
     *this, levels.size(), number_cache);
 
 #ifdef DEBUG
-  for (unsigned int level = 0; level < levels.size(); ++level)
-    levels[level]->cells.monitor_memory(dim);
+  for (const auto &level : levels)
+    monitor_memory(level->cells, dim);
 
   // check whether really all refinement flags are reset (also of
   // previously non-active cells which we may not have touched. If the
   // refinement flag of a non-active cell is set, something went wrong
   // since the cell-accessors should have caught this)
-  cell_iterator cell = begin(), endc = end();
-  while (cell != endc)
-    Assert(!(cell++)->refine_flag_set(), ExcInternalError());
+  for (const auto &cell : this->cell_iterators())
+    Assert(!cell->refine_flag_set(), ExcInternalError());
 #endif
 
   return cells_with_distorted_children;
@@ -13528,8 +13746,7 @@ Triangulation<dim, spacedim>::execute_coarsening()
   // child
   clear_user_flags();
 
-  cell_iterator cell = begin(), endc = end();
-  for (; cell != endc; ++cell)
+  for (const auto &cell : this->cell_iterators())
     if (!cell->is_active())
       if (cell->child(0)->coarsen_flag_set())
         {
@@ -13553,6 +13770,7 @@ Triangulation<dim, spacedim>::execute_coarsening()
   // since we delete the *children* of cells, we can ignore cells
   // on the highest level, i.e., level must be less than or equal
   // to n_levels()-2.
+  cell_iterator cell = begin(), endc = end();
   if (levels.size() >= 2)
     for (cell = last(); cell != endc; --cell)
       if (cell->level() <= static_cast<int>(levels.size() - 2) &&
@@ -13614,8 +13832,7 @@ Triangulation<dim, spacedim>::fix_coarsen_flags()
           // store highest level one of the cells adjacent to a vertex
           // belongs to
           std::fill(vertex_level.begin(), vertex_level.end(), 0);
-          active_cell_iterator cell = begin_active(), endc = end();
-          for (; cell != endc; ++cell)
+          for (const auto &cell : this->active_cell_iterators())
             {
               if (cell->refine_flag_set())
                 for (const unsigned int vertex :
@@ -13656,6 +13873,7 @@ Triangulation<dim, spacedim>::fix_coarsen_flags()
           // refinement flags, but we will also have to remove
           // coarsening flags on cells adjacent to vertices that will
           // see refinement
+          active_cell_iterator cell = begin_active(), endc = end();
           for (cell = last_active(); cell != endc; --cell)
             if (cell->refine_flag_set() == false)
               {
@@ -13704,12 +13922,10 @@ Triangulation<dim, spacedim>::fix_coarsen_flags()
       clear_user_flags();
       // Coarsen flags of cells with no mother cell, i.e. on the
       // coarsest level are deleted explicitly.
-      active_cell_iterator acell = begin_active(0), end_ac = end_active(0);
-      for (; acell != end_ac; ++acell)
+      for (const auto &acell : this->active_cell_iterators_on_level(0))
         acell->clear_coarsen_flag();
 
-      cell_iterator cell = begin(), endc = end();
-      for (; cell != endc; ++cell)
+      for (const auto &cell : this->cell_iterators())
         {
           // nothing to do if we are already on the finest level
           if (cell->is_active())
@@ -13735,7 +13951,7 @@ Triangulation<dim, spacedim>::fix_coarsen_flags()
         // in principle no coarsen flags should be set any more at this
         // point
 #if DEBUG
-      for (cell = begin(); cell != endc; ++cell)
+      for (auto &cell : this->cell_iterators())
         Assert(cell->coarsen_flag_set() == false, ExcInternalError());
 #endif
 
@@ -13756,6 +13972,7 @@ Triangulation<dim, spacedim>::fix_coarsen_flags()
       // have to work from the finest level to the coarsest one, since
       // we occasionally inspect user flags of cells on finer levels
       // and need to be sure that these flags are final
+      cell_iterator cell = begin(), endc = end();
       for (cell = last(); cell != endc; --cell)
         if (cell->user_flag_set())
           // if allowed: flag the
@@ -15111,8 +15328,8 @@ Triangulation<dim, spacedim>::memory_consumption() const
 {
   std::size_t mem = 0;
   mem += MemoryConsumption::memory_consumption(levels);
-  for (unsigned int i = 0; i < levels.size(); ++i)
-    mem += MemoryConsumption::memory_consumption(*levels[i]);
+  for (const auto &level : levels)
+    mem += MemoryConsumption::memory_consumption(*level);
   mem += MemoryConsumption::memory_consumption(vertices);
   mem += MemoryConsumption::memory_consumption(vertices_used);
   mem += sizeof(manifold);

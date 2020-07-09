@@ -27,6 +27,7 @@
 
 #include <deal.II/grid/tria_description.h>
 #include <deal.II/grid/tria_iterator_selector.h>
+#include <deal.II/grid/tria_levels.h>
 
 #include <boost/serialization/map.hpp>
 #include <boost/serialization/split_member.hpp>
@@ -78,12 +79,8 @@ namespace internal
 {
   namespace TriangulationImplementation
   {
-    template <int dim>
-    class TriaLevel;
-    template <int dim>
     class TriaFaces;
 
-    template <typename>
     class TriaObjects;
 
     /**
@@ -129,8 +126,6 @@ namespace internal
      * until we hit the end iterator. This is time consuming and since access
      * to the number of lines etc is a rather frequent operation, this was not
      * an optimal solution.
-     *
-     * @author Wolfgang Bangerth, 1999
      */
     template <int dim>
     struct NumberCache
@@ -146,8 +141,6 @@ namespace internal
      * until we hit the end iterator. This is time consuming and since access
      * to the number of lines etc is a rather frequent operation, this was not
      * an optimal solution.
-     *
-     * @author Wolfgang Bangerth, 1999
      */
     template <>
     struct NumberCache<1>
@@ -210,8 +203,6 @@ namespace internal
      * until we hit the end iterator. This is time consuming and since access
      * to the number of lines etc is a rather frequent operation, this was not
      * an optimal solution.
-     *
-     * @author Wolfgang Bangerth, 1999
      */
     template <>
     struct NumberCache<2> : public NumberCache<1>
@@ -270,8 +261,6 @@ namespace internal
      * until we hit the end . This is time consuming and since access to the
      * number of lines etc is a rather frequent operation, this was not an
      * optimal solution.
-     *
-     * @author Wolfgang Bangerth, 1999
      */
     template <>
     struct NumberCache<3> : public NumberCache<2>
@@ -1103,7 +1092,6 @@ namespace internal
  * data stored in the triangulation.
  *
  * @ingroup grid aniso
- * @author Wolfgang Bangerth, 1998; Ralf Hartmann, 2005
  */
 template <int dim, int spacedim = dim>
 class Triangulation : public Subscriptor
@@ -1341,6 +1329,12 @@ public:
    * @ingroup Iterators
    */
   using cell_iterator = TriaIterator<CellAccessor<dim, spacedim>>;
+
+  /**
+   * The same as above to allow the usage of the "MeshType concept" also
+   * on the refinement levels.
+   */
+  using level_cell_iterator = cell_iterator;
 
   /**
    * An alias that is used to identify
@@ -3829,8 +3823,8 @@ private:
    * Array of pointers pointing to the objects storing the cell data on the
    * different levels.
    */
-  std::vector<std::unique_ptr<
-    dealii::internal::TriangulationImplementation::TriaLevel<dim>>>
+  std::vector<
+    std::unique_ptr<dealii::internal::TriangulationImplementation::TriaLevel>>
     levels;
 
   /**
@@ -3838,7 +3832,7 @@ private:
    * in 2D it contains data concerning lines and in 3D quads and lines.  All
    * of these have no level and are therefore treated separately.
    */
-  std::unique_ptr<dealii::internal::TriangulationImplementation::TriaFaces<dim>>
+  std::unique_ptr<dealii::internal::TriangulationImplementation::TriaFaces>
     faces;
 
 
@@ -3937,7 +3931,6 @@ private:
 
   friend struct dealii::internal::TriangulationImplementation::Implementation;
 
-  template <typename>
   friend class dealii::internal::TriangulationImplementation::TriaObjects;
 
   friend class CellId;
@@ -4048,8 +4041,8 @@ Triangulation<dim, spacedim>::save(Archive &ar, const unsigned int) const
 
   unsigned int n_levels = levels.size();
   ar &         n_levels;
-  for (unsigned int i = 0; i < levels.size(); ++i)
-    ar &levels[i];
+  for (const auto &level : levels)
+    ar &level;
 
   // boost dereferences a nullptr when serializing a nullptr
   // at least up to 1.65.1. This causes problems with clang-5.
@@ -4091,12 +4084,11 @@ Triangulation<dim, spacedim>::load(Archive &ar, const unsigned int)
   unsigned int size;
   ar &         size;
   levels.resize(size);
-  for (unsigned int i = 0; i < levels.size(); ++i)
+  for (auto &level_ : levels)
     {
-      std::unique_ptr<internal::TriangulationImplementation::TriaLevel<dim>>
-          level;
-      ar &level;
-      levels[i] = std::move(level);
+      std::unique_ptr<internal::TriangulationImplementation::TriaLevel> level;
+      ar &                                                              level;
+      level_ = std::move(level);
     }
 
   // Workaround for nullptr, see in save().
@@ -4115,8 +4107,8 @@ Triangulation<dim, spacedim>::load(Archive &ar, const unsigned int)
   // they are easy enough to rebuild upon re-loading data. do
   // this here. don't forget to first resize the fields appropriately
   {
-    for (unsigned int l = 0; l < levels.size(); ++l)
-      levels[l]->active_cell_indices.resize(levels[l]->refine_flags.size());
+    for (auto &level : levels)
+      level->active_cell_indices.resize(level->refine_flags.size());
     reset_active_cell_indices();
   }
 
@@ -4167,9 +4159,6 @@ Triangulation<dim, spacedim>::coarse_cell_index_to_coarse_cell_id(
 
 template <>
 unsigned int
-Triangulation<1, 1>::n_raw_lines(const unsigned int level) const;
-template <>
-unsigned int
 Triangulation<1, 1>::n_quads() const;
 template <>
 unsigned int
@@ -4200,9 +4189,6 @@ Triangulation<1, 1>::max_adjacent_cells() const;
 
 template <>
 unsigned int
-Triangulation<1, 2>::n_raw_lines(const unsigned int level) const;
-template <>
-unsigned int
 Triangulation<1, 2>::n_quads() const;
 template <>
 unsigned int
@@ -4230,9 +4216,6 @@ Triangulation<1, 2>::max_adjacent_cells() const;
 // -- Explicit specializations for codimension two grids
 
 
-template <>
-unsigned int
-Triangulation<1, 3>::n_raw_lines(const unsigned int level) const;
 template <>
 unsigned int
 Triangulation<1, 3>::n_quads() const;

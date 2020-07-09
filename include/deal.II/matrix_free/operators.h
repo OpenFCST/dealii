@@ -181,8 +181,6 @@ namespace MatrixFreeOperators
    * system_rhs *= -1.;
    * // proceed with other terms from right hand side...
    * @endcode
-   *
-   * @author Denis Davydov, Daniel Arndt, Martin Kronbichler, 2016, 2017
    */
   template <int dim,
             typename VectorType = LinearAlgebra::distributed::Vector<double>,
@@ -532,8 +530,6 @@ namespace MatrixFreeOperators
    * Note that the vmult_interface_down is used during the restriction phase of
    * the multigrid V-cycle, whereas vmult_interface_up is used during the
    * prolongation phase.
-   *
-   * @author Martin Kronbichler, 2016
    */
   template <typename OperatorType>
   class MGInterfaceOperator : public Subscriptor
@@ -613,8 +609,6 @@ namespace MatrixFreeOperators
    * to provide an array for the inverse of the local coefficient (this class
    * provide a helper method 'fill_inverse_JxW_values' to get the inverse of a
    * constant-coefficient operator).
-   *
-   * @author Martin Kronbichler, 2014
    */
   template <int dim,
             int fe_degree,
@@ -684,7 +678,7 @@ namespace MatrixFreeOperators
      * @code
      * for (unsigned int q=0; q<phi.n_q_points; ++q)
      *   phi.submit_value(array[q], q);
-     * phi.integrate(true, false);
+     * phi.integrate(EvaluationFlags::values);
      * inverse_mass.apply(coefficients, 1, phi.begin_dof_values(),
      *                    phi.begin_dof_values());
      * @endcode
@@ -734,8 +728,6 @@ namespace MatrixFreeOperators
    * Note that this class only supports the non-blocked vector variant of the
    * Base operator because only a single FEEvaluation object is used in the
    * apply function.
-   *
-   * @author Daniel Arndt, 2016
    */
   template <int dim,
             int fe_degree,
@@ -802,8 +794,6 @@ namespace MatrixFreeOperators
    * Note that this class only supports the non-blocked vector variant of the
    * Base operator because only a single FEEvaluation object is used in the
    * apply function.
-   *
-   * @author Denis Davydov, 2016
    */
   template <int dim,
             int fe_degree,
@@ -1878,10 +1868,10 @@ namespace MatrixFreeOperators
       {
         phi.reinit(cell);
         phi.read_dof_values(src);
-        phi.evaluate(true, false, false);
+        phi.evaluate(EvaluationFlags::values);
         for (unsigned int q = 0; q < phi.n_q_points; ++q)
           phi.submit_value(phi.get_value(q), q);
-        phi.integrate(true, false);
+        phi.integrate(EvaluationFlags::values);
         phi.distribute_local_to_global(dst);
       }
   }
@@ -2074,7 +2064,7 @@ namespace MatrixFreeOperators
         typename Base<dim, VectorType, VectorizedArrayType>::value_type> &phi,
       const unsigned int cell) const
   {
-    phi.evaluate(false, true, false);
+    phi.evaluate(EvaluationFlags::gradients);
     if (scalar_coefficient.get())
       {
         Assert(scalar_coefficient->size(1) == 1 ||
@@ -2111,7 +2101,7 @@ namespace MatrixFreeOperators
             phi.submit_gradient(phi.get_gradient(q), q);
           }
       }
-    phi.integrate(false, true);
+    phi.integrate(EvaluationFlags::gradients);
   }
 
 

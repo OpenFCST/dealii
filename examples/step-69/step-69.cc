@@ -367,7 +367,7 @@ namespace Step69
   // <code>U</code> and a time point <code>t</code> (as input arguments)
   // computes the updated solution, stores it in the vector
   // <code>temp</code>, swaps its contents with the vector <code>U</code>,
-  // and returns the chosen \step-size $\tau$.
+  // and returns the chosen step-size $\tau$.
   //
   // The other important method is <code>prepare()</code> which primarily
   // sets the proper partition and sparsity pattern for the temporary
@@ -1258,10 +1258,7 @@ namespace Step69
         0, n_locally_relevant);
 
       const auto on_subranges = //
-        [&](
-          std_cxx20::ranges::iota_view<unsigned int, unsigned int>::iterator i1,
-          const std_cxx20::ranges::iota_view<unsigned int,
-                                             unsigned int>::iterator i2) {
+        [&](const auto i1, const auto i2) {
           for (const auto row_index :
                std_cxx20::ranges::iota_view<unsigned int, unsigned int>(*i1,
                                                                         *i2))
@@ -1923,10 +1920,7 @@ namespace Step69
                                "time_stepping - 1 compute d_ij");
 
       const auto on_subranges = //
-        [&](
-          std_cxx20::ranges::iota_view<unsigned int, unsigned int>::iterator i1,
-          const std_cxx20::ranges::iota_view<unsigned int,
-                                             unsigned int>::iterator i2) {
+        [&](const auto i1, const auto i2) {
           for (const auto i :
                std_cxx20::ranges::iota_view<unsigned int, unsigned int>(*i1,
                                                                         *i2))
@@ -2022,10 +2016,7 @@ namespace Step69
       // locally.
 
       const auto on_subranges = //
-        [&](
-          std_cxx20::ranges::iota_view<unsigned int, unsigned int>::iterator i1,
-          const std_cxx20::ranges::iota_view<unsigned int,
-                                             unsigned int>::iterator i2) {
+        [&](const auto i1, const auto i2) {
           double tau_max_on_subrange = std::numeric_limits<double>::infinity();
 
           for (const auto i :
@@ -2110,11 +2101,8 @@ namespace Step69
       TimerOutput::Scope scope(computing_timer,
                                "time_stepping - 3 perform update");
 
-      const auto on_subranges =
-        [&](
-          std_cxx20::ranges::iota_view<unsigned int, unsigned int>::iterator i1,
-          const std_cxx20::ranges::iota_view<unsigned int,
-                                             unsigned int>::iterator i2) {
+      const auto on_subranges = //
+        [&](const auto i1, const auto i2) {
           for (const auto i : boost::make_iterator_range(i1, i2))
             {
               Assert(i < n_locally_owned, ExcInternalError());
@@ -2316,7 +2304,7 @@ namespace Step69
   // The second thing to note is that we have to compute global minimum and
   // maximum $\max_j |\nabla r_j|$ and $\min_j |\nabla r_j|$. Following the
   // same ideas used to compute the time step size in the class member
-  // <code>%TimeStepping%<dim%>::%step()</code> we define $\max_j |\nabla r_j|$
+  // <code>%TimeStepping\<dim>::%step()</code> we define $\max_j |\nabla r_j|$
   // and $\min_j |\nabla r_j|$ as atomic doubles in order to resolve any
   // conflicts between threads. As usual, we use
   // <code>Utilities::MPI::max()</code> and
@@ -2364,10 +2352,7 @@ namespace Step69
     // global maxima and minima of the gradients.
     {
       const auto on_subranges = //
-        [&](
-          std_cxx20::ranges::iota_view<unsigned int, unsigned int>::iterator i1,
-          const std_cxx20::ranges::iota_view<unsigned int,
-                                             unsigned int>::iterator i2) {
+        [&](const auto i1, const auto i2) {
           double r_i_max_on_subrange = 0.;
           double r_i_min_on_subrange = std::numeric_limits<double>::infinity();
 
@@ -2451,10 +2436,7 @@ namespace Step69
 
     {
       const auto on_subranges = //
-        [&](
-          std_cxx20::ranges::iota_view<unsigned int, unsigned int>::iterator i1,
-          const std_cxx20::ranges::iota_view<unsigned int,
-                                             unsigned int>::iterator i2) {
+        [&](const auto i1, const auto i2) {
           for (const auto i : boost::make_iterator_range(i1, i2))
             {
               Assert(i < n_locally_owned, ExcInternalError());
@@ -2479,7 +2461,7 @@ namespace Step69
   //
   // With all classes implemented it is time to create an instance of
   // <code>Discretization<dim></code>, <code>OfflineData<dim></code>,
-  // <code>InitialValues<dim></code>, <code>TimeStepping<dim></code>, and
+  // <code>InitialValues<dim></code>, <code>%TimeStepping\<dim></code>, and
   // <code>SchlierenPostprocessor<dim></code>, and run the forward Euler
   // step in a loop.
   //
@@ -2525,11 +2507,7 @@ namespace Step69
                   output_granularity,
                   "time interval for output");
 
-#ifdef DEAL_II_WITH_THREADS
     asynchronous_writeback = true;
-#else
-    asynchronous_writeback = false;
-#endif
     add_parameter("asynchronous writeback",
                   asynchronous_writeback,
                   "Write out solution in a background thread performing IO");
@@ -2885,15 +2863,7 @@ namespace Step69
     // run in the background.
     if (asynchronous_writeback)
       {
-#ifdef DEAL_II_WITH_THREADS
         background_thread_state = std::async(std::launch::async, output_worker);
-#else
-        AssertThrow(
-          false,
-          ExcMessage(
-            "\"asynchronous_writeback\" was set to true but deal.II was built "
-            "without thread support (\"DEAL_II_WITH_THREADS=false\")."));
-#endif
       }
     else
       {

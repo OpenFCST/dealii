@@ -25,6 +25,8 @@
 
 #include <deal.II/lac/vector.h>
 
+#include <boost/container/small_vector.hpp>
+
 #include <cmath>
 #include <memory>
 
@@ -1672,7 +1674,8 @@ TransfiniteInterpolationManifold<dim, spacedim>::initialize(
   const Triangulation<dim, spacedim> &triangulation)
 {
   this->triangulation = &triangulation;
-  // in case the triangulatoin is cleared, remove the pointers by a signal
+  // in case the triangulation is cleared, remove the pointers by a signal
+  clear_signal.disconnect();
   clear_signal = triangulation.signals.clear.connect([&]() -> void {
     this->triangulation = nullptr;
     this->level_coarse  = -1;

@@ -52,9 +52,6 @@ namespace internal
 {
   namespace TriangulationImplementation
   {
-    template <int dim>
-    class TriaObject;
-    template <typename G>
     class TriaObjects;
     struct Implementation;
   } // namespace TriangulationImplementation
@@ -285,7 +282,6 @@ namespace TriaAccessorExceptions
  *
  * @ingroup grid
  * @ingroup Accessors
- * @author Wolfgang Bangerth, Guido Kanschat, 1998, 2010
  */
 template <int structdim, int dim, int spacedim = dim>
 class TriaAccessorBase
@@ -419,8 +415,7 @@ protected:
   /**
    * Access to the other objects of a Triangulation with same dimension.
    */
-  dealii::internal::TriangulationImplementation::TriaObjects<
-    dealii::internal::TriangulationImplementation::TriaObject<structdim>> &
+  dealii::internal::TriangulationImplementation::TriaObjects &
   objects() const;
 
 public:
@@ -552,7 +547,6 @@ private:
  * correctness, none of the functions do anything but generate errors.
  *
  * @ingroup Accessors
- * @author Wolfgang Bangerth, 2008
  */
 template <int structdim, int dim, int spacedim = dim>
 class InvalidAccessor : public TriaAccessorBase<structdim, dim, spacedim>
@@ -693,7 +687,6 @@ public:
  * @p structdim equals zero, i.e., for vertices of a triangulation.
  *
  * @ingroup Accessors
- * @author Wolfgang Bangerth and others, 1998, 2000, 2008
  */
 template <int structdim, int dim, int spacedim>
 class TriaAccessor : public TriaAccessorBase<structdim, dim, spacedim>
@@ -1613,6 +1606,49 @@ public:
     const TriaIterator<TriaAccessor<structdim, dim, spacedim>> &o) const;
 
   /**
+   * Number of vertices.
+   */
+  inline unsigned int
+  n_vertices() const;
+
+  /**
+   * Number of lines.
+   */
+  inline unsigned int
+  n_lines() const;
+
+  /**
+   * Number of faces.
+   *
+   * @note Only implemented for cells (dim==spacedim).
+   */
+  inline unsigned int
+  n_faces() const;
+
+  /**
+   * Return an object that can be thought of as an array containing all indices
+   * from zero to n_vertices().
+   */
+  inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  vertex_indices() const;
+
+  /**
+   * Return an object that can be thought of as an array containing all indices
+   * from zero to n_lines().
+   */
+  inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  line_indices() const;
+
+  /**
+   * Return an object that can be thought of as an array containing all indices
+   * from zero to n_faces().
+   *
+   * @note Only implemented for cells (dim==spacedim).
+   */
+  inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  face_indices() const;
+
+  /**
    * @}
    */
 
@@ -1626,12 +1662,22 @@ private:
   set_boundary_id_internal(const types::boundary_id id) const;
 
   /**
-   * Copy the data of the given object into the internal data structures of a
-   * triangulation.
+   * Set the indices of those objects that bound the current
+   * object. For example, if the current object represents a cell,
+   * then the argument denotes the indices of the faces that bound the
+   * cell. If the current object represents a line, the argument
+   * denotes the indices of the vertices that bound it. And so on.
    */
   void
-  set(const dealii::internal::TriangulationImplementation::TriaObject<structdim>
-        &o) const;
+  set_bounding_object_indices(
+    const std::initializer_list<int> &new_indices) const;
+
+  /**
+   * The same as above but for `unsigned int`.
+   */
+  void
+  set_bounding_object_indices(
+    const std::initializer_list<unsigned int> &new_indices) const;
 
   /**
    * Set the flag indicating, what <code>line_orientation()</code> will
@@ -1750,7 +1796,6 @@ private:
  * since in that case vertices are also faces.
  *
  * @ingroup Accessors
- * @author Bruno Turcksin, 2015
  */
 template <int dim, int spacedim>
 class TriaAccessor<0, dim, spacedim>
@@ -2155,7 +2200,6 @@ private:
  * since in the @p dim == 1 case vertices are also faces.
  *
  * @ingroup Accessors
- * @author Wolfgang Bangerth, 2010
  */
 template <int spacedim>
 class TriaAccessor<0, 1, spacedim>
@@ -2627,6 +2671,32 @@ public:
   bool
   used() const;
 
+  /**
+   * Number of vertices.
+   */
+  inline unsigned int
+  n_vertices() const;
+
+  /**
+   * Number of lines.
+   */
+  inline unsigned int
+  n_lines() const;
+
+  /**
+   * Return an object that can be thought of as an array containing all indices
+   * from zero to n_vertices().
+   */
+  inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  vertex_indices() const;
+
+  /**
+   * Return an object that can be thought of as an array containing all indices
+   * from zero to n_lines().
+   */
+  inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  line_indices() const;
+
 protected:
   /**
    * Pointer to the triangulation we operate on.
@@ -2661,7 +2731,6 @@ protected:
  *
  * @ingroup grid
  * @ingroup Accessors
- * @author Wolfgang Bangerth, 1998, 1999, 2000
  */
 template <int dim, int spacedim = dim>
 class CellAccessor : public TriaAccessor<dim, dim, spacedim>
@@ -2766,8 +2835,9 @@ public:
   /**
    * Return an array of iterators to all faces of this cell.
    */
-  std::array<TriaIterator<TriaAccessor<dim - 1, dim, spacedim>>,
-             GeometryInfo<dim>::faces_per_cell>
+  boost::container::small_vector<
+    TriaIterator<TriaAccessor<dim - 1, dim, spacedim>>,
+    GeometryInfo<dim>::faces_per_cell>
   face_iterators() const;
 
   /**

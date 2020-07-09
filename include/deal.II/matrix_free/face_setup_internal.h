@@ -43,8 +43,6 @@ namespace internal
     /**
      * A struct that is used to represent a collection of faces of a process
      * with one of its neighbor within the setup done in struct FaceInfo.
-     *
-     * @author Katharina Kormann, Martin Kronbichler, 2018
      */
     struct FaceIdentifier
     {
@@ -67,8 +65,6 @@ namespace internal
      * sides). This data structure is used for the setup of the connectivity
      * between faces and cells and for identification of the dof indices to be
      * used for face integrals.
-     *
-     * @author Katharina Kormann, Martin Kronbichler, 2018
      */
     template <int dim>
     struct FaceSetup
@@ -81,11 +77,11 @@ namespace internal
        * whether some of the faces should be considered for processing
        * locally.
        */
-      template <typename MFAddData>
       void
       initialize(
-        const dealii::Triangulation<dim> &                  triangulation,
-        const MFAddData &                                   additional_data,
+        const dealii::Triangulation<dim> &triangulation,
+        const unsigned int                mg_level,
+        const bool                        hold_all_faces_to_owned_cells,
         std::vector<std::pair<unsigned int, unsigned int>> &cell_levels);
 
       /**
@@ -164,15 +160,14 @@ namespace internal
 
 
     template <int dim>
-    template <typename MFAddData>
     void
     FaceSetup<dim>::initialize(
-      const dealii::Triangulation<dim> &                  triangulation,
-      const MFAddData &                                   additional_data,
+      const dealii::Triangulation<dim> &triangulation,
+      const unsigned int                mg_level,
+      const bool                        hold_all_faces_to_owned_cells,
       std::vector<std::pair<unsigned int, unsigned int>> &cell_levels)
     {
-      use_active_cells =
-        additional_data.mg_level == numbers::invalid_unsigned_int;
+      use_active_cells = mg_level == numbers::invalid_unsigned_int;
 
 #  ifdef DEBUG
       // safety check
@@ -586,8 +581,7 @@ namespace internal
               // inside the domain in case of multigrid separately
               else if ((dcell->at_boundary(f) == false ||
                         dcell->has_periodic_neighbor(f)) &&
-                       additional_data.mg_level !=
-                         numbers::invalid_unsigned_int &&
+                       mg_level != numbers::invalid_unsigned_int &&
                        dcell->neighbor_or_periodic_neighbor(f)->level() <
                          dcell->level())
                 {
@@ -601,7 +595,7 @@ namespace internal
 
                   // neighbor is refined -> face will be treated by neighbor
                   if (use_active_cells && neighbor->has_children() &&
-                      additional_data.hold_all_faces_to_owned_cells == false)
+                      hold_all_faces_to_owned_cells == false)
                     continue;
 
                   bool add_to_ghost = false;
@@ -652,8 +646,7 @@ namespace internal
                         add_to_ghost = (dcell->level_subdomain_id() !=
                                         neighbor->level_subdomain_id());
                     }
-                  else if (additional_data.hold_all_faces_to_owned_cells ==
-                           true)
+                  else if (hold_all_faces_to_owned_cells == true)
                     {
                       // add all cells to ghost layer...
                       face_is_owned[dcell->face(f)->index()] =

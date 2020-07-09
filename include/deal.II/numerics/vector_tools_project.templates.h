@@ -48,13 +48,10 @@ namespace VectorTools
      * mapping here because the function we evaluate for the DoFs is zero in
      * the mapped locations as well as in the original, unmapped locations
      */
-    template <int dim,
-              int spacedim,
-              template <int, int> class DoFHandlerType,
-              typename number>
+    template <int dim, int spacedim, typename number>
     void
     interpolate_zero_boundary_values(
-      const DoFHandlerType<dim, spacedim> &      dof_handler,
+      const DoFHandler<dim, spacedim> &          dof_handler,
       std::map<types::global_dof_index, number> &boundary_values)
     {
       // loop over all boundary faces
@@ -78,7 +75,7 @@ namespace VectorTools
       // that is actually wholly on
       // the boundary, not only by
       // one line or one vertex
-      typename DoFHandlerType<dim, spacedim>::active_cell_iterator
+      typename DoFHandler<dim, spacedim>::active_cell_iterator
         cell = dof_handler.begin_active(),
         endc = dof_handler.end();
       std::vector<types::global_dof_index> face_dof_indices;
@@ -105,14 +102,13 @@ namespace VectorTools
      */
     template <int dim,
               int spacedim,
-              template <int, int> class DoFHandlerType,
               template <int, int> class M_or_MC,
               template <int> class Q_or_QC,
               typename number>
     void
     project_compute_b_v(
       const M_or_MC<dim, spacedim> &             mapping,
-      const DoFHandlerType<dim, spacedim> &      dof,
+      const DoFHandler<dim, spacedim> &          dof,
       const Function<spacedim, number> &         function,
       const bool                                 enforce_zero_boundary,
       const Q_or_QC<dim - 1> &                   q_boundary,
@@ -148,6 +144,7 @@ namespace VectorTools
             mapping, dof, boundary_functions, q_boundary, boundary_values);
         }
     }
+
 
     /*
      * MatrixFree implementation of project() for an arbitrary number of
@@ -230,11 +227,11 @@ namespace VectorTools
           {
             phi.reinit(cell);
             phi.read_dof_values_plain(inhomogeneities);
-            phi.evaluate(true, false);
+            phi.evaluate(EvaluationFlags::values);
             for (unsigned int q = 0; q < phi.n_q_points; ++q)
               phi.submit_value(phi.get_value(q), q);
 
-            phi.integrate(true, false);
+            phi.integrate(EvaluationFlags::values);
             phi.distribute_local_to_global(rhs);
           }
         rhs.compress(VectorOperation::add);
@@ -480,13 +477,12 @@ namespace VectorTools
     template <int dim,
               int spacedim,
               typename VectorType,
-              template <int, int> class DoFHandlerType,
               template <int, int> class M_or_MC,
               template <int> class Q_or_QC>
     void
     do_project(
       const M_or_MC<dim, spacedim> &                             mapping,
-      const DoFHandlerType<dim, spacedim> &                      dof,
+      const DoFHandler<dim, spacedim> &                          dof,
       const AffineConstraints<typename VectorType::value_type> & constraints,
       const Q_or_QC<dim> &                                       quadrature,
       const Function<spacedim, typename VectorType::value_type> &function,
@@ -758,7 +754,7 @@ namespace VectorTools
             for (unsigned int q = 0; q < n_q_points; ++q)
               fe_eval.submit_value(func(cell, q), q);
 
-            fe_eval.integrate(true, false);
+            fe_eval.integrate(EvaluationFlags::values);
             fe_eval.distribute_local_to_global(rhs);
           }
         rhs.compress(VectorOperation::add);
@@ -1035,7 +1031,7 @@ namespace VectorTools
   template <int dim, typename VectorType, int spacedim>
   void
   project(const hp::MappingCollection<dim, spacedim> &              mapping,
-          const hp::DoFHandler<dim, spacedim> &                     dof,
+          const DoFHandler<dim, spacedim> &                         dof,
           const AffineConstraints<typename VectorType::value_type> &constraints,
           const hp::QCollection<dim> &                              quadrature,
           const Function<spacedim, typename VectorType::value_type> &function,
@@ -1062,7 +1058,7 @@ namespace VectorTools
 
   template <int dim, typename VectorType, int spacedim>
   void
-  project(const hp::DoFHandler<dim, spacedim> &                     dof,
+  project(const DoFHandler<dim, spacedim> &                         dof,
           const AffineConstraints<typename VectorType::value_type> &constraints,
           const hp::QCollection<dim> &                              quadrature,
           const Function<spacedim, typename VectorType::value_type> &function,

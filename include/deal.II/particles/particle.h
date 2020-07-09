@@ -139,8 +139,6 @@ namespace Particles
    * difficult to write either.
    *
    * @ingroup Particle
-   * @author Rene Gassmoeller, 2017
-   *
    */
   template <int dim, int spacedim = dim>
   class Particle
@@ -270,13 +268,27 @@ namespace Particles
     get_reference_location() const;
 
     /**
-     * Return the ID number of this particle.
+     * Return the ID number of this particle. The ID of a particle is intended
+     * to be a property that is globally unique even in parallel computations
+     * and is transfered along with other properties of a particle if it
+     * moves from a cell owned by the current processor to a cell owned by
+     * a different processor, or if ownership of the cell it is on is
+     * transferred to a different processor.
      */
     types::particle_index
     get_id() const;
 
     /**
-     * Set the ID number of this particle.
+     * Set the ID number of this particle. The ID of a particle is intended
+     * to be a property that is globally unique even in parallel computations
+     * and is transfered along with other properties of a particle if it
+     * moves from a cell owned by the current processor to a cell owned by
+     * a different processor, or if ownership of the cell it is on is
+     * transferred to a different processor. As a consequence, when setting
+     * the ID of a particle, care needs to be taken to ensure that particles
+     * have globally unique IDs. (The ParticleHandler does not itself check
+     * whether particle IDs so set are globally unique in a parallel setting
+     * since this would be a very expensive operation.)
      *
      * @param[in] new_id The new ID number for this particle.
      */
@@ -433,5 +445,40 @@ namespace Particles
 } // namespace Particles
 
 DEAL_II_NAMESPACE_CLOSE
+
+
+namespace boost
+{
+  namespace geometry
+  {
+    namespace index
+    {
+      // Forward declaration of bgi::indexable
+      template <class T>
+      struct indexable;
+
+      /**
+       * Make sure we can construct an RTree of Particles::Particle objects.
+       */
+      template <int dim, int spacedim>
+      struct indexable<dealii::Particles::Particle<dim, spacedim>>
+      {
+        /**
+         * boost::rtree expects a const reference to an indexable object. For
+         * a Particles::Particle object, this is its reference location.
+         */
+        using result_type = const dealii::Point<spacedim> &;
+
+        result_type
+        operator()(
+          const dealii::Particles::Particle<dim, spacedim> &particle) const
+        {
+          return particle.get_location();
+        }
+      };
+
+    } // namespace index
+  }   // namespace geometry
+} // namespace boost
 
 #endif
