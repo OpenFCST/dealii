@@ -9,10 +9,10 @@ The fork contains the following key branches:
     * feature branches: Each one of these branches will implement a new feature which, once it is finalized, will be merged with dealii/master via pull request. The name of the branch should be person/feature
 
 The workflow in the fork is as follows:
-a) Person A, that wants to develop a new feature for OpenFCST. Then, it would create a branch named PersonA/mesh_reader_for_GMSH from master in the OpenFCST fork (please make sure the master in the fork is up to date with dealii/master, otherwise inform the person maintaining the fork to re-synch using: git fetch origin/dealii/master).
-b) Once Person A has finished the feature, submits a pull request (PR) to origin/dealii/master for review by the deal.II developers. At the same time, she/he can merge the feature into openFCST/current in our fork
-c) Person A works with the deal.II developers in order to get the PR merged into deal.II.
-d) Person A asks the person managing the fork to udpate OpenFCST/master with the new origin/dealii/master version with the included feature.
+    * Person A, that wants to develop a new feature for OpenFCST. Then, it would create a branch named PersonA/mesh_reader_for_GMSH from master in the OpenFCST fork (please make sure the master in the fork is up to date with dealii/master, otherwise inform the person maintaining the fork to re-synch using: git fetch origin/dealii/master).
+    * Once Person A has finished the feature, submits a pull request (PR) to origin/dealii/master for review by the deal.II developers. At the same time, she/he can merge the feature into openFCST/current in our fork
+    * Person A works with the deal.II developers in order to get the PR merged into deal.II.
+    * Person A asks the person managing the fork to udpate OpenFCST/master with the new origin/dealii/master version with the included feature.
 
 What is deal.II?
 ================
@@ -58,6 +58,24 @@ See [`contrib/utilities/dotgdbinit.py`](contrib/utilities/dotgdbinit.py) or
 the new documentation page (under 'information for users') for instructions
 on how to set this up.
 
+Merging with upstream deal.II
+-----------------------------
+
+In order to merge with the upstream version of deal.II, run
+
+    $ git pull https://github.com/dealii/dealii.git master
+
+Resolve the conflicts (if any) and push the changes.
+    
+Reverting commits
+-----------------
+
+In order to revert N last commits, run
+
+    $ git revert HEAD~N
+    
+Note that this will not affect the commits made by the deal.II developers (inlcuding merges) and will only revert the commits made in this fork by the OpenFCST developers.
+    
 License:
 --------
 
