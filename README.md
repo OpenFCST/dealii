@@ -11,13 +11,10 @@ The fork contains the following key branches:
 
 The workflow in the fork is as follows:
 
-   a) Person A, that wants to develop a new feature for OpenFCST. Then, it would create a branch named PersonA/mesh_reader_for_GMSH from master in the OpenFCST fork (please make sure the master in the fork is up to date with dealii/master, otherwise inform the person maintaining the fork to re-synch using: git fetch origin/dealii/master).
-   
-   b) Once Person A has finished the feature, submits a pull request (PR) to origin/dealii/master for review by the deal.II developers. At the same time, she/he can merge the feature into openFCST/current in our fork
-   
-   c) Person A works with the deal.II developers in order to get the PR merged into deal.II.
-   
-   d) Person A asks the person managing the fork to udpate OpenFCST/master with the new origin/dealii/master version with the included feature.
+   * Person A, that wants to develop a new feature for OpenFCST. Then, it would create a branch named PersonA/mesh_reader_for_GMSH from master in the OpenFCST fork (please make sure the master in the fork is up to date with dealii/master, otherwise inform the person maintaining the fork to re-synch using: git fetch origin/dealii/master).
+   * Once Person A has finished the feature, submits a pull request (PR) to origin/dealii/master for review by the deal.II developers. At the same time, she/he can merge the feature into openFCST/current in our fork
+   * Person A works with the deal.II developers in order to get the PR merged into deal.II.
+   * Person A asks the person managing the fork to udpate OpenFCST/master with the new origin/dealii/master version with the included feature.
 
 
 What is deal.II?
