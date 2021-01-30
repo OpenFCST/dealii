@@ -150,6 +150,7 @@
 #cmakedefine DEAL_II_CXX14_CONSTEXPR_BUG
 
 #cmakedefine DEAL_II_DEPRECATED @DEAL_II_DEPRECATED@
+#cmakedefine DEAL_II_DEPRECATED_EARLY @DEAL_II_DEPRECATED_EARLY@
 #cmakedefine DEAL_II_FALLTHROUGH @DEAL_II_FALLTHROUGH@
 #cmakedefine DEAL_II_CONSTEXPR @DEAL_II_CONSTEXPR@
 
@@ -191,6 +192,9 @@
 /* cmake/modules/FindARPACK.cmake */
 #cmakedefine DEAL_II_ARPACK_WITH_PARPACK
 
+/* cmake/modules/FindGMSH.cmake */
+#cmakedefine DEAL_II_GMSH_WITH_API
+
 /* cmake/modules/FindPETSC.cmake */
 #cmakedefine DEAL_II_PETSC_WITH_COMPLEX
 #cmakedefine DEAL_II_PETSC_WITH_HYPRE
@@ -205,10 +209,11 @@
 /* cmake/configure/configure_2_trilinos.cmake */
 #cmakedefine DEAL_II_TRILINOS_CXX_SUPPORTS_SACADO_COMPLEX_RAD
 #cmakedefine DEAL_II_TRILINOS_WITH_EPETRAEXT
+#cmakedefine DEAL_II_TRILINOS_WITH_MUELU
 #cmakedefine DEAL_II_TRILINOS_WITH_ROL
 #cmakedefine DEAL_II_TRILINOS_WITH_SACADO
+#cmakedefine DEAL_II_TRILINOS_WITH_SEACAS
 #cmakedefine DEAL_II_TRILINOS_WITH_TPETRA
-#cmakedefine DEAL_II_TRILINOS_WITH_MUELU
 #cmakedefine DEAL_II_TRILINOS_WITH_ZOLTAN
 
 
@@ -230,6 +235,19 @@
     >=  \
     (major)*10000 + (minor)*100 + (subminor))
 
+/*
+ * boost:
+ */
+#define DEAL_II_BOOST_VERSION_MAJOR @Boost_MAJOR_VERSION@
+#define DEAL_II_BOOST_VERSION_MINOR @Boost_MINOR_VERSION@
+#define DEAL_II_BOOST_VERSION_SUBMINOR @Boost_SUBMINOR_VERSION@
+
+#define DEAL_II_BOOST_VERSION_GTE(major,minor,subminor) \
+ ((DEAL_II_BOOST_VERSION_MAJOR * 100000 + \
+    DEAL_II_BOOST_VERSION_MINOR * 100 + \
+     DEAL_II_BOOST_VERSION_SUBMINOR) \
+    >= \
+    (major)*100000 + (minor)*100 + (subminor))
 
 /*
  * Gmsh:
@@ -350,6 +368,8 @@
     DEAL_II_MPI_VERSION_MINOR) \
     >=  \
     (major)*100 + (minor))
+#else
+#  define DEAL_II_MPI_VERSION_GTE(major,minor) false
 #endif
 
 #cmakedefine DEAL_II_MPI_WITH_CUDA_SUPPORT
@@ -383,7 +403,7 @@ _Pragma("GCC diagnostic ignored \"-Wextra\"")                     /*!*/ \
 _Pragma("GCC diagnostic ignored \"-Waddress-of-packed-member\"")        \
 _Pragma("GCC diagnostic ignored \"-Wdeprecated-copy\"")                 \
 _Pragma("GCC diagnostic ignored \"-Wdeprecated-declarations\"")         \
-_Pragma("GCC diagnostic ignored \"-Wexpansion-to-defined\"")            \
+_Pragma("GCC diagnostic ignored \"-Wdeprecated-volatile\"")             \
 _Pragma("GCC diagnostic ignored \"-Wexpansion-to-defined\"")            \
 _Pragma("GCC diagnostic ignored \"-Wignored-attributes\"")              \
 _Pragma("GCC diagnostic ignored \"-Wignored-qualifiers\"")              \
@@ -452,5 +472,22 @@ DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
 
 #include <deal.II/base/numbers.h>
 #include <deal.II/base/types.h>
+
+/*
+ * Include the boost version header to do a quick version check in case, by
+ * accident, we have configured with one version of boost but are compiling
+ * either the library or an external application with a different version of
+ * boost.
+ */
+#include <boost/version.hpp>
+static_assert(
+  BOOST_VERSION == 100000 * DEAL_II_BOOST_VERSION_MAJOR +
+                     100 * DEAL_II_BOOST_VERSION_MINOR +
+                     DEAL_II_BOOST_VERSION_SUBMINOR,
+  "The version number of boost that you are compiling with does not match the "
+  "version number of boost found during deal.II's configuration step. This "
+  "leads to difficult to understand bugs and is not supported. Please check "
+  "that you have set up your application with the same version of boost as "
+  "deal.II.");
 
 #endif

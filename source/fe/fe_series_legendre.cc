@@ -15,14 +15,12 @@
 
 
 
+#include <deal.II/base/std_cxx17/cmath.h>
 #include <deal.II/base/thread_management.h>
 
 #include <deal.II/fe/fe_series.h>
 
 #include <iostream>
-#ifdef DEAL_II_WITH_GSL
-#  include <gsl/gsl_sf_legendre.h>
-#endif
 
 
 DEAL_II_NAMESPACE_OPEN
@@ -42,26 +40,15 @@ namespace
   double
   Lh(const Point<dim> &x_q, const TableIndices<dim> &indices)
   {
-#ifdef DEAL_II_WITH_GSL
     double res = 1.0;
     for (unsigned int d = 0; d < dim; d++)
       {
         const double x = 2.0 * (x_q[d] - 0.5);
         Assert((x_q[d] <= 1.0) && (x_q[d] >= 0.), ExcLegendre(d, x_q[d]));
-        const int ind = indices[d];
-        res *= std::sqrt(2.0) * gsl_sf_legendre_Pl(ind, x);
+        const unsigned int ind = indices[d];
+        res *= std::sqrt(2.0) * std_cxx17::legendre(ind, x);
       }
     return res;
-
-#else
-
-    (void)x_q;
-    (void)indices;
-    AssertThrow(false,
-                ExcMessage("deal.II has to be configured with GSL "
-                           "in order to use Legendre transformation."));
-    return 0;
-#endif
   }
 
 
@@ -118,11 +105,12 @@ namespace
 
     if (legendre_transform_matrices[fe].m() == 0)
       {
-        legendre_transform_matrices[fe].reinit(n_coefficients_per_direction[fe],
-                                               fe_collection[fe].dofs_per_cell);
+        legendre_transform_matrices[fe].reinit(
+          n_coefficients_per_direction[fe],
+          fe_collection[fe].n_dofs_per_cell());
 
         for (unsigned int k = 0; k < n_coefficients_per_direction[fe]; ++k)
-          for (unsigned int j = 0; j < fe_collection[fe].dofs_per_cell; ++j)
+          for (unsigned int j = 0; j < fe_collection[fe].n_dofs_per_cell(); ++j)
             legendre_transform_matrices[fe](k, j) = integrate(
               fe_collection[fe], q_collection[fe], TableIndices<1>(k), j);
       }
@@ -143,13 +131,14 @@ namespace
       {
         legendre_transform_matrices[fe].reinit(
           Utilities::fixed_power<2>(n_coefficients_per_direction[fe]),
-          fe_collection[fe].dofs_per_cell);
+          fe_collection[fe].n_dofs_per_cell());
 
         unsigned int k = 0;
         for (unsigned int k1 = 0; k1 < n_coefficients_per_direction[fe]; ++k1)
           for (unsigned int k2 = 0; k2 < n_coefficients_per_direction[fe];
                ++k2, k++)
-            for (unsigned int j = 0; j < fe_collection[fe].dofs_per_cell; ++j)
+            for (unsigned int j = 0; j < fe_collection[fe].n_dofs_per_cell();
+                 ++j)
               legendre_transform_matrices[fe](k, j) =
                 integrate(fe_collection[fe],
                           q_collection[fe],
@@ -173,14 +162,15 @@ namespace
       {
         legendre_transform_matrices[fe].reinit(
           Utilities::fixed_power<3>(n_coefficients_per_direction[fe]),
-          fe_collection[fe].dofs_per_cell);
+          fe_collection[fe].n_dofs_per_cell());
 
         unsigned int k = 0;
         for (unsigned int k1 = 0; k1 < n_coefficients_per_direction[fe]; ++k1)
           for (unsigned int k2 = 0; k2 < n_coefficients_per_direction[fe]; ++k2)
             for (unsigned int k3 = 0; k3 < n_coefficients_per_direction[fe];
                  ++k3, k++)
-              for (unsigned int j = 0; j < fe_collection[fe].dofs_per_cell; ++j)
+              for (unsigned int j = 0; j < fe_collection[fe].n_dofs_per_cell();
+                   ++j)
                 legendre_transform_matrices[fe](k, j) =
                   integrate(fe_collection[fe],
                             q_collection[fe],

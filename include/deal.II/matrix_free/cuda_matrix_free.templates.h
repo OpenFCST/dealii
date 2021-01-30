@@ -31,8 +31,6 @@
 #  include <deal.II/fe/fe_dgq.h>
 #  include <deal.II/fe/fe_values.h>
 
-#  include <deal.II/grid/filtered_iterator.h>
-
 #  include <deal.II/matrix_free/cuda_hanging_nodes_internal.h>
 #  include <deal.II/matrix_free/shape_info.h>
 
@@ -52,7 +50,7 @@ namespace CUDAWrappers
       (mf_max_elem_degree + 1) * (mf_max_elem_degree + 1);
 
     // Default initialized to false
-    std::array<std::atomic_bool, mf_n_concurrent_objects> used_objects;
+    extern std::array<std::atomic_bool, mf_n_concurrent_objects> used_objects;
 
     template <typename NumberType>
     using DataArray = NumberType[data_array_size];
@@ -503,7 +501,7 @@ namespace CUDAWrappers
       const AffineConstraints<number> &constraints)
     {
       std::vector<types::global_dof_index> local_dof_indices(
-        cell->get_fe().dofs_per_cell);
+        cell->get_fe().n_dofs_per_cell());
       cell->get_dof_indices(local_dof_indices);
       constraints.resolve_indices(local_dof_indices);
 
@@ -612,6 +610,7 @@ namespace CUDAWrappers
     , constrained_dofs(nullptr)
     , padding_length(0)
     , my_id(-1)
+    , dof_handler(nullptr)
   {}
 
 
@@ -845,12 +844,14 @@ namespace CUDAWrappers
   void
   MatrixFree<dim, Number>::internal_reinit(
     const Mapping<dim> &             mapping,
-    const DoFHandler<dim> &          dof_handler,
+    const DoFHandler<dim> &          dof_handler_,
     const AffineConstraints<Number> &constraints,
     const Quadrature<1> &            quad,
     std::shared_ptr<const MPI_Comm>  comm,
     const AdditionalData             additional_data)
   {
+    dof_handler = &dof_handler_;
+
     if (typeid(Number) == typeid(double))
       cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte);
 
@@ -868,9 +869,9 @@ namespace CUDAWrappers
     // TODO: only free if we actually need arrays of different length
     free();
 
-    n_dofs = dof_handler.n_dofs();
+    n_dofs = dof_handler->n_dofs();
 
-    const FiniteElement<dim> &fe = dof_handler.get_fe();
+    const FiniteElement<dim> &fe = dof_handler->get_fe();
 
     fe_degree = fe.degree;
     // TODO this should be a templated parameter
@@ -885,7 +886,7 @@ namespace CUDAWrappers
     padding_length = 1 << static_cast<unsigned int>(
                        std::ceil(dim * std::log2(fe_degree + 1.)));
 
-    dofs_per_cell     = fe.dofs_per_cell;
+    dofs_per_cell     = fe.n_dofs_per_cell();
     q_points_per_cell = std::pow(n_q_points_1d, dim);
 
     const ::dealii::internal::MatrixFreeFunctions::ShapeInfo<Number> shape_info(
@@ -946,15 +947,12 @@ namespace CUDAWrappers
     cells_per_block = cells_per_block_shmem(dim, fe_degree);
 
     internal::ReinitHelper<dim, Number> helper(
-      this, mapping, fe, quad, shape_info, dof_handler, update_flags);
+      this, mapping, fe, quad, shape_info, *dof_handler, update_flags);
 
     // Create a graph coloring
-    using CellFilter =
-      FilteredIterator<typename DoFHandler<dim>::active_cell_iterator>;
     CellFilter begin(IteratorFilters::LocallyOwnedCell(),
-                     dof_handler.begin_active());
-    CellFilter end(IteratorFilters::LocallyOwnedCell(), dof_handler.end());
-    std::vector<std::vector<CellFilter>> graph;
+                     dof_handler->begin_active());
+    CellFilter end(IteratorFilters::LocallyOwnedCell(), dof_handler->end());
 
     if (begin != end)
       {
@@ -968,6 +966,7 @@ namespace CUDAWrappers
           }
         else
           {
+            graph.clear();
             if (additional_data.overlap_communication_computation)
               {
                 // We create one color (1) with the cells on the boundary of the
@@ -976,10 +975,10 @@ namespace CUDAWrappers
                 graph.resize(3, std::vector<CellFilter>());
 
                 std::vector<bool> ghost_vertices(
-                  dof_handler.get_triangulation().n_vertices(), false);
+                  dof_handler->get_triangulation().n_vertices(), false);
 
                 for (const auto cell :
-                     dof_handler.get_triangulation().active_cell_iterators())
+                     dof_handler->get_triangulation().active_cell_iterators())
                   if (cell->is_ghost())
                     for (unsigned int i = 0;
                          i < GeometryInfo<dim>::vertices_per_cell;
@@ -987,8 +986,7 @@ namespace CUDAWrappers
                       ghost_vertices[cell->vertex_index(i)] = true;
 
                 std::vector<dealii::FilteredIterator<dealii::TriaActiveIterator<
-                  dealii::DoFCellAccessor<dealii::DoFHandler<dim, dim>,
-                                          false>>>>
+                  dealii::DoFCellAccessor<dim, dim, false>>>>
                   inner_cells;
 
                 for (auto cell = begin; cell != end; ++cell)
@@ -1032,10 +1030,10 @@ namespace CUDAWrappers
     IndexSet locally_relevant_dofs;
     if (comm)
       {
-        DoFTools::extract_locally_relevant_dofs(dof_handler,
+        DoFTools::extract_locally_relevant_dofs(*dof_handler,
                                                 locally_relevant_dofs);
         partitioner = std::make_shared<Utilities::MPI::Partitioner>(
-          dof_handler.locally_owned_dofs(), locally_relevant_dofs, *comm);
+          dof_handler->locally_owned_dofs(), locally_relevant_dofs, *comm);
       }
     for (unsigned int i = 0; i < n_colors; ++i)
       {
@@ -1094,7 +1092,7 @@ namespace CUDAWrappers
           }
         else
           {
-            const unsigned int n_local_dofs = dof_handler.n_dofs();
+            const unsigned int n_local_dofs = dof_handler->n_dofs();
             unsigned int       i_constraint = 0;
             for (unsigned int i = 0; i < n_local_dofs; ++i)
               {

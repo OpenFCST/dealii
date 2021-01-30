@@ -351,7 +351,7 @@ namespace Step37
     FEEvaluation<dim, degree_finite_element> phi(
       *system_matrix.get_matrix_free());
     for (unsigned int cell = 0;
-         cell < system_matrix.get_matrix_free()->n_macro_cells();
+         cell < system_matrix.get_matrix_free()->n_cell_batches();
          ++cell)
       {
         phi.reinit(cell);
@@ -480,10 +480,10 @@ namespace Step37
           filenames.emplace_back("solution-" + std::to_string(cycle) + "." +
                                  std::to_string(i) + ".vtu");
 
-        std::string master_name =
+        std::string pvtu_filename =
           "solution-" + Utilities::to_string(cycle) + ".pvtu";
-        std::ofstream master_output(master_name.c_str());
-        data_out.write_pvtu_record(master_output, filenames);
+        std::ofstream pvtu_output(pvtu_filename.c_str());
+        data_out.write_pvtu_record(pvtu_output, filenames);
       }
 
     if (dim == 2 && Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD) == 1)

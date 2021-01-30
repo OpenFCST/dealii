@@ -670,7 +670,7 @@ namespace GridGenerator
    * dimensions, but throws an error if called in 1d.
    *
    * By default, the manifold_id is set to 0 on the boundary faces, 1 on the
-   * boundary cells, and types::flat_manifold_id on the central cell and on
+   * boundary cells, and numbers::flat_manifold_id on the central cell and on
    * internal faces.
    *
    * A SphericalManifold is attached by default to the boundary faces for
@@ -756,7 +756,7 @@ namespace GridGenerator
    * </table>
    *
    * By default, the manifold_id is set to 0 on the boundary faces, 1 on the
-   * boundary cells, and types::flat_manifold_id on the central cell and on
+   * boundary cells, and numbers::flat_manifold_id on the central cell and on
    * internal faces.
    *
    * @pre The triangulation passed as argument needs to be empty when calling
@@ -800,7 +800,7 @@ namespace GridGenerator
                     const double           radius = 1.);
 
   /**
-   * This class produces a hyper-ball intersected with the positive orthant
+   * This function produces a hyper-ball intersected with the positive orthant
    * relative to @p center, which contains three elements in 2d and four in
    * 3d. The interior points of the mesh are chosen to balance the minimal
    * singular value of the Jacobian of the mapping from reference to real
@@ -839,7 +839,7 @@ namespace GridGenerator
                      const double        radius = 1.);
 
   /**
-   * This class produces a half hyper-ball around @p center, which contains
+   * This function produces a half hyper-ball around @p center, which contains
    * four elements in 2d and 6 in 3d. The cut plane is perpendicular to the
    * <i>x</i>-axis.
    *
@@ -1174,7 +1174,7 @@ namespace GridGenerator
    * triangulation.  However, opposed to the previous function, it does not
    * produce a whole shell, but only one half of it, namely that part for
    * which the first component is restricted to non-negative values. The
-   * purpose of this class is to enable computations for solutions which have
+   * purpose of this function is to enable computations for solutions which have
    * rotational symmetry, in which case the half shell in 2d represents a
    * shell in 3d.
    *
@@ -1383,9 +1383,9 @@ namespace GridGenerator
    * radius of the $k$th shell is given by
    *
    * @f[
-   *     r = r_{\text{inner}} + (r_\text{outer} - r_\text{inner})
-   *     \frac{1 - \tanh(\text{skewness}(1 - k/\text{n\_shells}))}
-   *          {\tanh(\text{skewness})}
+   *     r = r_{\mathrm{inner}} + (r_\mathrm{outer} - r_\mathrm{inner})
+   *     \frac{1 - \tanh(\mathrm{skewness}(1 - k/\mathrm{n\_shells}))}
+   *          {\tanh(\mathrm{skewness})}
    * @f]
    *
    * where @p skewness is a parameter controlling the shell spacing in the
@@ -1522,6 +1522,7 @@ namespace GridGenerator
    * Given the two triangulations specified as the first two arguments, create
    * the triangulation that contains the cells of both triangulation and store
    * it in the third parameter. Previous content of @p result will be deleted.
+   * One of the two input triangulations can also be the @p result triangulation.
    *
    * This function is most often used to compose meshes for more complicated
    * geometries if the geometry can be composed of simpler parts for which
@@ -1712,7 +1713,8 @@ namespace GridGenerator
    * existing triangulation. A prototypical case is a 2d domain with
    * rectangular holes. This can be achieved by first meshing the entire
    * domain and then using this function to get rid of the cells that are
-   * located at the holes. Likewise, you could create the mesh that
+   * located at the holes. A demonstration of this particular use case is part
+   * of step-27. Likewise, you could create the mesh that
    * GridGenerator::hyper_L() produces by starting with a
    * GridGenerator::hyper_cube(), refining it once, and then calling the
    * current function with a single cell in the second argument.
@@ -1748,8 +1750,10 @@ namespace GridGenerator
     Triangulation<dim, spacedim> &result);
 
   /**
-   * Extrude @p input in the $z$ direction from $z = 0$ to $z =
-   * \text{height}$. The number of <em>slices</em>, or layers of cells
+   * Extrude the Triangulation @p input in the $z$ direction from $z = 0$ to $z =
+   * \text{height}$ and store it in @p result.
+   *
+   * The number of <em>slices</em>, or layers of cells
    * perpendicular to the $z = 0$ plane, will be @p n_slices slices (minimum is
    * 2). The boundary indicators of the faces of @p input will be assigned to
    * the corresponding side walls in $z$ direction. The bottom and top get the
@@ -1904,6 +1908,48 @@ namespace GridGenerator
   void
   flatten_triangulation(const Triangulation<dim, spacedim1> &in_tria,
                         Triangulation<dim, spacedim2> &      out_tria);
+
+  /**
+   * Convert a triangulation consisting only of hypercube cells
+   * (quadrilaterals, hexahedra) to a triangulation only consisting of
+   * simplices (triangles, tetrahedra).
+   *
+   * As an example, the following image shows how a set of three hexahedra
+   * meshing one eighths of a sphere are subdivided into tetrahedra, and how
+   * the curved surface is taken into account. Colors indicate how boundary
+   * indicators are inherited:
+   * @image html "convert_hypercube_to_simplex_mesh_visualization_octant.png"
+   *
+   * In general, each quadrilateral in 2d is subdivided into eight triangles,
+   * and each hexahedron in 3d into 24 tetrahedra as shown here:
+   * @image html "convert_hypercube_to_simplex_mesh_visualization.png"
+   *
+   * Material ID and boundary IDs are inherited upon conversion.
+   *
+   * @param in_tria The triangulation containing hex elements.
+   * @param out_tria The converted triangulation containing tet elements.
+   *
+   * @note No manifold objects are copied by this function: you must
+   *   copy existing manifold objects from @p in_tria to @p out_tria, e.g.,
+   *   with the following code:
+   * @code
+   * for (const auto i : in_tria.get_manifold_ids())
+   *   if (i != numbers::flat_manifold_id)
+   *     out_tria.set_manifold(i, in_tria.get_manifold(i));
+   * @endcode
+   */
+  template <int dim, int spacedim>
+  void
+  convert_hypercube_to_simplex_mesh(const Triangulation<dim, spacedim> &in_tria,
+                                    Triangulation<dim, spacedim> &out_tria);
+
+  /**
+   * Specialization of the above function for 1D: simply copy triangulation.
+   */
+  template <int spacedim>
+  void
+  convert_hypercube_to_simplex_mesh(const Triangulation<1, spacedim> &in_tria,
+                                    Triangulation<1, spacedim> &      out_tria);
 
 
   /**
@@ -2152,11 +2198,11 @@ namespace GridGenerator
    * @ref ConceptMeshType "MeshType concept".
    * The map that is returned will be between cell iterators pointing into the
    * container describing the surface mesh and face iterators of the volume
-   * mesh container. If MeshType is DoFHandler or hp::DoFHandler, then the
-   * function will re-build the triangulation underlying the second argument
-   * and return a map between appropriate iterators into the MeshType
-   * arguments. However, the function will not actually distribute degrees of
-   * freedom on this newly created surface mesh.
+   * mesh container. If MeshType is DoFHandler, then the function will re-build
+   * the triangulation underlying the second argument and return a map between
+   * appropriate iterators into the MeshType arguments. However, the function
+   * will not actually distribute degrees of freedom on this newly created
+   * surface mesh.
    *
    * @tparam dim The dimension of the cells of the volume mesh. For example,
    * if dim==2, then the cells are quadrilaterals that either live in the

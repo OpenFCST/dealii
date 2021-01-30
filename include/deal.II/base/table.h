@@ -418,7 +418,7 @@ public:
    * Constructor. Initialize the array with the given dimensions in each index
    * component.
    */
-  TableBase(const TableIndices<N> &sizes);
+  explicit TableBase(const TableIndices<N> &sizes);
 
   /**
    * Constructor. Initialize the array with the given dimensions in each index
@@ -618,7 +618,8 @@ public:
 
   /**
    * Write or read the data of this object to or from a stream for the purpose
-   * of serialization.
+   * of serialization using the [BOOST serialization
+   * library](https://www.boost.org/doc/libs/1_74_0/libs/serialization/doc/index.html).
    */
   template <class Archive>
   void
@@ -716,7 +717,7 @@ public:
   /**
    * Constructor. Pass down the given dimension to the base class.
    */
-  Table(const size_type size);
+  explicit Table(const size_type size);
 
   /**
    * Constructor. Create a table with a given size and initialize it from a
@@ -1876,36 +1877,6 @@ public:
   typename AlignedVector<T>::const_reference
   operator()(const TableIndices<7> &indices) const;
 };
-
-
-/**
- * A namespace for iterators for TransposeTable. TransposeTable is unique in
- * that it stores entries in column-major order.
- *
- * @warning The classes defined in this namespace have been deprecated in
- * favor of the more general versions in MatrixTableIterators. Use those
- * instead.
- */
-namespace TransposeTableIterators
-{
-  template <typename T, bool Constness>
-  using AccessorBase DEAL_II_DEPRECATED = MatrixTableIterators::AccessorBase<
-    TransposeTable<T>,
-    Constness,
-    MatrixTableIterators::Storage::column_major>;
-
-  template <typename T, bool Constness>
-  using Accessor DEAL_II_DEPRECATED =
-    MatrixTableIterators::Accessor<TransposeTable<T>,
-                                   Constness,
-                                   MatrixTableIterators::Storage::column_major>;
-
-  template <typename T, bool Constness>
-  using Iterator DEAL_II_DEPRECATED =
-    MatrixTableIterators::Iterator<TransposeTable<T>,
-                                   Constness,
-                                   MatrixTableIterators::Storage::column_major>;
-} // namespace TransposeTableIterators
 
 
 /**

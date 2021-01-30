@@ -22,6 +22,8 @@
 
 #include <deal.II/lac/vector.h>
 
+#include <deal.II/simplex/fe_lib.h>
+
 #include <memory>
 #include <sstream>
 #include <vector>
@@ -118,7 +120,7 @@ FE_Q<dim, spacedim>::get_name() const
     {
       if (this->degree > 2)
         namebuf << "FE_Q<" << Utilities::dim_string(dim, spacedim)
-                << ">(QIterated(QTrapez()," << this->degree << "))";
+                << ">(QIterated(QTrapezoid()," << this->degree << "))";
       else
         namebuf << "FE_Q<" << Utilities::dim_string(dim, spacedim) << ">("
                 << this->degree << ")";
@@ -155,9 +157,9 @@ FE_Q<dim, spacedim>::convert_generalized_support_point_values_to_dof_values(
   AssertDimension(support_point_values.size(),
                   this->get_unit_support_points().size());
   AssertDimension(support_point_values.size(), nodal_values.size());
-  AssertDimension(this->dofs_per_cell, nodal_values.size());
+  AssertDimension(this->n_dofs_per_cell(), nodal_values.size());
 
-  for (unsigned int i = 0; i < this->dofs_per_cell; ++i)
+  for (unsigned int i = 0; i < this->n_dofs_per_cell(); ++i)
     {
       AssertDimension(support_point_values[i].size(), 1);
 
@@ -202,6 +204,37 @@ FE_Q<dim, spacedim>::compare_for_domination(
       if (this->degree < fe_q_other->degree)
         return FiniteElementDomination::this_element_dominates;
       else if (this->degree == fe_q_other->degree)
+        return FiniteElementDomination::either_element_can_dominate;
+      else
+        return FiniteElementDomination::other_element_dominates;
+    }
+  else if (const Simplex::FE_P<dim, spacedim> *fe_p_other =
+             dynamic_cast<const Simplex::FE_P<dim, spacedim> *>(&fe_other))
+    {
+      if (this->degree < fe_p_other->degree)
+        return FiniteElementDomination::this_element_dominates;
+      else if (this->degree == fe_p_other->degree)
+        return FiniteElementDomination::either_element_can_dominate;
+      else
+        return FiniteElementDomination::other_element_dominates;
+    }
+  else if (const Simplex::FE_WedgeP<dim, spacedim> *fe_wp_other =
+             dynamic_cast<const Simplex::FE_WedgeP<dim, spacedim> *>(&fe_other))
+    {
+      if (this->degree < fe_wp_other->degree)
+        return FiniteElementDomination::this_element_dominates;
+      else if (this->degree == fe_wp_other->degree)
+        return FiniteElementDomination::either_element_can_dominate;
+      else
+        return FiniteElementDomination::other_element_dominates;
+    }
+  else if (const Simplex::FE_PyramidP<dim, spacedim> *fe_pp_other =
+             dynamic_cast<const Simplex::FE_PyramidP<dim, spacedim> *>(
+               &fe_other))
+    {
+      if (this->degree < fe_pp_other->degree)
+        return FiniteElementDomination::this_element_dominates;
+      else if (this->degree == fe_pp_other->degree)
         return FiniteElementDomination::either_element_can_dominate;
       else
         return FiniteElementDomination::other_element_dominates;

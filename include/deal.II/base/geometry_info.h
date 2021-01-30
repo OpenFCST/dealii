@@ -860,7 +860,8 @@ public:
 
   /**
    * Read or write the data of this object to or from a stream for the purpose
-   * of serialization
+   * of serialization using the [BOOST serialization
+   * library](https://www.boost.org/doc/libs/1_74_0/libs/serialization/doc/index.html).
    */
   template <class Archive>
   void
@@ -1306,6 +1307,57 @@ struct GeometryInfo<0>
    */
   static std::array<unsigned int, vertices_per_cell>
   vertex_indices();
+
+  /**
+   * Map face vertex number to cell vertex number, i.e. give the cell vertex
+   * number of the <tt>vertex</tt>th vertex of face <tt>face</tt>, e.g.
+   * <tt>GeometryInfo<2>::face_to_cell_vertices(3,0)=2</tt>, see the image
+   * under point N4 in the 2d section of this class's documentation.
+   *
+   * Through the <tt>face_orientation</tt>, <tt>face_flip</tt> and
+   * <tt>face_rotation</tt> arguments this function handles faces oriented in
+   * the standard and non-standard orientation. <tt>face_orientation</tt>
+   * defaults to <tt>true</tt>, <tt>face_flip</tt> and <tt>face_rotation</tt>
+   * default to <tt>false</tt> (standard orientation). In 2d only
+   * <tt>face_flip</tt> is considered. See this
+   * @ref GlossFaceOrientation "glossary"
+   * article for more information.
+   *
+   * As the children of a cell are ordered according to the vertices of the
+   * cell, this call is passed down to the child_cell_on_face() function.
+   * Hence this function is simply a wrapper of child_cell_on_face() giving it
+   * a suggestive name.
+   *
+   * Of course, since this class is for the case `dim==0`, this function
+   * is not implemented.
+   */
+  static unsigned int
+  face_to_cell_vertices(const unsigned int face,
+                        const unsigned int vertex,
+                        const bool         face_orientation = true,
+                        const bool         face_flip        = false,
+                        const bool         face_rotation    = false);
+
+  /**
+   * Map face line number to cell line number, i.e. give the cell line number
+   * of the <tt>line</tt>th line of face <tt>face</tt>, e.g.
+   * <tt>GeometryInfo<3>::face_to_cell_lines(5,0)=4</tt>.
+   *
+   * Through the <tt>face_orientation</tt>, <tt>face_flip</tt> and
+   * <tt>face_rotation</tt> arguments this function handles faces oriented in
+   * the standard and non-standard orientation. <tt>face_orientation</tt>
+   * defaults to <tt>true</tt>, <tt>face_flip</tt> and <tt>face_rotation</tt>
+   * default to <tt>false</tt> (standard orientation) and has no effect in 2d.
+   *
+   * Of course, since this class is for the case `dim==0`, this function
+   * is not implemented.
+   */
+  static unsigned int
+  face_to_cell_lines(const unsigned int face,
+                     const unsigned int line,
+                     const bool         face_orientation = true,
+                     const bool         face_flip        = false,
+                     const bool         face_rotation    = false);
 
   /**
    * Number of vertices each face has. Since this is not useful in one
@@ -2420,8 +2472,9 @@ struct GeometryInfo
    * Projects a given point onto the unit cell, i.e. each coordinate outside
    * [0..1] is modified to lie within that interval.
    */
-  static Point<dim>
-  project_to_unit_cell(const Point<dim> &p);
+  template <typename Number = double>
+  static Point<dim, Number>
+  project_to_unit_cell(const Point<dim, Number> &p);
 
   /**
    * Return the infinity norm of the vector between a given point @p p
@@ -2883,7 +2936,7 @@ GeometryInfo<dim>::unit_cell_vertex(const unsigned int)
 {
   Assert(false, ExcNotImplemented());
 
-  return Point<dim>();
+  return {};
 }
 
 
@@ -3069,7 +3122,7 @@ GeometryInfo<dim>::cell_to_child_coordinates(
 
 {
   Assert(false, ExcNotImplemented());
-  return Point<dim>();
+  return {};
 }
 
 
@@ -3205,7 +3258,7 @@ GeometryInfo<dim>::child_to_cell_coordinates(
   const RefinementCase<dim> /*refine_case*/)
 {
   Assert(false, ExcNotImplemented());
-  return Point<dim>();
+  return {};
 }
 
 
@@ -4592,6 +4645,19 @@ GeometryInfo<3>::face_to_cell_lines(const unsigned int face,
 
 
 
+inline unsigned int
+GeometryInfo<0>::face_to_cell_lines(const unsigned int,
+                                    const unsigned int,
+                                    const bool,
+                                    const bool,
+                                    const bool)
+{
+  Assert(false, ExcNotImplemented());
+  return numbers::invalid_unsigned_int;
+}
+
+
+
 template <int dim>
 inline unsigned int
 GeometryInfo<dim>::face_to_cell_lines(const unsigned int,
@@ -4624,16 +4690,27 @@ GeometryInfo<dim>::face_to_cell_vertices(const unsigned int face,
 
 
 
-template <int dim>
-inline Point<dim>
-GeometryInfo<dim>::project_to_unit_cell(const Point<dim> &q)
+inline unsigned int
+GeometryInfo<0>::face_to_cell_vertices(const unsigned int,
+                                       const unsigned int,
+                                       const bool,
+                                       const bool,
+                                       const bool)
 {
-  Point<dim> p = q;
+  Assert(false, ExcNotImplemented());
+  return numbers::invalid_unsigned_int;
+}
+
+
+
+template <int dim>
+template <typename Number>
+inline Point<dim, Number>
+GeometryInfo<dim>::project_to_unit_cell(const Point<dim, Number> &q)
+{
+  Point<dim, Number> p;
   for (unsigned int i = 0; i < dim; i++)
-    if (p[i] < 0.)
-      p[i] = 0.;
-    else if (p[i] > 1.)
-      p[i] = 1.;
+    p[i] = std::min(std::max(q[i], Number(0.)), Number(1.));
 
   return p;
 }
@@ -4647,10 +4724,10 @@ GeometryInfo<dim>::distance_to_unit_cell(const Point<dim> &p)
   double result = 0.0;
 
   for (unsigned int i = 0; i < dim; i++)
-    if ((-p[i]) > result)
-      result = -p[i];
-    else if ((p[i] - 1.) > result)
-      result = (p[i] - 1.);
+    {
+      result = std::max(result, -p[i]);
+      result = std::max(result, p[i] - 1.);
+    }
 
   return result;
 }
