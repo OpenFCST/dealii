@@ -680,10 +680,7 @@ public:
    * To access the value use field_data[name_field][cell_id].
    */
   const std::map<std::string, std::vector<double>> &
-  get_field_data()
-  {
-    return this->field_data;
-  }
+  get_field_data() const;
 
 protected:
   /**

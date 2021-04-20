@@ -364,8 +364,8 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
 
             const std::vector<std::string> data_sets{"MaterialID",
                                                      "ManifoldID"};
-            in >> keyword;
             
+            in >> keyword;
             for (unsigned int i = 0; i < data_sets.size(); ++i)
               {
                 // Ignore everything until we get to a SCALARS data set
@@ -477,6 +477,15 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
                             }
                         }
                     }
+                    // check if a second SCALAR exists. If so, read the new
+                    // keyword SCALARS, otherwise, return to the bookmarked
+                    // position.
+                    std::streampos oldpos = in.tellg();
+                    in >> keyword;
+                    if (keyword == "SCALARS")
+                        continue;
+                    else
+                        in.seekg(oldpos);
                 }
                
             }
@@ -557,7 +566,12 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
                   "While reading VTK file, failed to find CELLS section"));
 }
 
-
+template <int dim, int spacedim>
+const std::map<std::string, std::vector<double>> &
+GridIn<dim, spacedim>::get_field_data() const
+  {
+    return this->field_data;
+  }
 
 template <int dim, int spacedim>
 void
