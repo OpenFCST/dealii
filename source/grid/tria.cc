@@ -1249,13 +1249,13 @@ namespace internal
           tria_level.global_active_cell_indices.insert(
             tria_level.global_active_cell_indices.end(),
             total_cells - tria_level.global_active_cell_indices.size(),
-            numbers::invalid_unsigned_int);
+            numbers::invalid_dof_index);
 
           tria_level.global_level_cell_indices.reserve(total_cells);
           tria_level.global_level_cell_indices.insert(
             tria_level.global_level_cell_indices.end(),
             total_cells - tria_level.global_level_cell_indices.size(),
-            numbers::invalid_unsigned_int);
+            numbers::invalid_dof_index);
 
           if (dimension < space_dimension)
             {
@@ -2709,9 +2709,9 @@ namespace internal
           level.face_orientations.assign(size * faces_per_cell, -1);
 
         level.global_active_cell_indices.assign(size,
-                                                numbers::invalid_unsigned_int);
+                                                numbers::invalid_dof_index);
         level.global_level_cell_indices.assign(size,
-                                               numbers::invalid_unsigned_int);
+                                               numbers::invalid_dof_index);
       }
 
 
@@ -5326,7 +5326,7 @@ namespace internal
                           if (face_ref_case ==
                               RefinementCase<dim - 1>::isotropic_refinement)
                             {
-                              if (aface->number_of_children() < 4)
+                              if (aface->n_active_descendants() < 4)
                                 // we use user_flags to denote needed
                                 // isotropic refinement
                                 aface->set_user_flag();
@@ -10190,6 +10190,14 @@ Triangulation<dim, spacedim>::clear()
 }
 
 
+template <int dim, int spacedim>
+MPI_Comm
+Triangulation<dim, spacedim>::get_communicator() const
+{
+  return MPI_COMM_SELF;
+}
+
+
 
 template <int dim, int spacedim>
 void
@@ -10421,9 +10429,8 @@ Triangulation<dim, spacedim>::copy_triangulation(
     faces = std::make_unique<internal::TriangulationImplementation::TriaFaces>(
       *other_tria.faces);
 
-  auto bdry_iterator = other_tria.manifold.begin();
-  for (; bdry_iterator != other_tria.manifold.end(); ++bdry_iterator)
-    manifold[bdry_iterator->first] = bdry_iterator->second->clone();
+  for (const auto &p : other_tria.manifold)
+    set_manifold(p.first, *p.second);
 
 
   levels.reserve(other_tria.levels.size());
@@ -10479,35 +10486,11 @@ Triangulation<dim, spacedim>::create_triangulation_compatibility(
 }
 
 
-
 template <int dim, int spacedim>
 void
-Triangulation<dim, spacedim>::create_triangulation(
-  const std::vector<Point<spacedim>> &v,
-  const std::vector<CellData<dim>> &  cells,
-  const SubCellData &                 subcelldata)
+Triangulation<dim, spacedim>::reset_policy()
 {
-  Assert((vertices.size() == 0) && (levels.size() == 0) && (faces == nullptr),
-         ExcTriangulationNotEmpty(vertices.size(), levels.size()));
-  // check that no forbidden arrays
-  // are used
-  Assert(subcelldata.check_consistency(dim), ExcInternalError());
-
-  // try to create a triangulation; if this fails, we still want to
-  // throw an exception but if we just do so we'll get into trouble
-  // because sometimes other objects are already attached to it:
-  try
-    {
-      internal::TriangulationImplementation::Implementation::
-        create_triangulation(v, cells, subcelldata, *this);
-
-      this->update_reference_cells();
-    }
-  catch (...)
-    {
-      clear_despite_subscriptions();
-      throw;
-    }
+  this->update_reference_cells();
 
   if (this->all_reference_cells_are_hyper_cube())
     {
@@ -10529,6 +10512,38 @@ Triangulation<dim, spacedim>::create_triangulation(
           spacedim,
           internal::TriangulationImplementation::ImplementationMixedMesh>>();
     }
+}
+
+
+
+template <int dim, int spacedim>
+void
+Triangulation<dim, spacedim>::create_triangulation(
+  const std::vector<Point<spacedim>> &v,
+  const std::vector<CellData<dim>> &  cells,
+  const SubCellData &                 subcelldata)
+{
+  Assert((vertices.size() == 0) && (levels.size() == 0) && (faces == nullptr),
+         ExcTriangulationNotEmpty(vertices.size(), levels.size()));
+  // check that no forbidden arrays
+  // are used
+  Assert(subcelldata.check_consistency(dim), ExcInternalError());
+
+  // try to create a triangulation; if this fails, we still want to
+  // throw an exception but if we just do so we'll get into trouble
+  // because sometimes other objects are already attached to it:
+  try
+    {
+      internal::TriangulationImplementation::Implementation::
+        create_triangulation(v, cells, subcelldata, *this);
+    }
+  catch (...)
+    {
+      clear_despite_subscriptions();
+      throw;
+    }
+
+  reset_policy();
 
   // update our counts of the various elements of a triangulation, and set
   // active_cell_indices of all cells
@@ -13363,7 +13378,12 @@ template <int dim, int spacedim>
 void
 Triangulation<dim, spacedim>::execute_coarsening_and_refinement()
 {
-  prepare_coarsening_and_refinement();
+  // Call our version of prepare_coarsening_and_refinement() even if a derived
+  // class like parallel::distributed::Triangulation overrides it. Their
+  // function will be called in their execute_coarsening_and_refinement()
+  // function. Even in a distributed computation our job here is to reconstruct
+  // the local part of the mesh and as such checking our flags is enough.
+  Triangulation<dim, spacedim>::prepare_coarsening_and_refinement();
 
   // verify a case with which we have had
   // some difficulty in the past (see the
@@ -13539,7 +13559,7 @@ Triangulation<dim, spacedim>::all_reference_cells_are_hyper_cube() const
                     "cells used by this triangulation if the "
                     "triangulation doesn't yet have any cells in it."));
   return (this->reference_cells.size() == 1 &&
-          this->reference_cells[0] == ReferenceCell::get_hypercube<dim>());
+          this->reference_cells[0] == ReferenceCells::get_hypercube<dim>());
 }
 
 

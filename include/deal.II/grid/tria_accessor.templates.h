@@ -621,11 +621,10 @@ namespace internal
       line_index(const TriaAccessor<3, 3, 3> &accessor, const unsigned int i)
       {
         const auto pair =
-          accessor.reference_cell_info().standard_line_to_face_and_line_index(
-            i);
+          accessor.reference_cell().standard_line_to_face_and_line_index(i);
         const auto quad_index = pair[0];
         const auto line_index =
-          accessor.reference_cell_info().standard_to_real_face_line(
+          accessor.reference_cell().standard_to_real_face_line(
             pair[1], pair[0], face_orientation_raw(accessor, quad_index));
 
         return accessor.quad(quad_index)->line_index(line_index);
@@ -833,18 +832,20 @@ namespace internal
         Assert(accessor.used(), TriaAccessorExceptions::ExcCellNotUsed());
         AssertIndexRange(line, accessor.n_lines());
 
+        // First pick a face on which this line is a part of, and the
+        // index of the line within.
         const auto pair =
-          accessor.reference_cell_info().standard_line_to_face_and_line_index(
-            line);
+          accessor.reference_cell().standard_line_to_face_and_line_index(line);
         const auto quad_index = pair[0];
-        const auto line_index =
-          accessor.reference_cell_info().standard_to_real_face_line(
+        const auto line_within_face_index =
+          accessor.reference_cell().standard_to_real_face_line(
             pair[1], pair[0], face_orientation_raw(accessor, quad_index));
 
-        return accessor.reference_cell_info().combine_face_and_line_orientation(
+        // Then query how that line is oriented within that face:
+        return accessor.reference_cell().standard_vs_true_line_orientation(
           pair[1],
           face_orientation_raw(accessor, quad_index),
-          accessor.quad(quad_index)->line_orientation(line_index));
+          accessor.quad(quad_index)->line_orientation(line_within_face_index));
       }
 
 
@@ -1019,11 +1020,12 @@ namespace internal
       vertex_index(const TriaAccessor<2, dim, spacedim> &accessor,
                    const unsigned int                    corner)
       {
-        const auto pair = accessor.reference_cell_info()
-                            .standard_vertex_to_face_and_vertex_index(corner);
+        const auto pair =
+          accessor.reference_cell().standard_vertex_to_face_and_vertex_index(
+            corner);
         const auto line_index = pair[0];
         const auto vertex_index =
-          accessor.reference_cell_info().standard_to_real_face_vertex(
+          accessor.reference_cell().standard_to_real_face_vertex(
             pair[1], pair[0], accessor.line_orientation(line_index));
 
         return accessor.line(line_index)->vertex_index(vertex_index);
@@ -1035,11 +1037,12 @@ namespace internal
       vertex_index(const TriaAccessor<3, 3, 3> &accessor,
                    const unsigned int           corner)
       {
-        const auto pair = accessor.reference_cell_info()
-                            .standard_vertex_to_face_and_vertex_index(corner);
+        const auto pair =
+          accessor.reference_cell().standard_vertex_to_face_and_vertex_index(
+            corner);
         const auto face_index = pair[0];
         const auto vertex_index =
-          accessor.reference_cell_info().standard_to_real_face_vertex(
+          accessor.reference_cell().standard_to_real_face_vertex(
             pair[1], pair[0], face_orientation_raw(accessor, face_index));
 
         return accessor.quad(face_index)->vertex_index(vertex_index);
@@ -1798,13 +1801,22 @@ template <int structdim, int dim, int spacedim>
 unsigned int
 TriaAccessor<structdim, dim, spacedim>::number_of_children() const
 {
+  return n_active_descendants();
+}
+
+
+
+template <int structdim, int dim, int spacedim>
+unsigned int
+TriaAccessor<structdim, dim, spacedim>::n_active_descendants() const
+{
   if (!this->has_children())
     return 1;
   else
     {
       unsigned int sum = 0;
       for (unsigned int c = 0; c < n_children(); ++c)
-        sum += this->child(c)->number_of_children();
+        sum += this->child(c)->n_active_descendants();
       return sum;
     }
 }
@@ -1876,7 +1888,7 @@ TriaAccessor<structdim, dim, spacedim>::set_all_boundary_ids(
       case 2:
         // for boundary quads also set
         // boundary_id of bounding lines
-        for (unsigned int i = 0; i < 4; ++i)
+        for (unsigned int i = 0; i < this->n_lines(); ++i)
           this->line(i)->set_boundary_id(boundary_ind);
         break;
 
@@ -2195,7 +2207,7 @@ template <int structdim, int dim, int spacedim>
 unsigned int
 TriaAccessor<structdim, dim, spacedim>::n_vertices() const
 {
-  return this->reference_cell_info().n_vertices();
+  return this->reference_cell().n_vertices();
 }
 
 
@@ -2204,7 +2216,7 @@ template <int structdim, int dim, int spacedim>
 unsigned int
 TriaAccessor<structdim, dim, spacedim>::n_lines() const
 {
-  return this->reference_cell_info().n_lines();
+  return this->reference_cell().n_lines();
 }
 
 
@@ -2215,7 +2227,7 @@ TriaAccessor<structdim, dim, spacedim>::n_faces() const
 {
   AssertDimension(structdim, dim);
 
-  return this->reference_cell_info().n_faces();
+  return this->reference_cell().n_faces();
 }
 
 
@@ -2245,19 +2257,6 @@ TriaAccessor<structdim, dim, spacedim>::face_indices() const
   return {0U, n_faces()};
 }
 
-
-
-template <int structdim, int dim, int spacedim>
-inline const internal::ReferenceCell::Base &
-TriaAccessor<structdim, dim, spacedim>::reference_cell_info() const
-{
-  if (structdim == 0)
-    return internal::ReferenceCell::get_cell(ReferenceCells::Vertex);
-  else if (structdim == 1)
-    return internal::ReferenceCell::get_cell(ReferenceCells::Line);
-  else
-    return internal::ReferenceCell::get_cell(this->reference_cell());
-}
 
 
 /*----------------- Functions: TriaAccessor<0,dim,spacedim> -----------------*/
@@ -2578,6 +2577,15 @@ TriaAccessor<0, dim, spacedim>::number_of_children()
 
 template <int dim, int spacedim>
 inline unsigned int
+TriaAccessor<0, dim, spacedim>::n_active_descendants()
+{
+  return 0;
+}
+
+
+
+template <int dim, int spacedim>
+inline unsigned int
 TriaAccessor<0, dim, spacedim>::max_refinement_depth()
 {
   return 0;
@@ -2851,8 +2859,7 @@ inline typename dealii::internal::TriangulationImplementation::
   Iterators<1, spacedim>::line_iterator
   TriaAccessor<0, 1, spacedim>::line(const unsigned int)
 {
-  return typename dealii::internal::TriangulationImplementation::
-    Iterators<1, spacedim>::line_iterator();
+  return {};
 }
 
 
@@ -2870,8 +2877,7 @@ inline typename dealii::internal::TriangulationImplementation::
   Iterators<1, spacedim>::quad_iterator
   TriaAccessor<0, 1, spacedim>::quad(const unsigned int)
 {
-  return typename dealii::internal::TriangulationImplementation::
-    Iterators<1, spacedim>::quad_iterator();
+  return {};
 }
 
 
@@ -2995,6 +3001,15 @@ TriaAccessor<0, 1, spacedim>::n_children()
 template <int spacedim>
 inline unsigned int
 TriaAccessor<0, 1, spacedim>::number_of_children()
+{
+  return 0;
+}
+
+
+
+template <int spacedim>
+inline unsigned int
+TriaAccessor<0, 1, spacedim>::n_active_descendants()
 {
   return 0;
 }

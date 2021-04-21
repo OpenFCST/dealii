@@ -634,11 +634,25 @@ namespace DoFTools
   }
 
 
+
   template <int dim, int spacedim>
   void
   extract_boundary_dofs(const DoFHandler<dim, spacedim> &   dof_handler,
                         const ComponentMask &               component_mask,
                         IndexSet &                          selected_dofs,
+                        const std::set<types::boundary_id> &boundary_ids)
+  {
+    // Simply forward to the other function
+    selected_dofs =
+      extract_boundary_dofs(dof_handler, component_mask, boundary_ids);
+  }
+
+
+
+  template <int dim, int spacedim>
+  IndexSet
+  extract_boundary_dofs(const DoFHandler<dim, spacedim> &   dof_handler,
+                        const ComponentMask &               component_mask,
                         const std::set<types::boundary_id> &boundary_ids)
   {
     Assert(component_mask.represents_n_components(
@@ -648,9 +662,7 @@ namespace DoFTools
              boundary_ids.end(),
            ExcInvalidBoundaryIndicator());
 
-    // first reset output argument
-    selected_dofs.clear();
-    selected_dofs.set_size(dof_handler.n_dofs());
+    IndexSet selected_dofs(dof_handler.n_dofs());
 
     // let's see whether we have to check for certain boundary indicators
     // or whether we can accept all
@@ -675,7 +687,6 @@ namespace DoFTools
     // boundary line is also part of a boundary face which we will be
     // visiting sooner or later
     for (const auto &cell : dof_handler.active_cell_iterators())
-
       // only work on cells that are either locally owned or at least ghost
       // cells
       if (cell->is_artificial() == false)
@@ -689,16 +700,13 @@ namespace DoFTools
 
                 const auto reference_cell = cell->reference_cell();
 
-                const auto &cell_rc =
-                  dealii::internal::ReferenceCell::get_cell(reference_cell);
-                const auto &face_rc =
-                  dealii::internal::ReferenceCell::get_face(reference_cell,
-                                                            face);
-
-                const unsigned int n_vertices_per_cell = cell_rc.n_vertices();
-                const unsigned int n_lines_per_cell    = cell_rc.n_lines();
-                const unsigned int n_vertices_per_face = face_rc.n_vertices();
-                const unsigned int n_lines_per_face    = face_rc.n_lines();
+                const unsigned int n_vertices_per_cell =
+                  reference_cell.n_vertices();
+                const unsigned int n_lines_per_cell = reference_cell.n_lines();
+                const unsigned int n_vertices_per_face =
+                  reference_cell.face_reference_cell(face).n_vertices();
+                const unsigned int n_lines_per_face =
+                  reference_cell.face_reference_cell(face).n_lines();
 
                 const unsigned int dofs_per_face = fe.n_dofs_per_face(face);
                 face_dof_indices.resize(dofs_per_face);
@@ -763,6 +771,8 @@ namespace DoFTools
                         }
                     }
               }
+
+    return selected_dofs;
   }
 
 

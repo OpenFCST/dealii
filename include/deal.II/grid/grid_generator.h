@@ -157,10 +157,8 @@ namespace GridGenerator
    * @param tria The triangulation to create. It needs to be empty upon
    * calling this function.
    *
-   * @param repetitions A vector of @p dim positive values denoting the number
-   * of cells to generate in that direction. For example, the first component of
-   * the vector specifies the number of cells in the x-direction, the second
-   * component specifies that for the y-direction for dim=2.
+   * @param repetitions An unsigned integer denoting the number of cells to
+   * generate in each direction.
    *
    * @param left Lower bound for the interval used to create the hyper cube.
    *
@@ -857,7 +855,6 @@ namespace GridGenerator
    * @pre The triangulation passed as argument needs to be empty when calling
    * this function.
    */
-
   template <int spacedim>
   void hyper_sphere(Triangulation<spacedim - 1, spacedim> &tria,
                     const Point<spacedim> &center = Point<spacedim>(),
@@ -948,6 +945,48 @@ namespace GridGenerator
   cylinder(Triangulation<dim> &tria,
            const double        radius      = 1.,
            const double        half_length = 1.);
+
+
+  /**
+   * Create a @p dim dimensional cylinder where the $x$-axis serves as
+   * the axis of the cylinder. For the purposes of this function, a
+   * cylinder is defined as a (@p dim - 1) dimensional disk of given
+   * @p radius, extruded along the axis of the cylinder (which is the
+   * first coordinate direction). Consequently, in three dimensions,
+   * the cylinder extends from `x=-half_length` to `x=+half_length`
+   * and its projection into the @p yz-plane is a circle of radius @p
+   * radius. In two dimensions, the cylinder is a rectangle from
+   * `x=-half_length` to `x=+half_length` and from `y=-radius` to
+   * `y=radius`. This function is only implemented for dim==3.
+   *
+   * The boundaries are colored according to the following scheme: 0 for the
+   * hull of the cylinder, 1 for the left hand face and 2 for the right hand
+   * face (see
+   * @ref GlossColorization "the glossary entry on colorization").
+   *
+   * The manifold id for the hull of the cylinder is set to zero, and a
+   * CylindricalManifold is attached to it.
+   *
+   * @image html subdivided_cylinder_3D.png
+   *
+   * @param tria The triangulation to be created. It needs to be empty upon
+   * calling this function.
+   *
+   * @param x_subdivisions A positive integer denoting the number
+   * of cells to generate in the x direction. The default cylinder has
+   * x_repetitions=2.
+   *
+   * @param radius The radius of the circle in the yz-plane used to extrude the cylinder.
+   *
+   * @param half_length The half-length of the cylinder in the x direction.
+   */
+  template <int dim>
+  void
+  subdivided_cylinder(Triangulation<dim> &tria,
+                      const unsigned int  x_subdivisions,
+                      const double        radius      = 1.,
+                      const double        half_length = 1.);
+
 
   /**
    * Create a cut cone around the x-axis.  The cone extends from
@@ -2146,8 +2185,6 @@ namespace GridGenerator
       add_parameters(ParameterHandler &prm);
     };
 
-
-
     /**
      * Initialize the given triangulation with a flow field around an airfoil,
      * i.e., a mesh of C-Type approximating Joukowski or NACA (4 digit)
@@ -2206,6 +2243,50 @@ namespace GridGenerator
       const AdditionalData &additional_data = AdditionalData());
 
   } // namespace Airfoil
+
+  /**
+   * Create a coordinate-parallel brick from the two diagonally opposite
+   * corner points @p p1 and @p p2. The number of vertices in coordinate
+   * direction @p i is given by <tt>repetitions[i]+1</tt>.
+   *
+   * @note This function connects internally 4/8 vertices to
+   *   quadrilateral/hexahedral cells and subdivides these into 2/5
+   * triangular/tetrahedral cells.
+   *
+   * @note Currently, this function only works for `dim==spacedim`.
+   *
+   * @ingroup simplex
+   */
+  template <int dim, int spacedim>
+  void
+  subdivided_hyper_rectangle_with_simplices(
+    Triangulation<dim, spacedim> &   tria,
+    const std::vector<unsigned int> &repetitions,
+    const Point<dim> &               p1,
+    const Point<dim> &               p2,
+    const bool                       colorize = false);
+
+  /**
+   * Initialize the given triangulation with a hypercube (square in 2D and
+   * cube in 3D) consisting of @p repetitions cells in each direction.
+   * The hypercube volume is the tensor product interval
+   * $[left,right]^{\text{dim}}$ in the present number of dimensions, where
+   * the limits are given as arguments. They default to zero and unity, then
+   * producing the unit hypercube.
+   *
+   * @note This function connects internally 4/8 vertices to
+   * quadrilateral/hexahedral cells and subdivides these into 2/5
+   * triangular/tetrahedral cells.
+   *
+   * @ingroup simplex
+   */
+  template <int dim, int spacedim>
+  void
+  subdivided_hyper_cube_with_simplices(Triangulation<dim, spacedim> &tria,
+                                       const unsigned int repetitions,
+                                       const double       p1       = 0.0,
+                                       const double       p2       = 1.0,
+                                       const bool         colorize = false);
 
   ///@}
 

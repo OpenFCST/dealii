@@ -293,7 +293,7 @@ namespace DataOutBase
                                         (n_data_sets + spacedim) :
                                         n_data_sets,
                                       patch.data.n_rows()));
-          Assert(patch.reference_cell != ReferenceCell::get_hypercube<dim>() ||
+          Assert(patch.reference_cell != ReferenceCells::get_hypercube<dim>() ||
                    (n_data_sets == 0) ||
                    (patch.data.n_cols() ==
                     Utilities::fixed_power<dim>(n_subdivisions + 1)),
@@ -615,7 +615,7 @@ namespace
 
     if (write_higher_order_cells)
       {
-        if (patch.reference_cell == ReferenceCell::get_hypercube<dim>())
+        if (patch.reference_cell == ReferenceCells::get_hypercube<dim>())
           {
             const std::array<unsigned int, 4> cell_type_by_dim{
               {VTK_VERTEX,
@@ -671,7 +671,7 @@ namespace
         vtk_cell_id[0] = VTK_PYRAMID;
         vtk_cell_id[1] = 1;
       }
-    else if (patch.reference_cell == ReferenceCell::get_hypercube<dim>())
+    else if (patch.reference_cell == ReferenceCells::get_hypercube<dim>())
       {
         const std::array<unsigned int, 4> cell_type_by_dim{
           {VTK_VERTEX, VTK_LINE, VTK_QUAD, VTK_HEXAHEDRON}};
@@ -683,7 +683,7 @@ namespace
         Assert(false, ExcNotImplemented());
       }
 
-    if (patch.reference_cell != ReferenceCell::get_hypercube<dim>() ||
+    if (patch.reference_cell != ReferenceCells::get_hypercube<dim>() ||
         write_higher_order_cells)
       vtk_cell_id[2] = patch.data.n_cols();
     else
@@ -697,14 +697,14 @@ namespace
   //----------------------------------------------------------------------//
   // For a given patch, compute the node interpolating the corner nodes linearly
   // at the point (xstep, ystep, zstep)*1./n_subdivisions. If the points are
-  // saved in the patch.data member, return the saved point instead
+  // saved in the patch.data member, return the saved point instead.
   template <int dim, int spacedim>
   inline Point<spacedim>
-  compute_node(const DataOutBase::Patch<dim, spacedim> &patch,
-               const unsigned int                       xstep,
-               const unsigned int                       ystep,
-               const unsigned int                       zstep,
-               const unsigned int                       n_subdivisions)
+  compute_hypercube_node(const DataOutBase::Patch<dim, spacedim> &patch,
+                         const unsigned int                       xstep,
+                         const unsigned int                       ystep,
+                         const unsigned int                       zstep,
+                         const unsigned int n_subdivisions)
   {
     Point<spacedim> node;
     if (patch.points_are_available)
@@ -768,6 +768,36 @@ namespace
               }
           }
       }
+    return node;
+  }
+
+  // For a given patch, compute the nodes for arbitrary (non-hypercube) cells.
+  // If the points are saved in the patch.data member, return the saved point
+  // instead.
+  template <int dim, int spacedim>
+  inline Point<spacedim>
+  compute_arbitrary_node(const DataOutBase::Patch<dim, spacedim> &patch,
+                         const unsigned int                       point_no)
+  {
+    Point<spacedim> node;
+
+    if (patch.points_are_available)
+      {
+        for (unsigned int d = 0; d < spacedim; ++d)
+          node[d] = patch.data(patch.data.size(0) - spacedim + d, point_no);
+        return node;
+      }
+    else
+      {
+        AssertDimension(patch.n_subdivisions, 1);
+        Assert(
+          patch.reference_cell != ReferenceCells::Pyramid,
+          ExcMessage(
+            "Pyramids need different ordering of the vertices, which is not implemented yet here."));
+
+        node = patch.vertices[point_no];
+      }
+
     return node;
   }
 
@@ -919,7 +949,7 @@ namespace
     for (const auto &patch : patches)
       {
         // The following formula doesn't hold for non-tensor products.
-        if (patch.reference_cell == ReferenceCell::get_hypercube<dim>())
+        if (patch.reference_cell == ReferenceCells::get_hypercube<dim>())
           {
             n_nodes += Utilities::fixed_power<dim>(patch.n_subdivisions + 1);
             n_cells += Utilities::fixed_power<dim>(patch.n_subdivisions);
@@ -927,9 +957,7 @@ namespace
         else
           {
             Assert(patch.n_subdivisions == 1, ExcNotImplemented());
-            const auto &info =
-              internal::ReferenceCell::get_cell(patch.reference_cell);
-            n_nodes += info.n_vertices();
+            n_nodes += patch.reference_cell.n_vertices();
             n_cells += 1;
           }
       }
@@ -950,7 +978,7 @@ namespace
     for (const auto &patch : patches)
       {
         // The following formulas don't hold for non-tensor products.
-        if (patch.reference_cell == ReferenceCell::get_hypercube<dim>())
+        if (patch.reference_cell == ReferenceCells::get_hypercube<dim>())
           {
             n_nodes += Utilities::fixed_power<dim>(patch.n_subdivisions + 1);
 
@@ -1866,7 +1894,7 @@ namespace DataOutBase
     : patch_index(no_neighbor)
     , n_subdivisions(1)
     , points_are_available(false)
-    , reference_cell(ReferenceCell::get_hypercube<dim>())
+    , reference_cell(ReferenceCells::get_hypercube<dim>())
   // all the other data has a constructor of its own, except for the "neighbors"
   // field, which we set to invalid values.
   {
@@ -1968,7 +1996,7 @@ namespace DataOutBase
   Patch<0, spacedim>::Patch()
     : patch_index(no_neighbor)
     , points_are_available(false)
-    , reference_cell(ReferenceCell::get_hypercube<0>())
+    , reference_cell(ReferenceCells::get_hypercube<0>())
   {
     Assert(spacedim <= 3, ExcNotImplemented());
   }
@@ -2628,22 +2656,12 @@ namespace DataOutBase
 
     for (const auto &patch : patches)
       {
-        // special treatment of simplices since they are not subdivided, such
-        // that no new nodes have to be created, but the precomputed ones can be
-        // used
-        if (patch.reference_cell != ReferenceCell::get_hypercube<dim>())
+        // special treatment of non-hypercube cells
+        if (patch.reference_cell != ReferenceCells::get_hypercube<dim>())
           {
-            Point<spacedim> node;
-
             for (unsigned int point_no = 0; point_no < patch.data.n_cols();
                  ++point_no)
-              {
-                for (unsigned int d = 0; d < spacedim; ++d)
-                  node[d] =
-                    patch.data(patch.data.size(0) - spacedim + d, point_no);
-
-                out.write_point(count++, node);
-              }
+              out.write_point(count++, compute_arbitrary_node(patch, point_no));
           }
         else
           {
@@ -2659,7 +2677,8 @@ namespace DataOutBase
               for (unsigned int i2 = 0; i2 < n2; ++i2)
                 for (unsigned int i1 = 0; i1 < n1; ++i1)
                   out.write_point(
-                    count++, compute_node(patch, i1, i2, i3, n_subdivisions));
+                    count++,
+                    compute_hypercube_node(patch, i1, i2, i3, n_subdivisions));
           }
       }
     out.flush_points();
@@ -2675,7 +2694,7 @@ namespace DataOutBase
     for (const auto &patch : patches)
       {
         // special treatment of simplices since they are not subdivided
-        if (patch.reference_cell != ReferenceCell::get_hypercube<dim>())
+        if (patch.reference_cell != ReferenceCells::get_hypercube<dim>())
           {
             out.write_cell_single(count++,
                                   first_vertex_of_patch,
@@ -2727,7 +2746,7 @@ namespace DataOutBase
 
     for (const auto &patch : patches)
       {
-        if (patch.reference_cell != ReferenceCell::get_hypercube<dim>())
+        if (patch.reference_cell != ReferenceCells::get_hypercube<dim>())
           {
             connectivity.resize(patch.data.n_cols());
 
@@ -3587,7 +3606,8 @@ namespace DataOutBase
                 for (unsigned int i1 = 0; i1 < n1; ++i1)
                   {
                     // compute coordinates for this patch point
-                    out << compute_node(patch, i1, i2, 0, n_subdivisions)
+                    out << compute_hypercube_node(
+                             patch, i1, i2, 0, n_subdivisions)
                         << ' ';
 
                     for (unsigned int data_set = 0; data_set < n_data_sets;
@@ -3614,7 +3634,7 @@ namespace DataOutBase
                   {
                     // compute coordinates for this patch point
                     this_point =
-                      compute_node(patch, i1, i2, i3, n_subdivisions);
+                      compute_hypercube_node(patch, i1, i2, i3, n_subdivisions);
                     // line into positive x-direction if possible
                     if (i1 < n_subdivisions)
                       {
@@ -3628,7 +3648,7 @@ namespace DataOutBase
                         out << '\n';
 
                         // write point there and its data
-                        out << compute_node(
+                        out << compute_hypercube_node(
                           patch, i1 + 1, i2, i3, n_subdivisions);
 
                         for (unsigned int data_set = 0; data_set < n_data_sets;
@@ -3655,7 +3675,7 @@ namespace DataOutBase
                         out << '\n';
 
                         // write point there and its data
-                        out << compute_node(
+                        out << compute_hypercube_node(
                           patch, i1, i2 + 1, i3, n_subdivisions);
 
                         for (unsigned int data_set = 0; data_set < n_data_sets;
@@ -3682,7 +3702,7 @@ namespace DataOutBase
                         out << '\n';
 
                         // write point there and its data
-                        out << compute_node(
+                        out << compute_hypercube_node(
                           patch, i1, i2, i3 + 1, n_subdivisions);
 
                         for (unsigned int data_set = 0; data_set < n_data_sets;
@@ -3868,7 +3888,7 @@ namespace DataOutBase
             {
               // compute coordinates for this patch point, storing in ver
               ver[i1 * d1 + i2 * d2] =
-                compute_node(patch, i1, i2, 0, n_subdivisions);
+                compute_hypercube_node(patch, i1, i2, 0, n_subdivisions);
             }
 
 
@@ -4110,11 +4130,14 @@ namespace DataOutBase
           for (unsigned int i1 = 0; i1 < n_subdivisions; ++i1)
             {
               Point<spacedim> points[4];
-              points[0] = compute_node(patch, i1, i2, 0, n_subdivisions);
-              points[1] = compute_node(patch, i1 + 1, i2, 0, n_subdivisions);
-              points[2] = compute_node(patch, i1, i2 + 1, 0, n_subdivisions);
-              points[3] =
-                compute_node(patch, i1 + 1, i2 + 1, 0, n_subdivisions);
+              points[0] =
+                compute_hypercube_node(patch, i1, i2, 0, n_subdivisions);
+              points[1] =
+                compute_hypercube_node(patch, i1 + 1, i2, 0, n_subdivisions);
+              points[2] =
+                compute_hypercube_node(patch, i1, i2 + 1, 0, n_subdivisions);
+              points[3] = compute_hypercube_node(
+                patch, i1 + 1, i2 + 1, 0, n_subdivisions);
 
               switch (spacedim)
                 {
@@ -6060,7 +6083,8 @@ namespace DataOutBase
     Point<2>                projection_decomposition;
     std::array<Point<2>, 4> projection_decompositions;
 
-    projected_point = compute_node(first_patch, 0, 0, 0, n_subdivisions);
+    projected_point =
+      compute_hypercube_node(first_patch, 0, 0, 0, n_subdivisions);
 
     if (first_patch.data.n_rows() != 0)
       {
@@ -6087,13 +6111,13 @@ namespace DataOutBase
             for (unsigned int i1 = 0; i1 < n_subdivisions; ++i1)
               {
                 projected_points[0] =
-                  compute_node(patch, i1, i2, 0, n_subdivisions);
+                  compute_hypercube_node(patch, i1, i2, 0, n_subdivisions);
                 projected_points[1] =
-                  compute_node(patch, i1 + 1, i2, 0, n_subdivisions);
+                  compute_hypercube_node(patch, i1 + 1, i2, 0, n_subdivisions);
                 projected_points[2] =
-                  compute_node(patch, i1, i2 + 1, 0, n_subdivisions);
-                projected_points[3] =
-                  compute_node(patch, i1 + 1, i2 + 1, 0, n_subdivisions);
+                  compute_hypercube_node(patch, i1, i2 + 1, 0, n_subdivisions);
+                projected_points[3] = compute_hypercube_node(
+                  patch, i1 + 1, i2 + 1, 0, n_subdivisions);
 
                 x_min = std::min(x_min, projected_points[0][0]);
                 x_min = std::min(x_min, projected_points[1][0]);
@@ -6268,7 +6292,8 @@ namespace DataOutBase
 
     Point<3> point;
 
-    projected_point = compute_node(first_patch, 0, 0, 0, n_subdivisions);
+    projected_point =
+      compute_hypercube_node(first_patch, 0, 0, 0, n_subdivisions);
 
     if (first_patch.data.n_rows() != 0)
       {
@@ -6301,10 +6326,11 @@ namespace DataOutBase
             for (unsigned int i1 = 0; i1 < n_subdivisions; ++i1)
               {
                 const std::array<Point<spacedim>, 4> projected_vertices{
-                  {compute_node(patch, i1, i2, 0, n_subdivisions),
-                   compute_node(patch, i1 + 1, i2, 0, n_subdivisions),
-                   compute_node(patch, i1, i2 + 1, 0, n_subdivisions),
-                   compute_node(patch, i1 + 1, i2 + 1, 0, n_subdivisions)}};
+                  {compute_hypercube_node(patch, i1, i2, 0, n_subdivisions),
+                   compute_hypercube_node(patch, i1 + 1, i2, 0, n_subdivisions),
+                   compute_hypercube_node(patch, i1, i2 + 1, 0, n_subdivisions),
+                   compute_hypercube_node(
+                     patch, i1 + 1, i2 + 1, 0, n_subdivisions)}};
 
                 Assert((flags.height_vector < patch.data.n_rows()) ||
                          patch.data.n_rows() == 0,
@@ -6442,10 +6468,11 @@ namespace DataOutBase
             for (unsigned int i1 = 0; i1 < n_subdivisions; ++i1)
               {
                 const std::array<Point<spacedim>, 4> projected_vertices = {
-                  {compute_node(patch, i1, i2, 0, n_subdivisions),
-                   compute_node(patch, i1 + 1, i2, 0, n_subdivisions),
-                   compute_node(patch, i1, i2 + 1, 0, n_subdivisions),
-                   compute_node(patch, i1 + 1, i2 + 1, 0, n_subdivisions)}};
+                  {compute_hypercube_node(patch, i1, i2, 0, n_subdivisions),
+                   compute_hypercube_node(patch, i1 + 1, i2, 0, n_subdivisions),
+                   compute_hypercube_node(patch, i1, i2 + 1, 0, n_subdivisions),
+                   compute_hypercube_node(
+                     patch, i1 + 1, i2 + 1, 0, n_subdivisions)}};
 
                 Assert((flags.height_vector < patch.data.n_rows()) ||
                          patch.data.n_rows() == 0,
@@ -7739,9 +7766,6 @@ DataOutBase::write_hdf5_parallel(
   // patches
   Assert(patches.size() > 0, ExcNoPatches());
 
-  const auto &cell_info =
-    internal::ReferenceCell::get_cell(patches[0].reference_cell);
-
   hid_t h5_mesh_file_id = -1, h5_solution_file_id, file_plist_id, plist_id;
   hid_t node_dataspace, node_dataset, node_file_dataspace,
     node_memory_dataspace;
@@ -7835,7 +7859,7 @@ DataOutBase::write_hdf5_parallel(
       AssertThrow(node_dataspace >= 0, ExcIO());
 
       cell_ds_dim[0] = global_node_cell_count[1];
-      cell_ds_dim[1] = cell_info.n_vertices();
+      cell_ds_dim[1] = patches[0].reference_cell.n_vertices();
       cell_dataspace = H5Screate_simple(2, cell_ds_dim, nullptr);
       AssertThrow(cell_dataspace >= 0, ExcIO());
 
@@ -7896,7 +7920,7 @@ DataOutBase::write_hdf5_parallel(
 
       // And repeat for cells
       count[0] = local_node_cell_count[1];
-      count[1] = cell_info.n_vertices();
+      count[1] = patches[0].reference_cell.n_vertices();
       offset[0] = global_node_cell_offsets[1];
       offset[1] = 0;
       cell_memory_dataspace = H5Screate_simple(2, count, nullptr);
@@ -8668,16 +8692,16 @@ XDMFEntry::get_xdmf_content(const unsigned int indent_level) const
     {
       case 0:
         return get_xdmf_content(indent_level,
-                                ReferenceCell::get_hypercube<0>());
+                                ReferenceCells::get_hypercube<0>());
       case 1:
         return get_xdmf_content(indent_level,
-                                ReferenceCell::get_hypercube<1>());
+                                ReferenceCells::get_hypercube<1>());
       case 2:
         return get_xdmf_content(indent_level,
-                                ReferenceCell::get_hypercube<2>());
+                                ReferenceCells::get_hypercube<2>());
       case 3:
         return get_xdmf_content(indent_level,
-                                ReferenceCell::get_hypercube<3>());
+                                ReferenceCells::get_hypercube<3>());
       default:
         Assert(false, ExcNotImplemented());
     }

@@ -235,9 +235,7 @@ namespace FETools
       // one, taking into account multiplicities, and other complications
       unsigned int total_index = 0;
       for (const unsigned int vertex_number :
-           dealii::internal::ReferenceCell::get_cell(
-             fes.front()->reference_cell())
-             .vertex_indices())
+           fes.front()->reference_cell().vertex_indices())
         {
           for (unsigned int base = 0; base < fes.size(); ++base)
             for (unsigned int m = 0; m < multiplicities[base]; ++m)
@@ -258,9 +256,7 @@ namespace FETools
 
       // 2. Lines
       for (const unsigned int line_number :
-           dealii::internal::ReferenceCell::get_cell(
-             fes.front()->reference_cell())
-             .line_indices())
+           fes.front()->reference_cell().line_indices())
         {
           for (unsigned int base = 0; base < fes.size(); ++base)
             for (unsigned int m = 0; m < multiplicities[base]; ++m)
@@ -282,11 +278,9 @@ namespace FETools
       // 3. Quads
       for (unsigned int quad_number = 0;
            quad_number <
-           (dim == 2 ? 1 :
-                       (dim == 3 ? dealii::internal::ReferenceCell::get_cell(
-                                     fes.front()->reference_cell())
-                                     .n_faces() :
-                                   0));
+           (dim == 2 ?
+              1 :
+              (dim == 3 ? fes.front()->reference_cell().n_faces() : 0));
            ++quad_number)
         {
           for (unsigned int base = 0; base < fes.size(); ++base)
@@ -381,7 +375,10 @@ namespace FETools
       const bool do_tensor_product)
     {
       AssertDimension(fes.size(), multiplicities.size());
-
+      Assert(
+        fes.size() > 0,
+        ExcMessage(
+          "This function only makes sense if at least one FiniteElement is provided."));
       // first count the number of dofs and components that will emerge from the
       // given FEs
       unsigned int n_shape_functions = 0;
@@ -428,9 +425,7 @@ namespace FETools
       // base elements, and other complications
       unsigned int total_index = 0;
       for (const unsigned int vertex_number :
-           dealii::internal::ReferenceCell::get_cell(
-             fes.front()->reference_cell())
-             .vertex_indices())
+           fes.front()->reference_cell().vertex_indices())
         {
           unsigned int comp_start = 0;
           for (unsigned int base = 0; base < fes.size(); ++base)
@@ -463,9 +458,7 @@ namespace FETools
 
       // 2. Lines
       for (const unsigned int line_number :
-           dealii::internal::ReferenceCell::get_cell(
-             fes.front()->reference_cell())
-             .line_indices())
+           fes.front()->reference_cell().line_indices())
         {
           unsigned int comp_start = 0;
           for (unsigned int base = 0; base < fes.size(); ++base)
@@ -499,11 +492,9 @@ namespace FETools
       // 3. Quads
       for (unsigned int quad_number = 0;
            quad_number <
-           (dim == 2 ? 1 :
-                       (dim == 3 ? dealii::internal::ReferenceCell::get_cell(
-                                     fes.front()->reference_cell())
-                                     .n_faces() :
-                                   0));
+           (dim == 2 ?
+              1 :
+              (dim == 3 ? fes.front()->reference_cell().n_faces() : 0));
            ++quad_number)
         {
           unsigned int comp_start = 0;
@@ -673,8 +664,7 @@ namespace FETools
       // vertex, etc
       total_index = 0;
       for (const unsigned int vertex_number :
-           dealii::internal::ReferenceCell::get_cell(fe.reference_cell())
-             .vertex_indices())
+           fe.reference_cell().vertex_indices())
         {
           unsigned int comp_start = 0;
           for (unsigned int base = 0; base < fe.n_base_elements(); ++base)
@@ -715,9 +705,7 @@ namespace FETools
         }
 
       // 2. Lines
-      for (const unsigned int line_number :
-           dealii::internal::ReferenceCell::get_cell(fe.reference_cell())
-             .line_indices())
+      for (const unsigned int line_number : fe.reference_cell().line_indices())
         {
           unsigned int comp_start = 0;
           for (unsigned int base = 0; base < fe.n_base_elements(); ++base)
@@ -761,11 +749,7 @@ namespace FETools
       // 3. Quads
       for (unsigned int quad_number = 0;
            quad_number <
-           (dim == 2 ? 1 :
-                       (dim == 3 ? dealii::internal::ReferenceCell::get_cell(
-                                     fe.reference_cell())
-                                     .n_faces() :
-                                   0));
+           (dim == 2 ? 1 : (dim == 3 ? fe.reference_cell().n_faces() : 0));
            ++quad_number)
         {
           unsigned int comp_start = 0;
@@ -872,9 +856,7 @@ namespace FETools
       unsigned int total_index = 0;
       for (unsigned int vertex_number = 0;
            vertex_number <
-           dealii::internal::ReferenceCell::get_face(fe.reference_cell(),
-                                                     face_no)
-             .n_vertices();
+           fe.reference_cell().face_reference_cell(face_no).n_vertices();
            ++vertex_number)
         {
           unsigned int comp_start = 0;
@@ -932,9 +914,7 @@ namespace FETools
       // 2. Lines
       for (unsigned int line_number = 0;
            line_number <
-           dealii::internal::ReferenceCell::get_face(fe.reference_cell(),
-                                                     face_no)
-             .n_lines();
+           fe.reference_cell().face_reference_cell(face_no).n_lines();
            ++line_number)
         {
           unsigned int comp_start = 0;
@@ -1995,9 +1975,7 @@ namespace FETools
     {
       unsigned int face_dof = 0;
       for (unsigned int i = 0;
-           i < dealii::internal::ReferenceCell::get_face(fe.reference_cell(),
-                                                         face_no)
-                 .n_vertices();
+           i < fe.reference_cell().face_reference_cell(face_no).n_vertices();
            ++i)
         {
           const unsigned int offset_c =
@@ -2015,9 +1993,7 @@ namespace FETools
         }
 
       for (unsigned int i = 1;
-           i <= dealii::internal::ReferenceCell::get_face(fe.reference_cell(),
-                                                          face_no)
-                  .n_lines();
+           i <= fe.reference_cell().face_reference_cell(face_no).n_lines();
            ++i)
         {
           const unsigned int offset_c =
@@ -2191,9 +2167,15 @@ namespace FETools
     const unsigned int nd     = fe.n_components();
     const unsigned int degree = fe.degree;
 
+    const ReferenceCell reference_cell = fe.reference_cell();
+
+    const auto &mapping =
+      reference_cell.template get_default_linear_mapping<dim, spacedim>();
+    const auto &q_fine =
+      reference_cell.get_gauss_type_quadrature<dim>(degree + 1);
+
     // prepare FEValues, quadrature etc on
     // coarse cell
-    QGauss<dim>        q_fine(degree + 1);
     const unsigned int nq = q_fine.size();
 
     // create mass matrix on coarse cell.
@@ -2201,9 +2183,10 @@ namespace FETools
     {
       // set up a triangulation for coarse cell
       Triangulation<dim, spacedim> tr;
-      GridGenerator::hyper_cube(tr, 0, 1);
+      GridGenerator::reference_cell(reference_cell, tr);
 
-      FEValues<dim, spacedim> coarse(fe,
+      FEValues<dim, spacedim> coarse(mapping,
+                                     fe,
                                      q_fine,
                                      update_JxW_values | update_values);
 
@@ -2239,9 +2222,10 @@ namespace FETools
 
 
     const auto compute_one_case =
-      [&fe, &q_fine, n, nd, nq](const unsigned int        ref_case,
-                                const FullMatrix<double> &inverse_mass_matrix,
-                                std::vector<FullMatrix<double>> &matrices) {
+      [&reference_cell, &mapping, &fe, &q_fine, n, nd, nq](
+        const unsigned int               ref_case,
+        const FullMatrix<double> &       inverse_mass_matrix,
+        std::vector<FullMatrix<double>> &matrices) {
         const unsigned int nc =
           GeometryInfo<dim>::n_children(RefinementCase<dim>(ref_case));
 
@@ -2255,11 +2239,12 @@ namespace FETools
 
         // create a respective refinement on the triangulation
         Triangulation<dim, spacedim> tr;
-        GridGenerator::hyper_cube(tr, 0, 1);
+        GridGenerator::reference_cell(reference_cell, tr);
         tr.begin_active()->set_refine_flag(RefinementCase<dim>(ref_case));
         tr.execute_coarsening_and_refinement();
 
-        FEValues<dim, spacedim> fine(fe,
+        FEValues<dim, spacedim> fine(mapping,
+                                     fe,
                                      q_fine,
                                      update_quadrature_points |
                                        update_JxW_values | update_values);

@@ -17,22 +17,25 @@
 
 // Test DataOut::write_vtk() for simplex meshes.
 
+#include <deal.II/base/quadrature_lib.h>
+
 #include <deal.II/dofs/dof_handler.h>
 
+#include <deal.II/fe/fe_pyramid_p.h>
 #include <deal.II/fe/fe_q.h>
+#include <deal.II/fe/fe_simplex_p.h>
+#include <deal.II/fe/fe_simplex_p_bubbles.h>
 #include <deal.II/fe/fe_system.h>
+#include <deal.II/fe/fe_wedge_p.h>
 #include <deal.II/fe/mapping_fe.h>
 
+#include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_in.h>
 #include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/tria.h>
 
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
-
-#include <deal.II/simplex/fe_lib.h>
-#include <deal.II/simplex/grid_generator.h>
-#include <deal.II/simplex/quadrature_lib.h>
 
 #include "../tests.h"
 
@@ -66,11 +69,11 @@ test(const FiniteElement<dim, spacedim> &fe_0,
 
   hp::FECollection<dim, spacedim> fe(fe_0, fe_1);
 
-  hp::QCollection<dim> quadrature(Simplex::QGauss<dim>(degree + 1),
+  hp::QCollection<dim> quadrature(QGaussSimplex<dim>(degree + 1),
                                   QGauss<dim>(degree + 1));
 
   hp::MappingCollection<dim, spacedim> mapping(
-    MappingFE<dim, spacedim>(Simplex::FE_P<dim, spacedim>(1)),
+    MappingFE<dim, spacedim>(FE_SimplexP<dim, spacedim>(1)),
     MappingQGeneric<dim, spacedim>(1));
 
   Triangulation<dim, spacedim> tria;
@@ -146,15 +149,15 @@ main()
       if (true)
         {
           const unsigned int dim = 2;
-          test<dim>(Simplex::FE_P<dim>(2), FE_Q<dim>(2), 1, do_high_order);
+          test<dim>(FE_SimplexP<dim>(2), FE_Q<dim>(2), 1, do_high_order);
 
-          test<dim>(FESystem<dim>(Simplex::FE_P<dim>(2), dim),
+          test<dim>(FESystem<dim>(FE_SimplexP<dim>(2), dim),
                     FESystem<dim>(FE_Q<dim>(2), dim),
                     dim,
                     do_high_order);
 
           test<dim>(
-            FESystem<dim>(Simplex::FE_P<dim>(2), dim, Simplex::FE_P<dim>(1), 1),
+            FESystem<dim>(FE_SimplexP<dim>(2), dim, FE_SimplexP<dim>(1), 1),
             FESystem<dim>(FE_Q<dim>(2), dim, FE_Q<dim>(1), 1),
             dim + 1,
             do_high_order);

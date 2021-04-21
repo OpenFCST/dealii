@@ -2868,11 +2868,10 @@ CellAccessor<dim, spacedim>::neighbor_child_on_subface(
                   (1 - subface) :
                   subface;
 
-              const auto &info =
-                internal::ReferenceCell::get_cell(ReferenceCells::Triangle);
               const unsigned int neighbor_child_index =
-                info.child_cell_on_face(neighbor_face, neighbor_subface);
-              TriaIterator<CellAccessor<dim, spacedim>> sub_neighbor =
+                ReferenceCells::Triangle.child_cell_on_face(neighbor_face,
+                                                            neighbor_subface);
+              const TriaIterator<CellAccessor<dim, spacedim>> sub_neighbor =
                 neighbor_cell->child(neighbor_child_index);
 
               // neighbor's child is not allowed to be further refined for the
@@ -2982,7 +2981,7 @@ CellAccessor<dim, spacedim>::neighbor_child_on_subface(
               const typename Triangulation<dim, spacedim>::face_iterator
                                  mother_face = this->face(face);
               const unsigned int total_children =
-                mother_face->number_of_children();
+                mother_face->n_active_descendants();
               AssertIndexRange(subface, total_children);
               Assert(total_children <= GeometryInfo<3>::max_children_per_face,
                      ExcInternalError());

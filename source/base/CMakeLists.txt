@@ -48,6 +48,7 @@ SET(_unity_include_src
   mpi.cc
   mpi_consensus_algorithms.cc
   mpi_noncontiguous_partitioner.cc
+  mpi_remote_point_evaluation.cc
   mu_parser_internal.cc
   multithread_info.cc
   named_selection.cc
@@ -64,6 +65,7 @@ SET(_unity_include_src
   polynomials_abf.cc
   polynomials_adini.cc
   tensor_polynomials_base.cc
+  polynomials_barycentric.cc
   polynomials_bernstein.cc
   polynomials_bdm.cc
   polynomials_bernardi_raugel.cc
@@ -72,9 +74,11 @@ SET(_unity_include_src
   polynomial_space.cc
   polynomials_p.cc
   polynomials_piecewise.cc
+  polynomials_pyramid.cc
   polynomials_rannacher_turek.cc
   polynomials_raviart_thomas.cc
   polynomials_rt_bubbles.cc
+  polynomials_wedge.cc
   process_grid.cc
   qprojector.cc
   quadrature.cc
@@ -129,6 +133,7 @@ SET(_inst
   geometric_utilities.inst.in
   mpi.inst.in
   mpi_noncontiguous_partitioner.inst.in
+  mpi_remote_point_evaluation.inst.in
   partitioner.inst.in
   partitioner.cuda.inst.in
   polynomials_rannacher_turek.inst.in

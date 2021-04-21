@@ -26,10 +26,12 @@
 #include <deal.II/fe/fe_dgp.h>
 #include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_nothing.h>
+#include <deal.II/fe/fe_pyramid_p.h>
 #include <deal.II/fe/fe_q_base.h>
+#include <deal.II/fe/fe_simplex_p.h>
+#include <deal.II/fe/fe_simplex_p_bubbles.h>
 #include <deal.II/fe/fe_tools.h>
-
-#include <deal.II/simplex/fe_lib.h>
+#include <deal.II/fe/fe_wedge_p.h>
 
 #include <memory>
 #include <sstream>
@@ -263,22 +265,22 @@ struct FE_Q_Base<xdim, xspacedim>::Implementation
 
         // line 5: use line 9
         QProjector<dim - 1>::project_to_subface(
-          ReferenceCell::get_hypercube<dim - 1>(), qline, 0, 0, p_line);
+          ReferenceCells::get_hypercube<dim - 1>(), qline, 0, 0, p_line);
         for (unsigned int i = 0; i < n; ++i)
           constraint_points.push_back(p_line[i] + Point<dim - 1>(0.5, 0));
         // line 6: use line 10
         QProjector<dim - 1>::project_to_subface(
-          ReferenceCell::get_hypercube<dim - 1>(), qline, 0, 1, p_line);
+          ReferenceCells::get_hypercube<dim - 1>(), qline, 0, 1, p_line);
         for (unsigned int i = 0; i < n; ++i)
           constraint_points.push_back(p_line[i] + Point<dim - 1>(0.5, 0));
         // line 7: use line 13
         QProjector<dim - 1>::project_to_subface(
-          ReferenceCell::get_hypercube<dim - 1>(), qline, 2, 0, p_line);
+          ReferenceCells::get_hypercube<dim - 1>(), qline, 2, 0, p_line);
         for (unsigned int i = 0; i < n; ++i)
           constraint_points.push_back(p_line[i] + Point<dim - 1>(0, 0.5));
         // line 8: use line 14
         QProjector<dim - 1>::project_to_subface(
-          ReferenceCell::get_hypercube<dim - 1>(), qline, 2, 1, p_line);
+          ReferenceCells::get_hypercube<dim - 1>(), qline, 2, 1, p_line);
         for (unsigned int i = 0; i < n; ++i)
           constraint_points.push_back(p_line[i] + Point<dim - 1>(0, 0.5));
 
@@ -291,7 +293,7 @@ struct FE_Q_Base<xdim, xspacedim>::Implementation
                ++subface)
             {
               QProjector<dim - 1>::project_to_subface(
-                ReferenceCell::get_hypercube<dim - 1>(),
+                ReferenceCells::get_hypercube<dim - 1>(),
                 qline,
                 face,
                 subface,
@@ -621,18 +623,19 @@ FE_Q_Base<dim, spacedim>::get_face_interpolation_matrix(
 template <int dim, int spacedim>
 void
 FE_Q_Base<dim, spacedim>::get_subface_interpolation_matrix(
-  const FiniteElement<dim, spacedim> &x_source_fe,
+  const FiniteElement<dim, spacedim> &source_fe,
   const unsigned int                  subface,
   FullMatrix<double> &                interpolation_matrix,
   const unsigned int                  face_no) const
 {
-  Assert(interpolation_matrix.m() == x_source_fe.n_dofs_per_face(face_no),
+  Assert(interpolation_matrix.m() == source_fe.n_dofs_per_face(face_no),
          ExcDimensionMismatch(interpolation_matrix.m(),
-                              x_source_fe.n_dofs_per_face(face_no)));
+                              source_fe.n_dofs_per_face(face_no)));
 
-  // see if source is a Q element
-  if (const FE_Q_Base<dim, spacedim> *source_fe =
-        dynamic_cast<const FE_Q_Base<dim, spacedim> *>(&x_source_fe))
+  // see if source is a Q or P element
+  if ((dynamic_cast<const FE_Q_Base<dim, spacedim> *>(&source_fe) != nullptr) ||
+      (dynamic_cast<const FE_SimplexPoly<dim, spacedim> *>(&source_fe) !=
+       nullptr))
     {
       // have this test in here since a table of size 2x0 reports its size as
       // 0x0
@@ -646,18 +649,18 @@ FE_Q_Base<dim, spacedim>::get_subface_interpolation_matrix(
       // produced in that case might lead to problems in the hp-procedures,
       // which use this method.
       Assert(
-        this->n_dofs_per_face(face_no) <= source_fe->n_dofs_per_face(face_no),
+        this->n_dofs_per_face(face_no) <= source_fe.n_dofs_per_face(face_no),
         (typename FiniteElement<dim,
                                 spacedim>::ExcInterpolationNotImplemented()));
 
       // generate a point on this cell and evaluate the shape functions there
       const Quadrature<dim - 1> quad_face_support(
-        source_fe->get_unit_face_support_points(face_no));
+        source_fe.get_unit_face_support_points(face_no));
 
       // Rule of thumb for FP accuracy, that can be expected for a given
       // polynomial degree.  This value is used to cut off values close to
       // zero.
-      double eps = 2e-13 * q_degree * (dim - 1);
+      double eps = 2e-13 * this->q_degree * (dim - 1);
 
       // compute the interpolation matrix by simply taking the value at the
       // support points.
@@ -673,7 +676,7 @@ FE_Q_Base<dim, spacedim>::get_subface_interpolation_matrix(
                                               quad_face_support,
                                               0,
                                               subface);
-      for (unsigned int i = 0; i < source_fe->n_dofs_per_face(face_no); ++i)
+      for (unsigned int i = 0; i < source_fe.n_dofs_per_face(face_no); ++i)
         {
           const Point<dim> &p = subface_quadrature.point(i);
 
@@ -697,7 +700,7 @@ FE_Q_Base<dim, spacedim>::get_subface_interpolation_matrix(
 #ifdef DEBUG
       // make sure that the row sum of each of the matrices is 1 at this
       // point. this must be so since the shape functions sum up to 1
-      for (unsigned int j = 0; j < source_fe->n_dofs_per_face(face_no); ++j)
+      for (unsigned int j = 0; j < source_fe.n_dofs_per_face(face_no); ++j)
         {
           double sum = 0.;
 
@@ -708,7 +711,7 @@ FE_Q_Base<dim, spacedim>::get_subface_interpolation_matrix(
         }
 #endif
     }
-  else if (dynamic_cast<const FE_Nothing<dim> *>(&x_source_fe) != nullptr)
+  else if (dynamic_cast<const FE_Nothing<dim> *>(&source_fe) != nullptr)
     {
       // nothing to do here, the FE_Nothing has no degrees of freedom anyway
     }
@@ -741,7 +744,7 @@ FE_Q_Base<dim, spacedim>::hp_vertex_dof_identities(
       // should have identical value
       return {{0U, 0U}};
     }
-  else if (dynamic_cast<const Simplex::FE_P<dim, spacedim> *>(&fe_other) !=
+  else if (dynamic_cast<const FE_SimplexP<dim, spacedim> *>(&fe_other) !=
            nullptr)
     {
       // there should be exactly one single DoF of each FE at a vertex, and they
@@ -812,8 +815,8 @@ FE_Q_Base<dim, spacedim>::hp_line_dof_identities(
 
       return identities;
     }
-  else if (const Simplex::FE_P<dim, spacedim> *fe_p_other =
-             dynamic_cast<const Simplex::FE_P<dim, spacedim> *>(&fe_other))
+  else if (const FE_SimplexP<dim, spacedim> *fe_p_other =
+             dynamic_cast<const FE_SimplexP<dim, spacedim> *>(&fe_other))
     {
       // DoFs are located along lines, so two dofs are identical if they are
       // located at identical positions. If we had only equidistant points, we
@@ -823,7 +826,7 @@ FE_Q_Base<dim, spacedim>::hp_line_dof_identities(
       // first coordinate direction. For FE_Q, we take the lexicographic
       // ordering of the line support points in the first direction (i.e.,
       // x-direction), which we access between index 1 and p-1 (index 0 and p
-      // are vertex dofs). For FE_P, they are currently hard-coded and we
+      // are vertex dofs). For FE_SimplexP, they are currently hard-coded and we
       // iterate over points on the first line which begin after the 3 vertex
       // points in the complete list of unit support points
 

@@ -17,9 +17,9 @@
 // Test ReferenceCell::Kind::faces_for_given_vertex().
 
 
-#include <deal.II/grid/reference_cell.h>
+#include <deal.II/base/quadrature_lib.h>
 
-#include <deal.II/simplex/quadrature_lib.h>
+#include <deal.II/grid/reference_cell.h>
 
 #include "../tests.h"
 
@@ -29,10 +29,9 @@ template <int dim>
 void
 test(const ReferenceCell &reference_cell)
 {
-  const auto  kind = ReferenceCell(reference_cell);
-  const auto &info = internal::ReferenceCell::get_cell(reference_cell);
+  const auto kind = ReferenceCell(reference_cell);
 
-  for (const auto v : info.vertex_indices())
+  for (const auto v : reference_cell.vertex_indices())
     {
       deallog << v << ": ";
       for (const auto i : kind.faces_for_given_vertex(v))

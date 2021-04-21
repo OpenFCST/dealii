@@ -228,9 +228,10 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
         {
           for (unsigned int count = 0; count < n_geometric_objects; count++)
             {
-              unsigned int type;
-              in >> type;
+              unsigned int n_vertices;
+              in >> n_vertices;
 
+              // VTK_TETRA is 10, VTK_HEXAHEDRON is 12
               if (cell_types[count] == 10 || cell_types[count] == 12)
                 {
                   if (cell_types[count] == 10)
@@ -244,14 +245,25 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
                                 subcelldata.boundary_lines.size() == 0,
                               ExcNotImplemented());
 
-                  cells.emplace_back(type);
+                  cells.emplace_back(n_vertices);
 
-                  for (unsigned int j = 0; j < type; j++) // loop to feed data
+                  for (unsigned int j = 0; j < n_vertices;
+                       j++) // loop to feed data
                     in >> cells.back().vertices[j];
+
+                  // Hexahedra need a permutation to go from VTK numbering
+                  // to deal numbering
+                  if (cell_types[count] == 12)
+                    {
+                      std::swap(cells.back().vertices[2],
+                                cells.back().vertices[3]);
+                      std::swap(cells.back().vertices[6],
+                                cells.back().vertices[7]);
+                    }
 
                   cells.back().material_id = 0;
                 }
-
+              // VTK_TRIANGLE is 5, VTK_QUAD is 9
               else if (cell_types[count] == 5 || cell_types[count] == 9)
                 {
                   if (cell_types[count] == 5)
@@ -264,19 +276,20 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
                   AssertThrow(subcelldata.boundary_lines.size() == 0,
                               ExcNotImplemented());
 
-                  subcelldata.boundary_quads.emplace_back(type);
+                  subcelldata.boundary_quads.emplace_back(n_vertices);
 
-                  for (unsigned int j = 0; j < type;
+                  for (unsigned int j = 0; j < n_vertices;
                        j++) // loop to feed the data to the boundary
                     in >> subcelldata.boundary_quads.back().vertices[j];
 
                   subcelldata.boundary_quads.back().material_id = 0;
                 }
+              // VTK_LINE is 3
               else if (cell_types[count] == 3)
                 {
-                  subcelldata.boundary_lines.emplace_back(type);
+                  subcelldata.boundary_lines.emplace_back(n_vertices);
 
-                  for (unsigned int j = 0; j < type;
+                  for (unsigned int j = 0; j < n_vertices;
                        j++) // loop to feed the data to the boundary
                     in >> subcelldata.boundary_lines.back().vertices[j];
 
@@ -287,16 +300,17 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
                 AssertThrow(
                   false,
                   ExcMessage(
-                    "While reading VTK file, unknown file type encountered"));
+                    "While reading VTK file, unknown cell type encountered"));
             }
         }
       else if (dim == 2)
         {
           for (unsigned int count = 0; count < n_geometric_objects; count++)
             {
-              unsigned int type;
-              in >> type;
+              unsigned int n_vertices;
+              in >> n_vertices;
 
+              // VTK_TRIANGLE is 5, VTK_QUAD is 9
               if (cell_types[count] == 5 || cell_types[count] == 9)
                 {
                   // we assume that the file contains first all cells,
@@ -309,21 +323,32 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
                   if (cell_types[count] == 9)
                     is_quad_or_hex_mesh = true;
 
-                  cells.emplace_back(type);
+                  cells.emplace_back(n_vertices);
 
-                  for (unsigned int j = 0; j < type; j++) // loop to feed data
+                  for (unsigned int j = 0; j < n_vertices;
+                       j++) // loop to feed data
                     in >> cells.back().vertices[j];
+
+                  // Quadrilaterals need a permutation to go from VTK numbering
+                  // to deal numbering
+                  if (cell_types[count] == 9)
+                    {
+                      // Like Hexahedra - the last two vertices need to be
+                      // flipped
+                      std::swap(cells.back().vertices[2],
+                                cells.back().vertices[3]);
+                    }
 
                   cells.back().material_id = 0;
                 }
-
+              // VTK_LINE is 3
               else if (cell_types[count] == 3)
                 {
                   // If this is encountered, the pointer comes out of the loop
                   // and starts processing boundaries.
-                  subcelldata.boundary_lines.emplace_back(type);
+                  subcelldata.boundary_lines.emplace_back(n_vertices);
 
-                  for (unsigned int j = 0; j < type;
+                  for (unsigned int j = 0; j < n_vertices;
                        j++) // loop to feed the data to the boundary
                     {
                       in >> subcelldata.boundary_lines.back().vertices[j];
@@ -545,21 +570,15 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
 
           if (dim == spacedim)
             GridReordering<dim, spacedim>::invert_all_cells_of_negative_grid(
-              vertices, cells);
+              vertices, cells, true);
 
-          GridReordering<dim, spacedim>::reorder_cells(cells);
-          tria->create_triangulation_compatibility(vertices,
-                                                   cells,
-                                                   subcelldata);
-
-          return;
+          GridReordering<dim, spacedim>::reorder_cells(cells, true);
+          tria->create_triangulation(vertices, cells, subcelldata);
         }
       else
         {
           // simplex or mixed mesh
-          tria->create_triangulation_compatibility(vertices,
-                                                   cells,
-                                                   subcelldata);
+          tria->create_triangulation(vertices, cells, subcelldata);
         }
     }
   else
@@ -696,11 +715,13 @@ GridIn<dim, spacedim>::read_unv(std::istream &in)
       if ((((type == 44) || (type == 94)) && (dim == 2)) ||
           ((type == 115) && (dim == 3))) // cell
         {
+          const auto reference_cell = ReferenceCells::get_hypercube<dim>();
           cells.emplace_back();
 
           AssertThrow(in, ExcIO());
           for (const unsigned int v : GeometryInfo<dim>::vertex_indices())
-            in >> cells.back().vertices[v];
+            in >> cells.back()
+                    .vertices[reference_cell.unv_vertex_to_deal_vertex(v)];
 
           cells.back().material_id = 0;
 
@@ -736,12 +757,16 @@ GridIn<dim, spacedim>::read_unv(std::istream &in)
         }
       else if (((type == 44) || (type == 94)) && (dim == 3)) // boundary quad
         {
+          const auto reference_cell = ReferenceCells::Quadrilateral;
           subcelldata.boundary_quads.emplace_back();
 
           AssertThrow(in, ExcIO());
-          for (unsigned int &vertex :
-               subcelldata.boundary_quads.back().vertices)
-            in >> vertex;
+          Assert(subcelldata.boundary_quads.back().vertices.size() ==
+                   GeometryInfo<2>::vertices_per_cell,
+                 ExcInternalError());
+          for (const unsigned int v : GeometryInfo<2>::vertex_indices())
+            in >> subcelldata.boundary_quads.back()
+                    .vertices[reference_cell.unv_vertex_to_deal_vertex(v)];
 
           subcelldata.boundary_quads.back().material_id = 0;
 
@@ -837,11 +862,12 @@ GridIn<dim, spacedim>::read_unv(std::istream &in)
 
   if (dim == spacedim)
     GridReordering<dim, spacedim>::invert_all_cells_of_negative_grid(vertices,
-                                                                     cells);
+                                                                     cells,
+                                                                     true);
 
-  GridReordering<dim, spacedim>::reorder_cells(cells);
+  GridReordering<dim, spacedim>::reorder_cells(cells, true);
 
-  tria->create_triangulation_compatibility(vertices, cells, subcelldata);
+  tria->create_triangulation(vertices, cells, subcelldata);
 }
 
 
@@ -923,7 +949,7 @@ GridIn<dim, spacedim>::read_ucd(std::istream &in,
           // allocate and read indices
           cells.emplace_back();
           for (const unsigned int i : GeometryInfo<dim>::vertex_indices())
-            in >> cells.back().vertices[i];
+            in >> cells.back().vertices[GeometryInfo<dim>::ucd_to_deal[i]];
 
           // to make sure that the cast won't fail
           Assert(material_id <= std::numeric_limits<types::material_id>::max(),
@@ -1010,10 +1036,9 @@ GridIn<dim, spacedim>::read_ucd(std::istream &in,
         // boundary info
         {
           subcelldata.boundary_quads.emplace_back();
-          in >> subcelldata.boundary_quads.back().vertices[0] >>
-            subcelldata.boundary_quads.back().vertices[1] >>
-            subcelldata.boundary_quads.back().vertices[2] >>
-            subcelldata.boundary_quads.back().vertices[3];
+          for (const unsigned int i : GeometryInfo<2>::vertex_indices())
+            in >> subcelldata.boundary_quads.back()
+                    .vertices[GeometryInfo<2>::ucd_to_deal[i]];
 
           // to make sure that the cast won't fail
           Assert(material_id <= std::numeric_limits<types::boundary_id>::max(),
@@ -1073,9 +1098,10 @@ GridIn<dim, spacedim>::read_ucd(std::istream &in,
   // ... and cells
   if (dim == spacedim)
     GridReordering<dim, spacedim>::invert_all_cells_of_negative_grid(vertices,
-                                                                     cells);
-  GridReordering<dim, spacedim>::reorder_cells(cells);
-  tria->create_triangulation_compatibility(vertices, cells, subcelldata);
+                                                                     cells,
+                                                                     true);
+  GridReordering<dim, spacedim>::reorder_cells(cells, true);
+  tria->create_triangulation(vertices, cells, subcelldata);
 }
 
 namespace
@@ -1289,7 +1315,7 @@ GridIn<dim, spacedim>::read_dbmesh(std::istream &in)
       cells.emplace_back();
       for (const unsigned int i : GeometryInfo<dim>::vertex_indices())
         {
-          in >> cells.back().vertices[i];
+          in >> cells.back().vertices[GeometryInfo<dim>::ucd_to_deal[i]];
 
           AssertThrow((cells.back().vertices[i] >= 1) &&
                         (static_cast<unsigned int>(cells.back().vertices[i]) <=
@@ -1327,167 +1353,80 @@ GridIn<dim, spacedim>::read_dbmesh(std::istream &in)
   GridTools::delete_unused_vertices(vertices, cells, subcelldata);
   // ...and cells
   GridReordering<dim, spacedim>::invert_all_cells_of_negative_grid(vertices,
-                                                                   cells);
-  GridReordering<dim, spacedim>::reorder_cells(cells);
-  tria->create_triangulation_compatibility(vertices, cells, subcelldata);
+                                                                   cells,
+                                                                   true);
+  GridReordering<dim, spacedim>::reorder_cells(cells, true);
+  tria->create_triangulation(vertices, cells, subcelldata);
 }
 
 
 
 template <int dim, int spacedim>
 void
-GridIn<dim, spacedim>::read_xda(std::istream &)
-{
-  Assert(false, ExcNotImplemented());
-}
-
-
-
-template <>
-void
-GridIn<2>::read_xda(std::istream &in)
+GridIn<dim, spacedim>::read_xda(std::istream &in)
 {
   Assert(tria != nullptr, ExcNoTriangulationSelected());
   AssertThrow(in, ExcIO());
 
+  const auto reference_cell = ReferenceCells::get_hypercube<dim>();
+
   std::string line;
   // skip comments at start of file
-  getline(in, line);
-
+  std::getline(in, line);
 
   unsigned int n_vertices;
   unsigned int n_cells;
 
   // read cells, throw away rest of line
   in >> n_cells;
-  getline(in, line);
+  std::getline(in, line);
 
   in >> n_vertices;
-  getline(in, line);
+  std::getline(in, line);
 
   // ignore following 8 lines
   for (unsigned int i = 0; i < 8; ++i)
-    getline(in, line);
+    std::getline(in, line);
 
   // set up array of cells
-  std::vector<CellData<2>> cells(n_cells);
-  SubCellData              subcelldata;
+  std::vector<CellData<dim>> cells(n_cells);
+  SubCellData                subcelldata;
 
-  for (unsigned int cell = 0; cell < n_cells; ++cell)
+  for (CellData<dim> &cell : cells)
     {
-      // note that since in the input
-      // file we found the number of
-      // cells at the top, there
-      // should still be input here,
-      // so check this:
+      // note that since in the input file we found the number of cells at the
+      // top, there should still be input here, so check this:
       AssertThrow(in, ExcIO());
-      Assert(GeometryInfo<2>::vertices_per_cell == 4, ExcInternalError());
 
-      for (unsigned int &vertex : cells[cell].vertices)
-        in >> vertex;
+      // XDA happens to use ExodusII's numbering because XDA/XDR is libMesh's
+      // native format, and libMesh's node numberings come from ExodusII:
+      for (unsigned int i = 0; i < GeometryInfo<dim>::vertices_per_cell; i++)
+        in >> cell.vertices[reference_cell.exodusii_vertex_to_deal_vertex(i)];
     }
 
-
-
   // set up array of vertices
-  std::vector<Point<2>> vertices(n_vertices);
-  for (unsigned int vertex = 0; vertex < n_vertices; ++vertex)
+  std::vector<Point<spacedim>> vertices(n_vertices);
+  for (Point<spacedim> &vertex : vertices)
     {
-      double x[3];
-
-      // read vertex
-      in >> x[0] >> x[1] >> x[2];
-
-      // store vertex
-      for (unsigned int d = 0; d < 2; ++d)
-        vertices[vertex](d) = x[d];
+      for (unsigned int d = 0; d < spacedim; ++d)
+        in >> vertex[d];
+      for (unsigned int d = spacedim; d < 3; ++d)
+        {
+          // file is always in 3D
+          double dummy;
+          in >> dummy;
+        }
     }
   AssertThrow(in, ExcIO());
 
   // do some clean-up on vertices...
   GridTools::delete_unused_vertices(vertices, cells, subcelldata);
   // ... and cells
-  GridReordering<2>::invert_all_cells_of_negative_grid(vertices, cells);
-  GridReordering<2>::reorder_cells(cells);
-  tria->create_triangulation_compatibility(vertices, cells, subcelldata);
-}
-
-
-
-template <>
-void
-GridIn<3>::read_xda(std::istream &in)
-{
-  Assert(tria != nullptr, ExcNoTriangulationSelected());
-  AssertThrow(in, ExcIO());
-
-  static const unsigned int xda_to_dealII_map[] = {0, 1, 5, 4, 3, 2, 6, 7};
-
-  std::string line;
-  // skip comments at start of file
-  getline(in, line);
-
-
-  unsigned int n_vertices;
-  unsigned int n_cells;
-
-  // read cells, throw away rest of line
-  in >> n_cells;
-  getline(in, line);
-
-  in >> n_vertices;
-  getline(in, line);
-
-  // ignore following 8 lines
-  for (unsigned int i = 0; i < 8; ++i)
-    getline(in, line);
-
-  // set up array of cells
-  std::vector<CellData<3>> cells(n_cells);
-  SubCellData              subcelldata;
-
-  for (unsigned int cell = 0; cell < n_cells; ++cell)
-    {
-      // note that since in the input
-      // file we found the number of
-      // cells at the top, there
-      // should still be input here,
-      // so check this:
-      AssertThrow(in, ExcIO());
-      Assert(GeometryInfo<3>::vertices_per_cell == 8, ExcInternalError());
-
-      unsigned int xda_ordered_nodes[8];
-
-      for (unsigned int &xda_ordered_node : xda_ordered_nodes)
-        in >> xda_ordered_node;
-
-      for (unsigned int i = 0; i < 8; i++)
-        cells[cell].vertices[i] = xda_ordered_nodes[xda_to_dealII_map[i]];
-    }
-
-
-
-  // set up array of vertices
-  std::vector<Point<3>> vertices(n_vertices);
-  for (unsigned int vertex = 0; vertex < n_vertices; ++vertex)
-    {
-      double x[3];
-
-      // read vertex
-      in >> x[0] >> x[1] >> x[2];
-
-      // store vertex
-      for (unsigned int d = 0; d < 3; ++d)
-        vertices[vertex](d) = x[d];
-    }
-  AssertThrow(in, ExcIO());
-
-  // do some clean-up on vertices...
-  GridTools::delete_unused_vertices(vertices, cells, subcelldata);
-  // ... and cells
-  GridReordering<3>::invert_all_cells_of_negative_grid(vertices, cells);
-  GridReordering<3>::reorder_cells(cells);
-  tria->create_triangulation_compatibility(vertices, cells, subcelldata);
+  GridReordering<dim, spacedim>::invert_all_cells_of_negative_grid(vertices,
+                                                                   cells,
+                                                                   true);
+  GridReordering<dim>::reorder_cells(cells, true);
+  tria->create_triangulation(vertices, cells, subcelldata);
 }
 
 
@@ -1986,7 +1925,19 @@ GridIn<dim, spacedim>::read_msh(std::istream &in)
                 cells.emplace_back();
                 cells.back().vertices.resize(vertices_per_cell);
                 for (unsigned int i = 0; i < vertices_per_cell; ++i)
-                  in >> cells.back().vertices[i];
+                  {
+                    // hypercube cells need to be reordered
+                    if (vertices_per_cell ==
+                        GeometryInfo<dim>::vertices_per_cell)
+                      {
+                        in >> cells.back()
+                                .vertices[GeometryInfo<dim>::ucd_to_deal[i]];
+                      }
+                    else
+                      {
+                        in >> cells.back().vertices[i];
+                      }
+                  }
 
                 // to make sure that the cast won't fail
                 Assert(material_id <=
@@ -2001,8 +1952,7 @@ GridIn<dim, spacedim>::read_msh(std::istream &in)
 
                 cells.back().material_id = material_id;
 
-                // transform from ucd to
-                // consecutive numbering
+                // transform from gmsh to consecutive numbering
                 for (unsigned int i = 0; i < vertices_per_cell; ++i)
                   {
                     AssertThrow(
@@ -2165,15 +2115,10 @@ GridIn<dim, spacedim>::read_msh(std::istream &in)
       // ... and cells
       if (dim == spacedim)
         GridReordering<dim, spacedim>::invert_all_cells_of_negative_grid(
-          vertices, cells);
-      GridReordering<dim, spacedim>::reorder_cells(cells);
-      tria->create_triangulation_compatibility(vertices, cells, subcelldata);
+          vertices, cells, true);
+      GridReordering<dim, spacedim>::reorder_cells(cells, true);
     }
-  else
-    {
-      // simplex or mixed mesh
-      tria->create_triangulation_compatibility(vertices, cells, subcelldata);
-    }
+  tria->create_triangulation(vertices, cells, subcelldata);
 
   // in 1d, we also have to attach boundary ids to vertices, which does not
   // currently work through the call above
@@ -2801,8 +2746,8 @@ GridIn<2>::read_tecplot(std::istream &in)
           {
             cells[cell].vertices[0] = i + j * I;
             cells[cell].vertices[1] = i + 1 + j * I;
-            cells[cell].vertices[2] = i + 1 + (j + 1) * I;
-            cells[cell].vertices[3] = i + (j + 1) * I;
+            cells[cell].vertices[2] = i + (j + 1) * I;
+            cells[cell].vertices[3] = i + 1 + (j + 1) * I;
             ++cell;
           }
       Assert(cell == n_cells, ExcInternalError());
@@ -2849,8 +2794,8 @@ GridIn<2>::read_tecplot(std::istream &in)
           // get the connectivity from the
           // input file. the vertices are
           // ordered like in the ucd format
-          for (unsigned int &vertex : cells[i].vertices)
-            in >> vertex;
+          for (const unsigned int j : GeometryInfo<dim>::vertex_indices())
+            in >> cells[i].vertices[GeometryInfo<dim>::ucd_to_deal[j]];
         }
       // do some clean-up on vertices
       GridTools::delete_unused_vertices(vertices, cells, subcelldata);
@@ -2864,9 +2809,10 @@ GridIn<2>::read_tecplot(std::istream &in)
 
   // do some cleanup on cells
   GridReordering<dim, spacedim>::invert_all_cells_of_negative_grid(vertices,
-                                                                   cells);
-  GridReordering<dim, spacedim>::reorder_cells(cells);
-  tria->create_triangulation_compatibility(vertices, cells, subcelldata);
+                                                                   cells,
+                                                                   true);
+  GridReordering<dim, spacedim>::reorder_cells(cells, true);
+  tria->create_triangulation(vertices, cells, subcelldata);
 }
 
 
@@ -2971,7 +2917,8 @@ GridIn<dim, spacedim>::read_assimp(const std::string &filename,
             {
               for (const unsigned int f : GeometryInfo<dim>::vertex_indices())
                 {
-                  cells[valid_cell].vertices[f] =
+                  cells[valid_cell]
+                    .vertices[GeometryInfo<dim>::ucd_to_deal[f]] =
                     mFaces[i].mIndices[f] + v_offset;
                 }
               cells[valid_cell].material_id = m;
@@ -3019,13 +2966,11 @@ GridIn<dim, spacedim>::read_assimp(const std::string &filename,
   GridTools::delete_unused_vertices(vertices, cells, subcelldata);
   if (dim == spacedim)
     GridReordering<dim, spacedim>::invert_all_cells_of_negative_grid(vertices,
-                                                                     cells);
+                                                                     cells,
+                                                                     true);
+  GridReordering<dim, spacedim>::reorder_cells(cells, true);
+  tria->create_triangulation(vertices, cells, subcelldata);
 
-  GridReordering<dim, spacedim>::reorder_cells(cells);
-  if (dim == 2)
-    tria->create_triangulation_compatibility(vertices, cells, subcelldata);
-  else
-    tria->create_triangulation(vertices, cells, subcelldata);
 #else
   (void)filename;
   (void)mesh_index;
@@ -3194,41 +3139,41 @@ namespace
             const CellData<dim> &cell = cells[face_id / max_faces_per_cell];
             const ReferenceCell  cell_type =
               ReferenceCell::n_vertices_to_type(dim, cell.vertices.size());
-            const internal::ReferenceCell::Base &info =
-              internal::ReferenceCell::get_cell(cell_type);
             const unsigned int deal_face_n =
-              info.exodusii_face_to_deal_face(local_face_n);
-            const internal::ReferenceCell::Base &face_info =
-              internal::ReferenceCell::get_face(cell_type, deal_face_n);
+              cell_type.exodusii_face_to_deal_face(local_face_n);
+            const ReferenceCell face_reference_cell =
+              cell_type.face_reference_cell(deal_face_n);
 
             // The orientation we pick doesn't matter here since when we create
             // the Triangulation we will sort the vertices for each CellData
             // object created here.
             if (dim == 2)
               {
-                CellData<1> boundary_line(face_info.n_vertices());
+                CellData<1> boundary_line(face_reference_cell.n_vertices());
                 if (apply_all_indicators_to_manifolds)
                   boundary_line.manifold_id = current_b_or_m_id;
                 else
                   boundary_line.boundary_id = current_b_or_m_id;
-                for (unsigned int j = 0; j < face_info.n_vertices(); ++j)
+                for (unsigned int j = 0; j < face_reference_cell.n_vertices();
+                     ++j)
                   boundary_line.vertices[j] =
-                    cell
-                      .vertices[info.face_to_cell_vertices(deal_face_n, j, 0)];
+                    cell.vertices[cell_type.face_to_cell_vertices(
+                      deal_face_n, j, 0)];
 
                 subcelldata.boundary_lines.push_back(std::move(boundary_line));
               }
             else if (dim == 3)
               {
-                CellData<2> boundary_quad(face_info.n_vertices());
+                CellData<2> boundary_quad(face_reference_cell.n_vertices());
                 if (apply_all_indicators_to_manifolds)
                   boundary_quad.manifold_id = current_b_or_m_id;
                 else
                   boundary_quad.boundary_id = current_b_or_m_id;
-                for (unsigned int j = 0; j < face_info.n_vertices(); ++j)
+                for (unsigned int j = 0; j < face_reference_cell.n_vertices();
+                     ++j)
                   boundary_quad.vertices[j] =
-                    cell
-                      .vertices[info.face_to_cell_vertices(deal_face_n, j, 0)];
+                    cell.vertices[cell_type.face_to_cell_vertices(
+                      deal_face_n, j, 0)];
 
                 subcelldata.boundary_quads.push_back(std::move(boundary_quad));
               }
@@ -3346,13 +3291,11 @@ GridIn<dim, spacedim>::read_exodusii(
       AssertThrowExodusII(ierr);
       const ReferenceCell type =
         exodusii_name_to_type(string_temp.data(), n_nodes_per_element);
-      const internal::ReferenceCell::Base &info =
-        internal::ReferenceCell::get_cell(type);
 
       // The number of nodes per element may be larger than what we want to
       // read - for example, if the Exodus file contains a QUAD9 element, we
       // only want to read the first four values and ignore the rest.
-      Assert(int(info.n_vertices()) <= n_nodes_per_element, ExcInternalError());
+      Assert(int(type.n_vertices()) <= n_nodes_per_element, ExcInternalError());
 
       std::vector<int> connection(n_nodes_per_element * n_block_elements);
       ierr = ex_get_conn(ex_id,
@@ -3366,10 +3309,10 @@ GridIn<dim, spacedim>::read_exodusii(
       for (unsigned int elem_n = 0; elem_n < connection.size();
            elem_n += n_nodes_per_element)
         {
-          CellData<dim> cell(info.n_vertices());
-          for (unsigned int i : info.vertex_indices())
+          CellData<dim> cell(type.n_vertices());
+          for (unsigned int i : type.vertex_indices())
             {
-              cell.vertices[info.exodusii_vertex_to_deal_vertex(i)] =
+              cell.vertices[type.exodusii_vertex_to_deal_vertex(i)] =
                 connection[elem_n + i] - 1;
             }
           cell.material_id = element_block_id;
