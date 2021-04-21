@@ -1615,6 +1615,13 @@ public:
   clear();
 
   /**
+   * Return MPI communicator used by this triangulation. In the case of
+   * a serial Triangulation object, MPI_COMM_SELF is returned.
+   */
+  virtual MPI_Comm
+  get_communicator() const;
+
+  /**
    * Set the mesh smoothing to @p mesh_smoothing. This overrides the
    * MeshSmoothing given to the constructor. It is allowed to call this
    * function only if the triangulation is empty.
@@ -1868,6 +1875,7 @@ public:
    * @note This function internally calls create_triangulation and therefore
    * can throw the same exception as the other function.
    */
+  DEAL_II_DEPRECATED_EARLY
   virtual void
   create_triangulation_compatibility(
     const std::vector<Point<spacedim>> &vertices,
@@ -2211,6 +2219,15 @@ public:
      * without a way to distinguish the last signal call.
      */
     boost::signals2::signal<void()> pre_distributed_refinement;
+
+    /**
+     * This signal is triggered during execution of the
+     * parallel::distributed::Triangulation::execute_coarsening_and_refinement()
+     * function. At the time this signal is triggered, the p4est oracle has been
+     * refined and the cell relations have been updated. The triangulation is
+     * unchanged otherwise, and the p4est oracle has not yet been repartitioned.
+     */
+    boost::signals2::signal<void()> post_p4est_refinement;
 
     /**
      * This signal is triggered at the end of execution of the
@@ -3860,6 +3877,12 @@ private:
   clear_despite_subscriptions();
 
   /**
+   * Reset triangulation policy.
+   */
+  void
+  reset_policy();
+
+  /**
    * For all cells, set the active cell indices so that active cells know the
    * how many-th active cell they are, and all other cells have an invalid
    * value. This function is called after mesh creation, refinement, and
@@ -4227,10 +4250,16 @@ Triangulation<dim, spacedim>::load(Archive &ar, const unsigned int)
   // this here. don't forget to first resize the fields appropriately
   {
     for (auto &level : levels)
-      level->active_cell_indices.resize(level->refine_flags.size());
+      {
+        level->active_cell_indices.resize(level->refine_flags.size());
+        level->global_active_cell_indices.resize(level->refine_flags.size());
+        level->global_level_cell_indices.resize(level->refine_flags.size());
+      }
     reset_active_cell_indices();
+    reset_global_cell_indices();
   }
 
+  reset_policy();
 
   bool my_check_for_distorted_cells;
   ar & my_check_for_distorted_cells;
@@ -4290,13 +4319,35 @@ unsigned int
 Triangulation<2, 2>::n_raw_quads(const unsigned int level) const;
 template <>
 unsigned int
-Triangulation<1, 1>::n_raw_hexs(const unsigned int level) const;
+Triangulation<3, 3>::n_raw_quads(const unsigned int level) const;
+template <>
+unsigned int
+Triangulation<3, 3>::n_raw_quads() const;
 template <>
 unsigned int
 Triangulation<1, 1>::n_active_quads(const unsigned int level) const;
 template <>
 unsigned int
 Triangulation<1, 1>::n_active_quads() const;
+template <>
+unsigned int
+Triangulation<1, 1>::n_raw_hexs(const unsigned int level) const;
+template <>
+unsigned int
+Triangulation<3, 3>::n_raw_hexs(const unsigned int level) const;
+template <>
+unsigned int
+Triangulation<3, 3>::n_hexs() const;
+template <>
+unsigned int
+Triangulation<3, 3>::n_active_hexs() const;
+template <>
+unsigned int
+Triangulation<3, 3>::n_active_hexs(const unsigned int) const;
+template <>
+unsigned int
+Triangulation<3, 3>::n_hexs(const unsigned int level) const;
+
 template <>
 unsigned int
 Triangulation<1, 1>::max_adjacent_cells() const;
@@ -4334,7 +4385,6 @@ Triangulation<1, 2>::max_adjacent_cells() const;
 // -------------------------------------------------------------------
 // -- Explicit specializations for codimension two grids
 
-
 template <>
 unsigned int
 Triangulation<1, 3>::n_quads() const;
@@ -4360,6 +4410,23 @@ template <>
 unsigned int
 Triangulation<1, 3>::max_adjacent_cells() const;
 
+template <>
+bool
+Triangulation<1, 1>::prepare_coarsening_and_refinement();
+template <>
+bool
+Triangulation<1, 2>::prepare_coarsening_and_refinement();
+template <>
+bool
+Triangulation<1, 3>::prepare_coarsening_and_refinement();
+
+
+extern template class Triangulation<1, 1>;
+extern template class Triangulation<1, 2>;
+extern template class Triangulation<1, 3>;
+extern template class Triangulation<2, 2>;
+extern template class Triangulation<2, 3>;
+extern template class Triangulation<3, 3>;
 
 #endif // DOXYGEN
 

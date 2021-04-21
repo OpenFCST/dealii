@@ -31,100 +31,22 @@
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_tools.h>
 
-#include <deal.II/fe/mapping_fe.h>
+#include <deal.II/fe/fe_pyramid_p.h>
+#include <deal.II/fe/fe_simplex_p.h>
+#include <deal.II/fe/fe_simplex_p_bubbles.h>
+#include <deal.II/fe/fe_wedge_p.h>
 
+#include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/tria.h>
 
 #include <deal.II/hp/fe_collection.h>
-#include <deal.II/hp/mapping_collection.h>
 
 #include <deal.II/lac/affine_constraints.h>
 
-#include <deal.II/simplex/fe_lib.h>
-#include <deal.II/simplex/grid_generator.h>
-
 #include "../tests.h"
 
-
-// ----- diagnostics -----
-
-template <int dim>
-void
-print_dof_indices_on_faces(const DoFHandler<dim> &dofh)
-{
-  std::vector<types::global_dof_index> dof_indices;
-
-  for (const auto &cell : dofh.active_cell_iterators())
-    for (unsigned int f = 0; f < cell->n_faces(); ++f)
-      {
-        const auto &face = cell->face(f);
-
-        Assert(!face->has_children(), ExcInternalError());
-
-        const unsigned int fe_index = cell->active_fe_index();
-        const auto &       fe       = cell->get_fe();
-
-        dof_indices.resize(fe.n_dofs_per_face(f));
-        face->get_dof_indices(dof_indices, fe_index);
-
-        deallog << "cell:" << cell->active_cell_index() << " face:" << f
-                << " dofs:";
-        for (const auto &i : dof_indices)
-          deallog << i << " ";
-        deallog << std::endl;
-      }
-}
-
-
-template <int dim>
-void
-print_dof_points(const DoFHandler<dim> &dofh)
-{
-  hp::MappingCollection<dim> mapping;
-  for (unsigned int i = 0; i < dofh.get_fe_collection().size(); ++i)
-    mapping.push_back(MappingFE<dim>(dofh.get_fe(i)));
-
-  std::vector<Point<dim>> points(dofh.n_dofs());
-  DoFTools::map_dofs_to_support_points(mapping, dofh, points);
-
-  for (unsigned int i = 0; i < dofh.n_dofs(); ++i)
-    deallog << "dof:" << i << " point:" << points[i] << std::endl;
-}
-
-
-// ----- test -----
-
-template <int dim>
-void
-test(const hp::FECollection<dim> &fes)
-{
-  // setup grid
-  Triangulation<dim> tria;
-  GridGenerator::subdivided_hyper_cube_with_simplices(tria, 1);
-
-#if false
-  GridOut grid_out;
-  grid_out.write_vtk(tria, deallog.get_file_stream());
-#endif
-
-  DoFHandler<dim> dofh(tria);
-  dofh.begin_active()->set_active_fe_index(1);
-
-  dofh.distribute_dofs(fes);
-  deallog << "ndofs: " << dofh.n_dofs() << std::endl;
-
-#if false
-  print_dof_points(dofh);
-  print_dof_indices_on_faces(dofh);
-#endif
-
-  // hanging node constraints
-  AffineConstraints<double> constraints;
-  DoFTools::make_hanging_node_constraints(dofh, constraints);
-  constraints.print(deallog.get_file_stream());
-
-  deallog << "OK" << std::endl;
-}
+#include "hanging_nodes.h"
 
 
 int
@@ -133,7 +55,22 @@ main()
   initlog();
 
   deallog.push("2d");
-  test<2>(hp::FECollection<2>(Simplex::FE_P<2>(1), Simplex::FE_P<2>(2)));
-  test<2>(hp::FECollection<2>(Simplex::FE_P<2>(2), Simplex::FE_P<2>(1)));
+  {
+    const unsigned int dim = 2;
+
+    const auto subdivided_hyper_cube_with_simplices =
+      [](Triangulation<dim> &tria) {
+        GridGenerator::subdivided_hyper_cube_with_simplices(tria, 1);
+      };
+
+    test<dim>({0, 0},
+              {0, 1},
+              hp::FECollection<dim>(FE_SimplexP<dim>(2), FE_SimplexP<dim>(1)),
+              subdivided_hyper_cube_with_simplices);
+    test<dim>({0, 0},
+              {0, 1},
+              hp::FECollection<dim>(FE_SimplexP<dim>(1), FE_SimplexP<dim>(2)),
+              subdivided_hyper_cube_with_simplices);
+  }
   deallog.pop();
 }

@@ -18,9 +18,9 @@
 // for all reference-cell types.
 
 
-#include <deal.II/grid/reference_cell.h>
+#include <deal.II/base/quadrature_lib.h>
 
-#include <deal.II/simplex/quadrature_lib.h>
+#include <deal.II/grid/reference_cell.h>
 
 #include "../tests.h"
 
@@ -30,8 +30,7 @@ template <int dim>
 void
 test(const ReferenceCell &reference_cell)
 {
-  for (const auto face_no :
-       internal::ReferenceCell::get_cell(reference_cell).face_indices())
+  for (const auto face_no : reference_cell.face_indices())
     {
       deallog << reference_cell.template unit_normal_vectors<dim>(face_no)
               << std::endl;

@@ -422,7 +422,7 @@ public:
    * to true.
    *
    * When this flag is set to true, the generated vtu file contains the
-   * triangulation in a xml section which is ignored by vtu general vtu readers.
+   * triangulation in a xml section which is ignored by general vtu readers.
    * If this section is absent, an exception is thrown.
    */
   void
@@ -539,26 +539,26 @@ public:
    * From the Gmsh documentation, the formats of the physical tags follows the
    * following conventions:
    * @code
-   * $PhysicalNames // same as MSH version 2
+   * \$PhysicalNames // same as MSH version 2
    *   numPhysicalNames(ASCII int)
    *   dimension(ASCII int) physicalTag(ASCII int) "name"(127 characters max)
    *   ...
-   * $EndPhysicalNames
+   * \$EndPhysicalNames
    * @endcode
    *
    * For example, the following snippet of mesh file
    * @code
    * MeshFormat
    * 4.1 0 8
-   * $EndMeshFormat
-   * $PhysicalNames
+   * \$EndMeshFormat
+   * \$PhysicalNames
    * 4
    * 1 1 "ManifoldID:0"
    * 1 2 "BoundaryID: -1, ManifoldID: 1"
    * 2 3 "ManifoldID: 1"
    * 2 4 "MaterialID: 2, ManifoldID: 1"
-   * $EndPhysicalNames
-   * $Entities
+   * \$EndPhysicalNames
+   * \$Entities
    * ...
    * @endcode
    *
@@ -754,7 +754,12 @@ public:
   /**
    * Exception
    */
-  DeclException0(ExcNoTriangulationSelected);
+  DeclExceptionMsg(ExcNoTriangulationSelected,
+                   "No Triangulation has been attached to this GridIn object "
+                   "so that nothing can be filled during any read function "
+                   "calls.  Please pass a reference to the Triangulation tria "
+                   "to be  filled in the constructor GridIn(tria) or attach "
+                   "it with the function call GridIn::attach_triangulation().");
   /**
    * Exception
    */

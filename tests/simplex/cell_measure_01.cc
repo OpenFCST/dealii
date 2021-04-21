@@ -17,12 +17,14 @@
 
 // Test TriaAccessor::measure() and TriaAccessor::diameter().
 
+#include <deal.II/fe/fe_pyramid_p.h>
+#include <deal.II/fe/fe_simplex_p.h>
+#include <deal.II/fe/fe_simplex_p_bubbles.h>
+#include <deal.II/fe/fe_wedge_p.h>
 #include <deal.II/fe/mapping_fe.h>
 
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/tria.h>
-
-#include <deal.II/simplex/fe_lib.h>
 
 #include "../tests.h"
 
@@ -47,10 +49,10 @@ process(const std::vector<Point<spacedim>> &vertices,
 
   AssertDimension(reference_cells.size(), 1);
 
-  if (reference_cells[0] == ReferenceCell::get_simplex<dim>())
-    mapping = std::make_shared<MappingFE<dim>>(Simplex::FE_P<dim>(1));
+  if (reference_cells[0] == ReferenceCells::get_simplex<dim>())
+    mapping = std::make_shared<MappingFE<dim>>(FE_SimplexP<dim>(1));
   else if (reference_cells[0] == ReferenceCells::Wedge)
-    mapping = std::make_shared<MappingFE<dim>>(Simplex::FE_WedgeP<dim>(1));
+    mapping = std::make_shared<MappingFE<dim>>(FE_WedgeP<dim>(1));
   else
     AssertThrow(false, ExcNotImplemented());
 

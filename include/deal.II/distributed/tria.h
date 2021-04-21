@@ -33,7 +33,6 @@
 #include <functional>
 #include <list>
 #include <set>
-#include <tuple>
 #include <type_traits>
 #include <utility>
 #include <vector>
@@ -74,6 +73,18 @@ namespace GridTools
   template <typename CellIterator>
   struct PeriodicFacePair;
 }
+
+namespace internal
+{
+  namespace parallel
+  {
+    namespace distributed
+    {
+      template <int, int>
+      class TemporarilyMatchRefineFlags;
+    }
+  } // namespace parallel
+} // namespace internal
 #  endif
 
 namespace parallel
@@ -401,8 +412,6 @@ namespace parallel
       /**
        * Implementation of the same function as in the base class.
        *
-       * @note This function cannot copy a triangulation that has been refined.
-       *
        * @note This function can be used to copy a serial Triangulation to a
        * parallel::distributed::Triangulation but only if the serial
        * Triangulation has never been refined.
@@ -605,6 +614,14 @@ namespace parallel
            const bool         autopartition = true) override;
 
       /**
+       * Load the refinement information from a given parallel forest. This
+       * forest might be obtained from the function call to
+       * parallel::distributed::Triangulation::get_p4est().
+       */
+      void
+      load(const typename dealii::internal::p4est::types<dim>::forest *forest);
+
+      /**
        * Return a permutation vector for the order the coarse cells are handed
        * off to p4est. For example the value of the $i$th element in this
        * vector is the index of the deal.II coarse cell (counting from
@@ -687,13 +704,25 @@ namespace parallel
       typename dealii::internal::p4est::types<dim>::ghost *parallel_ghost;
 
       /**
-       * Go through all p4est trees and store the relations between the status
-       * of locally owned quadrants and cells in the private member
-       * local_cell_relations.
+       * Go through all p4est trees and record the relations between locally
+       * owned p4est quadrants and active deal.II cells in the private member
+       * vector local_cell_relations.
+       *
+       * The vector contains an active cell iterator for every locally owned
+       * p4est quadrant, as well as a CellStatus flag to describe their
+       * relation.
        *
        * The stored vector will be ordered by the occurrence of quadrants in
        * the corresponding local sc_array of the parallel_forest. p4est requires
-       * this specific ordering for its transfer functions.
+       * this specific ordering for its transfer functions. Therefore, the size
+       * of this vector will be equal to the number of locally owned quadrants
+       * in the parallel_forest object.
+       *
+       * These relations will be established for example in the mesh refinement
+       * process: after adapting the parallel_forest, but before applying these
+       * changes to this triangulation, we will record how cells will change in
+       * the refinement process. With this information, we can prepare all
+       * buffers for data transfer accordingly.
        */
       virtual void
       update_cell_relations() override;
@@ -786,6 +815,10 @@ namespace parallel
 
       template <int, int, class>
       friend class dealii::FETools::internal::ExtrapolateImplementation;
+
+      template <int, int>
+      friend class dealii::internal::parallel::distributed::
+        TemporarilyMatchRefineFlags;
     };
 
 
@@ -893,6 +926,10 @@ namespace parallel
       virtual types::coarse_cell_id
       coarse_cell_index_to_coarse_cell_id(
         const unsigned int coarse_cell_index) const override;
+
+      template <int, int>
+      friend class dealii::internal::parallel::distributed::
+        TemporarilyMatchRefineFlags;
     };
   } // namespace distributed
 } // namespace parallel
@@ -917,7 +954,7 @@ namespace parallel
      */
     template <int dim, int spacedim = dim>
     class Triangulation
-      : public dealii::parallel::TriangulationBase<dim, spacedim>
+      : public dealii::parallel::DistributedTriangulationBase<dim, spacedim>
     {
     public:
       /**
@@ -931,6 +968,75 @@ namespace parallel
 
 
 #endif
+
+
+namespace internal
+{
+  namespace parallel
+  {
+    namespace distributed
+    {
+      /**
+       * This class temporarily modifies the refine and coarsen flags of all
+       * active cells to match the p4est oracle.
+       *
+       * The modification only happens on parallel::distributed::Triangulation
+       * objects, and persists for the lifetime of an instantiation of this
+       * class.
+       *
+       * The TemporarilyMatchRefineFlags class should only be used in
+       * combination with the Triangulation::Signals::post_p4est_refinement
+       * signal. At this stage, the p4est orcale already has been refined, but
+       * the triangulation is still unchanged. After the modification, all
+       * refine and coarsen flags describe how the traingulation will acutally
+       * be refined.
+       */
+      template <int dim, int spacedim = dim>
+      class TemporarilyMatchRefineFlags : public Subscriptor
+      {
+      public:
+        /**
+         * Constructor.
+         *
+         * Stores the refine and coarsen flags of all active cells if the
+         * provided Triangulation is of type
+         * parallel::distributed::Triangulation.
+         *
+         * Adjusts them to be consistent with the p4est oracle.
+         */
+        TemporarilyMatchRefineFlags(Triangulation<dim, spacedim> &tria);
+
+        /**
+         * Destructor.
+         *
+         * Returns the refine and coarsen flags of all active cells on the
+         * parallel::distributed::Triangulation into their previous state.
+         */
+        ~TemporarilyMatchRefineFlags();
+
+      private:
+        /**
+         * The modified parallel::distributed::Triangulation.
+         */
+        const SmartPointer<
+          dealii::parallel::distributed::Triangulation<dim, spacedim>>
+          distributed_tria;
+
+        /**
+         * A vector that temporarily stores the refine flags before they have
+         * been modified on the parallel::distributed::Triangulation.
+         */
+        std::vector<bool> saved_refine_flags;
+
+        /**
+         * A vector that temporarily stores the coarsen flags before they have
+         * been modified on the parallel::distributed::Triangulation.
+         */
+        std::vector<bool> saved_coarsen_flags;
+      };
+    } // namespace distributed
+  }   // namespace parallel
+} // namespace internal
 
 
 DEAL_II_NAMESPACE_CLOSE

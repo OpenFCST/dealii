@@ -20,6 +20,7 @@
 
 #include <deal.II/base/array_view.h>
 #include <deal.II/base/geometry_info.h>
+#include <deal.II/base/ndarray.h>
 #include <deal.II/base/tensor.h>
 #include <deal.II/base/utilities.h>
 
@@ -33,10 +34,10 @@ class Mapping;
 
 template <int dim>
 class Quadrature;
-#endif
-
 
 class ReferenceCell;
+#endif
+
 
 namespace internal
 {
@@ -57,6 +58,7 @@ namespace internal
      */
     DEAL_II_CONSTEXPR dealii::ReferenceCell
                       make_reference_cell_from_int(const std::uint8_t kind);
+
   } // namespace ReferenceCell
 } // namespace internal
 
@@ -76,44 +78,45 @@ namespace internal
  * all of the possible values. User codes should therefore rely
  * exclusively on assigning ReferenceCell objects from these special
  * objects, and comparing against those special objects.
+ *
+ * The purposes and intents of this class are described in the
+ * @ref GlossReferenceCell "reference cell" glossary entry.
+ *
+ * @ingroup grid geomprimitives aniso
  */
 class ReferenceCell
 {
 public:
   /**
-   * Return the correct simplex reference cell type for the given dimension
-   * `dim`. Depending on the template argument `dim`, this function returns a
-   * reference to either Vertex, Triangle, or Tetrahedron.
-   */
-  template <int dim>
-  static constexpr const ReferenceCell &
-  get_simplex();
-
-  /**
-   * Return the correct hypercube reference cell type for the given dimension
-   * `dim`. Depending on the template argument `dim`, this function returns a
-   * reference to either Vertex, Quadrilateral, or Hexahedron.
-   */
-  template <int dim>
-  static constexpr const ReferenceCell &
-  get_hypercube();
-
-  /**
    * Return the correct ReferenceCell for a given structural
    * dimension and number of vertices. For example, if `dim==2` and
-   * `n_vertices==4`, this function will return `Quadrilateral`. But if `dim==3`
-   * and `n_vertices==4`, it will return `Tetrahedron`.
+   * `n_vertices==4`, this function will return ReferenceCells::Quadrilateral.
+   * But if `dim==3` and `n_vertices==4`, it will return
+   * ReferenceCells::Tetrahedron.
    */
   static ReferenceCell
   n_vertices_to_type(const int dim, const unsigned int n_vertices);
 
   /**
-   * Default constructor. Initialize this object as an invalid object.
+   * Default constructor. Initialize this object as an invalid object. The
+   * end result is that the current object equals ReferenceCells::Invalid.
+   *
+   * Generally, ReferenceCell objects are created by assignment from
+   * the special objects in namespace ReferenceCells, which is the only
+   * way to obtain a valid object.
    */
-  constexpr ReferenceCell();
+  DEAL_II_CONSTEXPR
+  ReferenceCell();
 
   /**
-   * Return true if the object is a Vertex, Line, Quadrilateral, or Hexahedron.
+   * @name Querying information about the kind of reference cells
+   * @{
+   */
+
+  /**
+   * Return `true` if the object is a ReferenceCells::Vertex,
+   * ReferenceCells::Line, ReferenceCells::Quadrilateral, or
+   * ReferenceCells::Hexahedron.
    */
   bool
   is_hyper_cube() const;
@@ -132,6 +135,15 @@ public:
   get_dimension() const;
 
   /**
+   * @}
+   */
+
+  /**
+   * @name Shape functions, mappings, quadratures defined on a reference cell
+   * @{
+   */
+
+  /**
    * Compute the value of the $i$-th linear shape function at location $\xi$
    * for the current reference-cell type.
    */
@@ -147,6 +159,251 @@ public:
   Tensor<1, dim>
   d_linear_shape_function_gradient(const Point<dim> & xi,
                                    const unsigned int i) const;
+
+  /**
+   * Return a default mapping of degree @p degree matching the current
+   * reference cell. If this reference cell is a hypercube, then the returned
+   * mapping is a MappingQGeneric; otherwise, it is an object of type
+   * MappingFE initialized with FE_SimplexP (if the reference cell is a
+   * triangle or tetrahedron), with FE_PyramidP (if the reference
+   * cell is a pyramid), or with FE_WedgeP (if the reference cell is
+   * a wedge).
+   */
+  template <int dim, int spacedim>
+  std::unique_ptr<Mapping<dim, spacedim>>
+  get_default_mapping(const unsigned int degree) const;
+
+  /**
+   * Return a default linear mapping matching the current reference cell.
+   * If this reference cell is a hypercube, then the returned mapping
+   * is a MappingQ1; otherwise, it is an object of type MappingFE
+   * initialized with FE_SimplexP (if the reference cell is a triangle or
+   * tetrahedron), with FE_PyramidP (if the reference cell is a
+   * pyramid), or with FE_WedgeP (if the reference cell is a wedge).
+   * In other words, the term "linear" in the name of the function has to be
+   * understood as $d$-linear (i.e., bilinear or trilinear) for some of the
+   * coordinate directions.
+   */
+  template <int dim, int spacedim>
+  const Mapping<dim, spacedim> &
+  get_default_linear_mapping() const;
+
+  /**
+   * Return a Gauss-type quadrature matching the given reference cell (QGauss,
+   * QGaussSimplex, QGaussPyramid, QGaussWedge).
+   *
+   * @param[in] n_points_1D The number of quadrature points in each direction
+   * (QGauss) or an indication of what polynomial degree needs to be
+   * integrated exactly for the other types.
+   */
+  template <int dim>
+  Quadrature<dim>
+  get_gauss_type_quadrature(const unsigned n_points_1D) const;
+
+  /**
+   * Return a quadrature rule with the support points of the given reference
+   * cell.
+   *
+   * @note The weights of the quadrature object are left unfilled.
+   */
+  template <int dim>
+  const Quadrature<dim> &
+  get_nodal_type_quadrature() const;
+
+  /**
+   * @}
+   */
+
+  /**
+   * @name Querying the number of building blocks of a reference cell
+   * @{
+   */
+
+  /**
+   * Return the number of vertices that make up the reference
+   * cell in question. A vertex is a "corner" (a zero-dimensional
+   * object) of the reference cell.
+   */
+  unsigned int
+  n_vertices() const;
+
+  /**
+   * Return an object that can be thought of as an array containing all
+   * indices from zero to n_vertices().
+   */
+  std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  vertex_indices() const;
+
+  /**
+   * Return the number of lines that make up the reference
+   * cell in question. A line is an "edge" (a one-dimensional
+   * object) of the reference cell.
+   */
+  unsigned int
+  n_lines() const;
+
+  /**
+   * Return an object that can be thought of as an array containing all
+   * indices from zero to n_lines().
+   */
+  std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  line_indices() const;
+
+  /**
+   * Return the number of faces that make up the reference
+   * cell in question. A face is a `(dim-1)`-dimensional
+   * object bounding the reference cell.
+   */
+  unsigned int
+  n_faces() const;
+
+  /**
+   * Return an object that can be thought of as an array containing all
+   * indices from zero to n_faces().
+   */
+  std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  face_indices() const;
+
+  /**
+   * Return the reference-cell type of face @p face_no of the current
+   * object. For example, if the current object is
+   * ReferenceCells::Tetrahedron, then `face_no` must be between
+   * in the interval $[0,4)$ and the function will always return
+   * ReferenceCells::Triangle. If the current object is
+   * ReferenceCells::Hexahedron, then `face_no` must be between
+   * in the interval $[0,6)$ and the function will always return
+   * ReferenceCells::Quadrilateral. For wedges and pyramids, the
+   * returned object may be either ReferenceCells::Triangle or
+   * ReferenceCells::Quadrilateral, depending on the given index.
+   */
+  ReferenceCell
+  face_reference_cell(const unsigned int face_no) const;
+
+  /**
+   * @}
+   */
+
+  /**
+   * @name Relationships between objects in the cell and on faces
+   * @{
+   */
+
+  /**
+   * Return which child cells are adjacent to a certain face of the
+   * mother cell.
+   *
+   * For example, in 2D the layout of a quadrilateral cell is as follows:
+   * @verbatim
+   * .      3
+   * .   2-->--3
+   * .   |     |
+   * . 0 ^     ^ 1
+   * .   |     |
+   * .   0-->--1
+   * .      2
+   * @endverbatim
+   * Vertices and faces are indicated with their numbers, faces also with
+   * their directions.
+   *
+   * Now, when refined, the layout is like this:
+   * @verbatim
+   * *--*--*
+   * | 2|3 |
+   * *--*--*
+   * | 0|1 |
+   * *--*--*
+   * @endverbatim
+   *
+   * Thus, the child cells on face 0 are (ordered in the direction of the
+   * face) 0 and 2, on face 3 they are 2 and 3, etc.
+   *
+   * For three spatial dimensions, the exact order of the children is laid
+   * down in the general documentation of this class.
+   */
+  unsigned int
+  child_cell_on_face(const unsigned int face_n,
+                     const unsigned int subface_n) const;
+
+  /**
+   * For a given vertex in a cell, return a pair of a face index and a
+   * vertex index within this face.
+   *
+   * @note In practice, a vertex is of course generally part of more than one
+   *   face, and one could return different faces and the corresponding
+   *   index within. Which face this function chooses is often not of
+   *   importance (and not exposed by this function on purpose).
+   */
+  std::array<unsigned int, 2>
+  standard_vertex_to_face_and_vertex_index(const unsigned int vertex) const;
+
+  /**
+   * For a given line in a cell, return a pair of a face index and a
+   * line index within this face.
+   *
+   * @note In practice, a line is of course generally part of more than one
+   *   face, and one could return different faces and the corresponding
+   *   index within. Which face this function chooses is often not of
+   *   importance (and not exposed by this function on purpose).
+   */
+  std::array<unsigned int, 2>
+  standard_line_to_face_and_line_index(const unsigned int line) const;
+
+  /**
+   * Map face line number to cell line number.
+   */
+  unsigned int
+  face_to_cell_lines(const unsigned int  face,
+                     const unsigned int  line,
+                     const unsigned char face_orientation) const;
+
+  /**
+   * Map face vertex number to cell vertex number.
+   */
+  unsigned int
+  face_to_cell_vertices(const unsigned int  face,
+                        const unsigned int  vertex,
+                        const unsigned char face_orientation) const;
+
+  /**
+   * Correct vertex index depending on face orientation.
+   */
+  unsigned int
+  standard_to_real_face_vertex(const unsigned int  vertex,
+                               const unsigned int  face,
+                               const unsigned char face_orientation) const;
+
+  /**
+   * Correct line index depending on face orientation.
+   */
+  unsigned int
+  standard_to_real_face_line(const unsigned int  line,
+                             const unsigned int  face,
+                             const unsigned char face_orientation) const;
+
+  /**
+   * Return whether the line with index @p line is oriented in
+   * standard direction within a cell, given the @p face_orientation of
+   * the face within the current cell, and @p line_orientation flag
+   * for the line within that face. @p true indicates that the line is
+   * oriented from vertex 0 to vertex 1, whereas it is the other way
+   * around otherwise. In 1d and 2d, this is always @p true, but in 3d
+   * it may be different, see the respective discussion in the
+   * documentation of the GeometryInfo class.
+   */
+  bool
+  standard_vs_true_line_orientation(const unsigned int  line,
+                                    const unsigned char face_orientation,
+                                    const unsigned char line_orientation) const;
+
+  /**
+   * @}
+   */
+
+  /**
+   * @name Geometric properties of reference cells
+   * @name Querying the number of building blocks of a reference cell
+   * @{
+   */
 
   /*
    * Return $i$-th unit tangential vector of a face of the reference cell.
@@ -185,54 +442,66 @@ public:
                                 const unsigned int      orientation) const;
 
   /**
-   * Return a default mapping of degree @p degree matching the current
-   * reference cell. If this reference cell is a hypercube, then the returned
-   * mapping is a MappingQGeneric; otherwise, it is an object of type
-   * MappingFE initialized with Simplex::FE_P (if the reference cell is a
-   * triangle or tetrahedron), with Simplex::FE_PyramidP (if the reference
-   * cell is a pyramid), or with Simplex::FE_WedgeP (if the reference cell is
-   * a wedge).
+   * Return a vector of faces a given @p vertex_index belongs to.
    */
-  template <int dim, int spacedim>
-  std::unique_ptr<Mapping<dim, spacedim>>
-  get_default_mapping(const unsigned int degree) const;
+  ArrayView<const unsigned int>
+  faces_for_given_vertex(const unsigned int vertex_index) const;
 
   /**
-   * Return a default linear mapping matching the current reference cell.
-   * If this reference cell is a hypercube, then the returned mapping
-   * is a MappingQ1; otherwise, it is an object of type MappingFE
-   * initialized with Simplex::FE_P (if the reference cell is a triangle or
-   * tetrahedron), with Simplex::FE_PyramidP (if the reference cell is a
-   * pyramid), or with Simplex::FE_WedgeP (if the reference cell is a wedge).
-   * In other words, the term "linear" in the name of the function has to be
-   * understood as $d$-linear (i.e., bilinear or trilinear) for some of the
-   * coordinate directions.
+   * @}
    */
-  template <int dim, int spacedim>
-  const Mapping<dim, spacedim> &
-  get_default_linear_mapping() const;
 
   /**
-   * Return a Gauss-type quadrature matching the given reference cell (QGauss,
-   * Simplex::QGauss, Simplex::QGaussPyramid, Simplex::QGaussWedge).
-   *
-   * @param[in] n_points_1D The number of quadrature points in each direction
-   * (QGauss) or an indication of what polynomial degree needs to be
-   * integrated exactly for the other types.
+   * @name Translating between deal.II indexing and formats used by other programs
+   * @{
    */
-  template <int dim>
-  Quadrature<dim>
-  get_gauss_type_quadrature(const unsigned n_points_1D) const;
 
   /**
-   * Return a quadrature rule with the support points of the given reference
+   * Map an ExodusII vertex number to a deal.II vertex number.
+   */
+  unsigned int
+  exodusii_vertex_to_deal_vertex(const unsigned int vertex_n) const;
+
+  /**
+   * Map an ExodusII face number to a deal.II face number.
+   */
+  unsigned int
+  exodusii_face_to_deal_face(const unsigned int face_n) const;
+
+  /**
+   * Map a UNV vertex number to a deal.II vertex number.
+   */
+  unsigned int
+  unv_vertex_to_deal_vertex(const unsigned int vertex_n) const;
+
+  /**
+   * Return a VTK linear shape constant that corresponds to the reference cell.
+   */
+  unsigned int
+  vtk_linear_type() const;
+
+  /**
+   * Return a VTK quadratic shape constant that corresponds to the reference
    * cell.
-   *
-   * @note The weights of the quadrature object are left unfilled.
    */
-  template <int dim>
-  const Quadrature<dim> &
-  get_nodal_type_quadrature() const;
+  unsigned int
+  vtk_quadratic_type() const;
+
+  /**
+   * Return a VTK Lagrange shape constant that corresponds to the reference
+   * cell.
+   */
+  unsigned int
+  vtk_lagrange_type() const;
+
+  /**
+   * @}
+   */
+
+  /**
+   * @name Other functions
+   * @{
+   */
 
   /**
    * Return a text representation of the reference cell represented by the
@@ -268,10 +537,8 @@ public:
   serialize(Archive &archive, const unsigned int /*version*/);
 
   /**
-   * Return a vector of faces a @p vertex belongs to.
+   * @}
    */
-  ArrayView<const unsigned int>
-  faces_for_given_vertex(const unsigned int vertex) const;
 
 private:
   /**
@@ -294,12 +561,6 @@ private:
   friend DEAL_II_CONSTEXPR ReferenceCell
                            internal::ReferenceCell::make_reference_cell_from_int(const std::uint8_t);
 };
-
-
-
-inline constexpr ReferenceCell::ReferenceCell()
-  : ReferenceCell(static_cast<std::uint8_t>(-1))
-{}
 
 
 
@@ -381,7 +642,32 @@ namespace ReferenceCells
   DEAL_II_CONSTEXPR const ReferenceCell Invalid =
     internal::ReferenceCell::make_reference_cell_from_int(
       static_cast<std::uint8_t>(-1));
+
+  /**
+   * Return the correct simplex reference cell type for the given dimension
+   * `dim`. Depending on the template argument `dim`, this function returns a
+   * reference to either Vertex, Triangle, or Tetrahedron.
+   */
+  template <int dim>
+  constexpr const ReferenceCell &
+  get_simplex();
+
+  /**
+   * Return the correct hypercube reference cell type for the given dimension
+   * `dim`. Depending on the template argument `dim`, this function returns a
+   * reference to either Vertex, Quadrilateral, or Hexahedron.
+   */
+  template <int dim>
+  constexpr const ReferenceCell &
+  get_hypercube();
 } // namespace ReferenceCells
+
+
+
+inline DEAL_II_CONSTEXPR
+ReferenceCell::ReferenceCell()
+  : ReferenceCell(ReferenceCells::Invalid)
+{}
 
 
 
@@ -415,7 +701,7 @@ ReferenceCell::faces_for_given_vertex(const unsigned int vertex) const
   else if (*this == ReferenceCells::Triangle)
     {
       AssertIndexRange(vertex, 3);
-      static const std::array<std::array<unsigned int, 2>, 3> table = {
+      static const ndarray<unsigned int, 3, 2> table = {
         {{{0, 2}}, {{0, 1}}, {{1, 2}}}};
 
       return table[vertex];
@@ -423,7 +709,7 @@ ReferenceCell::faces_for_given_vertex(const unsigned int vertex) const
   else if (*this == ReferenceCells::Tetrahedron)
     {
       AssertIndexRange(vertex, 4);
-      static const std::array<std::array<unsigned int, 3>, 4> table = {
+      static const ndarray<unsigned int, 4, 3> table = {
         {{{0, 1, 2}}, {{0, 1, 3}}, {{0, 2, 3}}, {{1, 2, 3}}}};
 
       return table[vertex];
@@ -431,13 +717,12 @@ ReferenceCell::faces_for_given_vertex(const unsigned int vertex) const
   else if (*this == ReferenceCells::Wedge)
     {
       AssertIndexRange(vertex, 6);
-      static const std::array<std::array<unsigned int, 3>, 6> table = {
-        {{{0, 2, 4}},
-         {{0, 2, 3}},
-         {{0, 3, 4}},
-         {{1, 2, 4}},
-         {{1, 2, 3}},
-         {{1, 3, 4}}}};
+      static const ndarray<unsigned int, 6, 3> table = {{{{0, 2, 4}},
+                                                         {{0, 2, 3}},
+                                                         {{0, 3, 4}},
+                                                         {{1, 2, 4}},
+                                                         {{1, 2, 3}},
+                                                         {{1, 3, 4}}}};
 
       return table[vertex];
     }
@@ -445,12 +730,11 @@ ReferenceCell::faces_for_given_vertex(const unsigned int vertex) const
     {
       AssertIndexRange(vertex, 5);
       static const unsigned int X = numbers::invalid_unsigned_int;
-      static const std::array<std::array<unsigned int, 4>, 5> table = {
-        {{{0, 1, 3, X}},
-         {{0, 2, 3, X}},
-         {{0, 1, 4, X}},
-         {{0, 2, 4, X}},
-         {{1, 2, 3, 4}}}};
+      static const ndarray<unsigned int, 5, 4> table = {{{{0, 1, 3, X}},
+                                                         {{0, 2, 3, X}},
+                                                         {{0, 1, 4, X}},
+                                                         {{0, 2, 4, X}},
+                                                         {{1, 2, 3, 4}}}};
 
       return {&table[vertex][0], vertex == 4 ? 4u : 3u};
     }
@@ -504,48 +788,706 @@ ReferenceCell::get_dimension() const
 
 
 
-template <int dim>
-inline constexpr const ReferenceCell &
-ReferenceCell::get_simplex()
+inline unsigned int
+ReferenceCell::n_vertices() const
 {
-  switch (dim)
-    {
-      case 0:
-        return ReferenceCells::Vertex;
-      case 1:
-        return ReferenceCells::Line;
-      case 2:
-        return ReferenceCells::Triangle;
-      case 3:
-        return ReferenceCells::Tetrahedron;
-      default:
-        Assert(false, ExcNotImplemented());
-        return ReferenceCells::Invalid;
-    }
+  if (*this == ReferenceCells::Vertex)
+    return 1;
+  else if (*this == ReferenceCells::Line)
+    return 2;
+  else if (*this == ReferenceCells::Triangle)
+    return 3;
+  else if (*this == ReferenceCells::Quadrilateral)
+    return 4;
+  else if (*this == ReferenceCells::Tetrahedron)
+    return 4;
+  else if (*this == ReferenceCells::Pyramid)
+    return 5;
+  else if (*this == ReferenceCells::Wedge)
+    return 6;
+  else if (*this == ReferenceCells::Hexahedron)
+    return 8;
+
+  Assert(false, ExcNotImplemented());
+  return numbers::invalid_unsigned_int;
 }
 
 
 
-template <int dim>
-inline constexpr const ReferenceCell &
-ReferenceCell::get_hypercube()
+inline unsigned int
+ReferenceCell::n_lines() const
 {
-  switch (dim)
+  if (*this == ReferenceCells::Vertex)
+    return 0;
+  else if (*this == ReferenceCells::Line)
+    return 1;
+  else if (*this == ReferenceCells::Triangle)
+    return 3;
+  else if (*this == ReferenceCells::Quadrilateral)
+    return 4;
+  else if (*this == ReferenceCells::Tetrahedron)
+    return 6;
+  else if (*this == ReferenceCells::Pyramid)
+    return 7;
+  else if (*this == ReferenceCells::Wedge)
+    return 9;
+  else if (*this == ReferenceCells::Hexahedron)
+    return 12;
+
+  Assert(false, ExcNotImplemented());
+  return numbers::invalid_unsigned_int;
+}
+
+
+
+inline unsigned int
+ReferenceCell::n_faces() const
+{
+  if (*this == ReferenceCells::Vertex)
+    return 0;
+  else if (*this == ReferenceCells::Line)
+    return 2;
+  else if (*this == ReferenceCells::Triangle)
+    return 3;
+  else if (*this == ReferenceCells::Quadrilateral)
+    return 4;
+  else if (*this == ReferenceCells::Tetrahedron)
+    return 4;
+  else if (*this == ReferenceCells::Pyramid)
+    return 5;
+  else if (*this == ReferenceCells::Wedge)
+    return 5;
+  else if (*this == ReferenceCells::Hexahedron)
+    return 6;
+
+  Assert(false, ExcNotImplemented());
+  return numbers::invalid_unsigned_int;
+}
+
+
+
+inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+ReferenceCell::vertex_indices() const
+{
+  return {0U, n_vertices()};
+}
+
+
+
+inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+ReferenceCell::line_indices() const
+{
+  return {0U, n_lines()};
+}
+
+
+
+inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+ReferenceCell::face_indices() const
+{
+  return {0U, n_faces()};
+}
+
+
+
+inline ReferenceCell
+ReferenceCell::face_reference_cell(const unsigned int face_no) const
+{
+  AssertIndexRange(face_no, n_faces());
+
+  if (*this == ReferenceCells::Vertex)
+    return ReferenceCells::Invalid;
+  else if (*this == ReferenceCells::Line)
+    return ReferenceCells::Vertex;
+  else if (*this == ReferenceCells::Triangle)
+    return ReferenceCells::Line;
+  else if (*this == ReferenceCells::Quadrilateral)
+    return ReferenceCells::Line;
+  else if (*this == ReferenceCells::Tetrahedron)
+    return ReferenceCells::Triangle;
+  else if (*this == ReferenceCells::Pyramid)
     {
-      case 0:
-        return ReferenceCells::Vertex;
-      case 1:
-        return ReferenceCells::Line;
-      case 2:
+      if (face_no == 0)
         return ReferenceCells::Quadrilateral;
-      case 3:
-        return ReferenceCells::Hexahedron;
-      default:
-        Assert(false, ExcNotImplemented());
-        return ReferenceCells::Invalid;
+      else
+        return ReferenceCells::Triangle;
     }
+  else if (*this == ReferenceCells::Wedge)
+    {
+      if (face_no > 1)
+        return ReferenceCells::Quadrilateral;
+      else
+        return ReferenceCells::Triangle;
+    }
+  else if (*this == ReferenceCells::Hexahedron)
+    return ReferenceCells::Quadrilateral;
+
+  Assert(false, ExcNotImplemented());
+  return ReferenceCells::Invalid;
 }
 
+
+
+inline unsigned int
+ReferenceCell::child_cell_on_face(const unsigned int face,
+                                  const unsigned int subface) const
+{
+  AssertIndexRange(face, n_faces());
+
+  if (*this == ReferenceCells::Vertex)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Line)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Triangle)
+    {
+      static const ndarray<unsigned int, 3, 2> subcells = {
+        {{{0, 1}}, {{1, 2}}, {{2, 0}}}};
+
+      return subcells[face][subface];
+    }
+  else if (*this == ReferenceCells::Quadrilateral)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Tetrahedron)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Pyramid)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Wedge)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Hexahedron)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+
+  Assert(false, ExcNotImplemented());
+  return {};
+}
+
+
+
+inline std::array<unsigned int, 2>
+ReferenceCell::standard_vertex_to_face_and_vertex_index(
+  const unsigned int vertex) const
+{
+  AssertIndexRange(vertex, n_vertices());
+
+  if (*this == ReferenceCells::Vertex)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Line)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Triangle)
+    {
+      static const ndarray<unsigned int, 3, 2> table = {
+        {{{0, 0}}, {{0, 1}}, {{1, 1}}}};
+
+      return table[vertex];
+    }
+  else if (*this == ReferenceCells::Quadrilateral)
+    {
+      return GeometryInfo<2>::standard_quad_vertex_to_line_vertex_index(vertex);
+    }
+  else if (*this == ReferenceCells::Tetrahedron)
+    {
+      static const ndarray<unsigned int, 4, 2> table = {
+        {{{0, 0}}, {{0, 1}}, {{0, 2}}, {{1, 2}}}};
+
+      return table[vertex];
+    }
+  else if (*this == ReferenceCells::Pyramid)
+    {
+      static const ndarray<unsigned int, 5, 2> table = {
+        {{{0, 0}}, {{0, 1}}, {{0, 2}}, {{0, 3}}, {{1, 2}}}};
+
+      return table[vertex];
+    }
+  else if (*this == ReferenceCells::Wedge)
+    {
+      static const ndarray<unsigned int, 6, 2> table = {
+        {{{0, 1}}, {{0, 0}}, {{0, 2}}, {{1, 0}}, {{1, 1}}, {{1, 2}}}};
+
+      return table[vertex];
+    }
+  else if (*this == ReferenceCells::Hexahedron)
+    {
+      return GeometryInfo<3>::standard_hex_vertex_to_quad_vertex_index(vertex);
+    }
+
+  Assert(false, ExcNotImplemented());
+  return {};
+}
+
+
+
+inline std::array<unsigned int, 2>
+ReferenceCell::standard_line_to_face_and_line_index(
+  const unsigned int line) const
+{
+  AssertIndexRange(line, n_lines());
+
+  if (*this == ReferenceCells::Vertex)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Line)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Triangle)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Quadrilateral)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Tetrahedron)
+    {
+      static const std::array<unsigned int, 2> table[6] = {
+        {{0, 0}}, {{0, 1}}, {{0, 2}}, {{1, 1}}, {{1, 2}}, {{2, 1}}};
+
+      return table[line];
+    }
+  else if (*this == ReferenceCells::Pyramid)
+    {
+      static const std::array<unsigned int, 2> table[8] = {{{0, 0}},
+                                                           {{0, 1}},
+                                                           {{0, 2}},
+                                                           {{0, 3}},
+                                                           {{1, 2}},
+                                                           {{2, 1}},
+                                                           {{1, 1}},
+                                                           {{2, 2}}};
+
+      return table[line];
+    }
+  else if (*this == ReferenceCells::Wedge)
+    {
+      static const std::array<unsigned int, 2> table[9] = {{{0, 0}},
+                                                           {{0, 2}},
+                                                           {{0, 1}},
+                                                           {{1, 0}},
+                                                           {{1, 1}},
+                                                           {{1, 2}},
+                                                           {{2, 0}},
+                                                           {{2, 1}},
+                                                           {{3, 1}}};
+
+      return table[line];
+    }
+  else if (*this == ReferenceCells::Hexahedron)
+    {
+      return GeometryInfo<3>::standard_hex_line_to_quad_line_index(line);
+    }
+
+  Assert(false, ExcNotImplemented());
+  return {};
+}
+
+
+
+inline unsigned int
+ReferenceCell::face_to_cell_lines(const unsigned int  face,
+                                  const unsigned int  line,
+                                  const unsigned char face_orientation) const
+{
+  AssertIndexRange(face, n_faces());
+  AssertIndexRange(line, face_reference_cell(face).n_lines());
+
+  if (*this == ReferenceCells::Vertex)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Line)
+    {
+      return GeometryInfo<1>::face_to_cell_lines(
+        face,
+        line,
+        Utilities::get_bit(face_orientation, 0),
+        Utilities::get_bit(face_orientation, 2),
+        Utilities::get_bit(face_orientation, 1));
+    }
+  else if (*this == ReferenceCells::Triangle)
+    {
+      return face;
+    }
+  else if (*this == ReferenceCells::Quadrilateral)
+    {
+      return GeometryInfo<2>::face_to_cell_lines(
+        face,
+        line,
+        Utilities::get_bit(face_orientation, 0),
+        Utilities::get_bit(face_orientation, 2),
+        Utilities::get_bit(face_orientation, 1));
+    }
+  else if (*this == ReferenceCells::Tetrahedron)
+    {
+      const static ndarray<unsigned int, 4, 3> table = {
+        {{{0, 1, 2}}, {{0, 3, 4}}, {{2, 5, 3}}, {{1, 4, 5}}}};
+
+      return table[face]
+                  [standard_to_real_face_line(line, face, face_orientation)];
+    }
+  else if (*this == ReferenceCells::Pyramid)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Wedge)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Hexahedron)
+    {
+      return GeometryInfo<3>::face_to_cell_lines(
+        face,
+        line,
+        Utilities::get_bit(face_orientation, 0),
+        Utilities::get_bit(face_orientation, 2),
+        Utilities::get_bit(face_orientation, 1));
+    }
+
+  Assert(false, ExcNotImplemented());
+  return numbers::invalid_unsigned_int;
+}
+
+
+
+inline unsigned int
+ReferenceCell::face_to_cell_vertices(const unsigned int  face,
+                                     const unsigned int  vertex,
+                                     const unsigned char face_orientation) const
+{
+  AssertIndexRange(face, n_faces());
+  AssertIndexRange(vertex, face_reference_cell(face).n_vertices());
+
+  if (*this == ReferenceCells::Vertex)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Line)
+    {
+      return GeometryInfo<1>::face_to_cell_vertices(
+        face,
+        vertex,
+        Utilities::get_bit(face_orientation, 0),
+        Utilities::get_bit(face_orientation, 2),
+        Utilities::get_bit(face_orientation, 1));
+    }
+  else if (*this == ReferenceCells::Triangle)
+    {
+      static const ndarray<unsigned int, 3, 2> table = {
+        {{{0, 1}}, {{1, 2}}, {{2, 0}}}};
+
+      return table[face][face_orientation ? vertex : (1 - vertex)];
+    }
+  else if (*this == ReferenceCells::Quadrilateral)
+    {
+      return GeometryInfo<2>::face_to_cell_vertices(
+        face,
+        vertex,
+        Utilities::get_bit(face_orientation, 0),
+        Utilities::get_bit(face_orientation, 2),
+        Utilities::get_bit(face_orientation, 1));
+    }
+  else if (*this == ReferenceCells::Tetrahedron)
+    {
+      static const ndarray<unsigned int, 4, 3> table = {
+        {{{0, 1, 2}}, {{1, 0, 3}}, {{0, 2, 3}}, {{2, 1, 3}}}};
+
+      return table[face][standard_to_real_face_vertex(
+        vertex, face, face_orientation)];
+    }
+  else if (*this == ReferenceCells::Pyramid)
+    {
+      constexpr auto X = numbers::invalid_unsigned_int;
+      static const ndarray<unsigned int, 5, 4> table = {{{{0, 1, 2, 3}},
+                                                         {{0, 2, 4, X}},
+                                                         {{3, 1, 4, X}},
+                                                         {{1, 0, 4, X}},
+                                                         {{2, 3, 4, X}}}};
+
+      return table[face][standard_to_real_face_vertex(
+        vertex, face, face_orientation)];
+    }
+  else if (*this == ReferenceCells::Wedge)
+    {
+      constexpr auto X = numbers::invalid_unsigned_int;
+      static const ndarray<unsigned int, 6, 4> table = {{{{1, 0, 2, X}},
+                                                         {{3, 4, 5, X}},
+                                                         {{0, 1, 3, 4}},
+                                                         {{1, 2, 4, 5}},
+                                                         {{2, 0, 5, 3}}}};
+
+      return table[face][standard_to_real_face_vertex(
+        vertex, face, face_orientation)];
+    }
+  else if (*this == ReferenceCells::Hexahedron)
+    {
+      return GeometryInfo<3>::face_to_cell_vertices(
+        face,
+        vertex,
+        Utilities::get_bit(face_orientation, 0),
+        Utilities::get_bit(face_orientation, 2),
+        Utilities::get_bit(face_orientation, 1));
+    }
+
+  Assert(false, ExcNotImplemented());
+  return numbers::invalid_unsigned_int;
+}
+
+
+
+inline unsigned int
+ReferenceCell::standard_to_real_face_vertex(
+  const unsigned int  vertex,
+  const unsigned int  face,
+  const unsigned char face_orientation) const
+{
+  AssertIndexRange(face, n_faces());
+  AssertIndexRange(vertex, face_reference_cell(face).n_vertices());
+
+  if (*this == ReferenceCells::Vertex)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Line)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Triangle)
+    {
+      static const ndarray<unsigned int, 2, 2> table = {{{{1, 0}}, {{0, 1}}}};
+
+      return table[face_orientation][vertex];
+    }
+  else if (*this == ReferenceCells::Quadrilateral)
+    {
+      return GeometryInfo<2>::standard_to_real_line_vertex(vertex,
+                                                           face_orientation);
+    }
+  else if (*this == ReferenceCells::Tetrahedron)
+    {
+      static const ndarray<unsigned int, 6, 3> table = {{{{0, 2, 1}},
+                                                         {{0, 1, 2}},
+                                                         {{2, 1, 0}},
+                                                         {{1, 2, 0}},
+                                                         {{1, 0, 2}},
+                                                         {{2, 0, 1}}}};
+
+      return table[face_orientation][vertex];
+    }
+  else if (*this == ReferenceCells::Pyramid)
+    {
+      if (face == 0) // The quadrilateral face
+        {
+          return GeometryInfo<3>::standard_to_real_face_vertex(
+            vertex,
+            Utilities::get_bit(face_orientation, 0),
+            Utilities::get_bit(face_orientation, 2),
+            Utilities::get_bit(face_orientation, 1));
+        }
+      else // One of the triangular faces
+        {
+          static const ndarray<unsigned int, 6, 3> table = {{{{0, 2, 1}},
+                                                             {{0, 1, 2}},
+                                                             {{2, 1, 0}},
+                                                             {{1, 2, 0}},
+                                                             {{1, 0, 2}},
+                                                             {{2, 0, 1}}}};
+
+          return table[face_orientation][vertex];
+        }
+    }
+  else if (*this == ReferenceCells::Wedge)
+    {
+      if (face > 1) // One of the quadrilateral faces
+        {
+          return GeometryInfo<3>::standard_to_real_face_vertex(
+            vertex,
+            Utilities::get_bit(face_orientation, 0),
+            Utilities::get_bit(face_orientation, 2),
+            Utilities::get_bit(face_orientation, 1));
+        }
+      else // One of the triangular faces
+        {
+          static const ndarray<unsigned int, 6, 3> table = {{{{0, 2, 1}},
+                                                             {{0, 1, 2}},
+                                                             {{2, 1, 0}},
+                                                             {{1, 2, 0}},
+                                                             {{1, 0, 2}},
+                                                             {{2, 0, 1}}}};
+
+          return table[face_orientation][vertex];
+        }
+    }
+  else if (*this == ReferenceCells::Hexahedron)
+    {
+      return GeometryInfo<3>::standard_to_real_face_vertex(
+        vertex,
+        Utilities::get_bit(face_orientation, 0),
+        Utilities::get_bit(face_orientation, 2),
+        Utilities::get_bit(face_orientation, 1));
+    }
+
+  Assert(false, ExcNotImplemented());
+  return numbers::invalid_unsigned_int;
+}
+
+
+
+inline unsigned int
+ReferenceCell::standard_to_real_face_line(
+  const unsigned int  line,
+  const unsigned int  face,
+  const unsigned char face_orientation) const
+{
+  AssertIndexRange(face, n_faces());
+  AssertIndexRange(line, face_reference_cell(face).n_lines());
+
+  if (*this == ReferenceCells::Vertex)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Line)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Triangle)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Quadrilateral)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Tetrahedron)
+    {
+      static const ndarray<unsigned int, 6, 3> table = {{{{2, 1, 0}},
+                                                         {{0, 1, 2}},
+                                                         {{1, 0, 2}},
+                                                         {{1, 2, 0}},
+                                                         {{0, 2, 1}},
+                                                         {{2, 0, 1}}}};
+
+      return table[face_orientation][line];
+    }
+  else if (*this == ReferenceCells::Pyramid)
+    {
+      if (face == 0) // The quadrilateral face
+        {
+          return GeometryInfo<3>::standard_to_real_face_line(
+            line,
+            Utilities::get_bit(face_orientation, 0),
+            Utilities::get_bit(face_orientation, 2),
+            Utilities::get_bit(face_orientation, 1));
+        }
+      else // One of the triangular faces
+        {
+          static const ndarray<unsigned int, 6, 3> table = {{{{2, 1, 0}},
+                                                             {{0, 1, 2}},
+                                                             {{1, 0, 2}},
+                                                             {{1, 2, 0}},
+                                                             {{0, 2, 1}},
+                                                             {{2, 0, 1}}}};
+
+          return table[face_orientation][line];
+        }
+    }
+  else if (*this == ReferenceCells::Wedge)
+    {
+      if (face > 1) // One of the quadrilateral faces
+        {
+          return GeometryInfo<3>::standard_to_real_face_line(
+            line,
+            Utilities::get_bit(face_orientation, 0),
+            Utilities::get_bit(face_orientation, 2),
+            Utilities::get_bit(face_orientation, 1));
+        }
+      else // One of the triangular faces
+        {
+          static const ndarray<unsigned int, 6, 3> table = {{{{2, 1, 0}},
+                                                             {{0, 1, 2}},
+                                                             {{1, 0, 2}},
+                                                             {{1, 2, 0}},
+                                                             {{0, 2, 1}},
+                                                             {{2, 0, 1}}}};
+
+          return table[face_orientation][line];
+        }
+    }
+  else if (*this == ReferenceCells::Hexahedron)
+    {
+      return GeometryInfo<3>::standard_to_real_face_line(
+        line,
+        Utilities::get_bit(face_orientation, 0),
+        Utilities::get_bit(face_orientation, 2),
+        Utilities::get_bit(face_orientation, 1));
+    }
+
+  Assert(false, ExcNotImplemented());
+  return numbers::invalid_unsigned_int;
+}
+
+
+
+namespace ReferenceCells
+{
+  template <int dim>
+  inline constexpr const ReferenceCell &
+  get_simplex()
+  {
+    switch (dim)
+      {
+        case 0:
+          return ReferenceCells::Vertex;
+        case 1:
+          return ReferenceCells::Line;
+        case 2:
+          return ReferenceCells::Triangle;
+        case 3:
+          return ReferenceCells::Tetrahedron;
+        default:
+          Assert(false, ExcNotImplemented());
+          return ReferenceCells::Invalid;
+      }
+  }
+
+
+
+  template <int dim>
+  inline constexpr const ReferenceCell &
+  get_hypercube()
+  {
+    switch (dim)
+      {
+        case 0:
+          return ReferenceCells::Vertex;
+        case 1:
+          return ReferenceCells::Line;
+        case 2:
+          return ReferenceCells::Quadrilateral;
+        case 3:
+          return ReferenceCells::Hexahedron;
+        default:
+          Assert(false, ExcNotImplemented());
+          return ReferenceCells::Invalid;
+      }
+  }
+} // namespace ReferenceCells
 
 
 inline ReferenceCell
@@ -554,33 +1496,32 @@ ReferenceCell::n_vertices_to_type(const int dim, const unsigned int n_vertices)
   AssertIndexRange(dim, 4);
   AssertIndexRange(n_vertices, 9);
 
-  const auto X = ReferenceCells::Invalid;
-  static const std::array<std::array<ReferenceCell, 9>,
-                          4>
-    table = {{// dim 0
-              {{X, ReferenceCells::Vertex, X, X, X, X, X, X, X}},
-              // dim 1
-              {{X, X, ReferenceCells::Line, X, X, X, X, X, X}},
-              // dim 2
-              {{X,
-                X,
-                X,
-                ReferenceCells::Triangle,
-                ReferenceCells::Quadrilateral,
-                X,
-                X,
-                X,
-                X}},
-              // dim 3
-              {{X,
-                X,
-                X,
-                X,
-                ReferenceCells::Tetrahedron,
-                ReferenceCells::Pyramid,
-                ReferenceCells::Wedge,
-                X,
-                ReferenceCells::Hexahedron}}}};
+  const auto                                X     = ReferenceCells::Invalid;
+  static const ndarray<ReferenceCell, 4, 9> table = {
+    {// dim 0
+     {{X, ReferenceCells::Vertex, X, X, X, X, X, X, X}},
+     // dim 1
+     {{X, X, ReferenceCells::Line, X, X, X, X, X, X}},
+     // dim 2
+     {{X,
+       X,
+       X,
+       ReferenceCells::Triangle,
+       ReferenceCells::Quadrilateral,
+       X,
+       X,
+       X,
+       X}},
+     // dim 3
+     {{X,
+       X,
+       X,
+       X,
+       ReferenceCells::Tetrahedron,
+       ReferenceCells::Pyramid,
+       ReferenceCells::Wedge,
+       X,
+       ReferenceCells::Hexahedron}}}};
   Assert(table[dim][n_vertices] != ReferenceCells::Invalid,
          ExcMessage("The combination of dim = " + std::to_string(dim) +
                     " and n_vertices = " + std::to_string(n_vertices) +
@@ -596,12 +1537,12 @@ ReferenceCell::d_linear_shape_function(const Point<dim> & xi,
                                        const unsigned int i) const
 {
   AssertDimension(dim, get_dimension());
-  if (*this == get_hypercube<dim>())
+  if (*this == ReferenceCells::get_hypercube<dim>())
     return GeometryInfo<dim>::d_linear_shape_function(xi, i);
 
   if (*this ==
       ReferenceCells::Triangle) // see also
-                                // Simplex::ScalarPolynomial::compute_value
+                                // BarycentricPolynomials<2>::compute_value
     {
       switch (i)
         {
@@ -616,7 +1557,7 @@ ReferenceCell::d_linear_shape_function(const Point<dim> & xi,
 
   if (*this ==
       ReferenceCells::Tetrahedron) // see also
-                                   // Simplex::ScalarPolynomial::compute_value
+                                   // BarycentricPolynomials<3>::compute_value
     {
       switch (i)
         {
@@ -634,7 +1575,7 @@ ReferenceCell::d_linear_shape_function(const Point<dim> & xi,
 
   if (*this ==
       ReferenceCells::Wedge) // see also
-                             // Simplex::ScalarWedgePolynomial::compute_value
+                             // ScalarLagrangePolynomialWedge::compute_value
     {
       return ReferenceCell(ReferenceCells::Triangle)
                .d_linear_shape_function<2>(Point<2>(xi[std::min(0, dim - 1)],
@@ -645,9 +1586,9 @@ ReferenceCell::d_linear_shape_function(const Point<dim> & xi,
                                            i / 3);
     }
 
-  if (*this == ReferenceCells::
-                 Pyramid) // see also
-                          // Simplex::ScalarPyramidPolynomial::compute_value
+  if (*this ==
+      ReferenceCells::Pyramid) // see also
+                               // ScalarLagrangePolynomialPyramid::compute_value
     {
       const double Q14 = 0.25;
       double       ration;
@@ -690,12 +1631,12 @@ ReferenceCell::d_linear_shape_function_gradient(const Point<dim> & xi,
                                                 const unsigned int i) const
 {
   AssertDimension(dim, get_dimension());
-  if (*this == get_hypercube<dim>())
+  if (*this == ReferenceCells::get_hypercube<dim>())
     return GeometryInfo<dim>::d_linear_shape_function_gradient(xi, i);
 
   if (*this ==
       ReferenceCells::Triangle) // see also
-                                // Simplex::ScalarPolynomial::compute_grad
+                                // BarycentricPolynomials<2>::compute_grad
     {
       switch (i)
         {
@@ -722,7 +1663,7 @@ ReferenceCell::unit_tangential_vectors(const unsigned int face_no,
   AssertDimension(dim, get_dimension());
   AssertIndexRange(i, dim - 1);
 
-  if (*this == get_hypercube<dim>())
+  if (*this == ReferenceCells::get_hypercube<dim>())
     {
       AssertIndexRange(face_no, GeometryInfo<dim>::faces_per_cell);
       return GeometryInfo<dim>::unit_tangential_vectors[face_no][i];
@@ -740,7 +1681,7 @@ ReferenceCell::unit_tangential_vectors(const unsigned int face_no,
   else if (*this == ReferenceCells::Tetrahedron)
     {
       AssertIndexRange(face_no, 4);
-      static const std::array<std::array<Tensor<1, dim>, 2>, 4> table = {
+      static const ndarray<Tensor<1, dim>, 4, 2> table = {
         {{{Point<dim>(0, 1, 0), Point<dim>(1, 0, 0)}},
          {{Point<dim>(1, 0, 0), Point<dim>(0, 0, 1)}},
          {{Point<dim>(0, 0, 1), Point<dim>(0, 1, 0)}},
@@ -756,20 +1697,20 @@ ReferenceCell::unit_tangential_vectors(const unsigned int face_no,
   else if (*this == ReferenceCells::Wedge)
     {
       AssertIndexRange(face_no, 5);
-      static const std::array<std::array<Tensor<1, dim>, 2>, 5> table = {
+      static const ndarray<Tensor<1, dim>, 5, 2> table = {
         {{{Point<dim>(0, 1, 0), Point<dim>(1, 0, 0)}},
+         {{Point<dim>(1, 0, 0), Point<dim>(0, 1, 0)}},
          {{Point<dim>(1, 0, 0), Point<dim>(0, 0, 1)}},
          {{Point<dim>(-1 / std::sqrt(2.0), +1 / std::sqrt(2.0), 0),
            Point<dim>(0, 0, 1)}},
-         {{Point<dim>(0, 0, 1), Point<dim>(0, 1, 0)}},
-         {{Point<dim>(1, 0, 0), Point<dim>(0, 0, 1)}}}};
+         {{Point<dim>(0, 0, 1), Point<dim>(0, 1, 0)}}}};
 
       return table[face_no][i];
     }
   else if (*this == ReferenceCells::Pyramid)
     {
       AssertIndexRange(face_no, 5);
-      static const std::array<std::array<Tensor<1, dim>, 2>, 5> table = {
+      static const ndarray<Tensor<1, dim>, 5, 2> table = {
         {{{Point<dim>(0, 1, 0), Point<dim>(1, 0, 0)}},
          {{Point<dim>(+1.0 / sqrt(2.0), 0, +1.0 / sqrt(2.0)),
            Point<dim>(0, 1, 0)}},
@@ -820,1154 +1761,41 @@ ReferenceCell::unit_normal_vectors(const unsigned int face_no) const
 }
 
 
-namespace internal
+
+inline bool
+ReferenceCell::standard_vs_true_line_orientation(
+  const unsigned int  line,
+  const unsigned char face_orientation_raw,
+  const unsigned char line_orientation) const
 {
-  /**
-   * A namespace for geometric information on reference cells.
-   */
-  namespace ReferenceCell
-  {
-    /**
-     * Interface to be used in TriaAccessor/TriaCellAccessor to access
-     * sub-entities of dimension d' of geometric entities of dimension d, with
-     * 0<=d'<d<=3.
-     */
-    struct Base
+  if (*this == ReferenceCells::Hexahedron)
     {
-      /**
-       * Destructor.
-       */
-      virtual ~Base() = default;
-
-      /**
-       * Number of vertices.
-       */
-      virtual unsigned int
-      n_vertices() const
-      {
-        Assert(false, ExcNotImplemented());
-        return 0;
-      }
-
-      /**
-       * Number of lines.
-       */
-      virtual unsigned int
-      n_lines() const
-      {
-        Assert(false, ExcNotImplemented());
-        return 0;
-      }
-
-
-      /**
-       * Number of faces.
-       */
-      virtual unsigned int
-      n_faces() const
-      {
-        Assert(false, ExcNotImplemented());
-        return 0;
-      }
-
-      /**
-       * Return an object that can be thought of as an array containing all
-       * indices from zero to n_vertices().
-       */
-      inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
-      vertex_indices() const
-      {
-        return {0U, n_vertices()};
-      }
-
-      /**
-       * Return an object that can be thought of as an array containing all
-       * indices from zero to n_lines().
-       */
-      inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
-      line_indices() const
-      {
-        return {0U, n_lines()};
-      }
-
-      /**
-       * Return an object that can be thought of as an array containing all
-       * indices from zero to n_faces().
-       */
-      inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
-      face_indices() const
-      {
-        return {0U, n_faces()};
-      }
-
-      /**
-       * Standard decomposition of vertex index into face and face-vertex
-       * index.
-       */
-      virtual std::array<unsigned int, 2>
-      standard_vertex_to_face_and_vertex_index(const unsigned int vertex) const
-      {
-        Assert(false, ExcNotImplemented());
-
-        (void)vertex;
-
-        return {{0u, 0u}};
-      }
-
-      /**
-       * Standard decomposition of line index into face and face-line index.
-       */
-      virtual std::array<unsigned int, 2>
-      standard_line_to_face_and_line_index(const unsigned int line) const
-      {
-        Assert(false, ExcNotImplemented());
-
-        (void)line;
-
-        return {{0, 0}};
-      }
-
-      /**
-       * Correct vertex index depending on face orientation.
-       */
-      virtual unsigned int
-      standard_to_real_face_vertex(const unsigned int  vertex,
-                                   const unsigned int  face,
-                                   const unsigned char face_orientation) const
-      {
-        Assert(false, ExcNotImplemented());
-
-        (void)vertex;
-        (void)face;
-        (void)face_orientation;
-
-        return 0;
-      }
-
-      /**
-       * Correct line index depending on face orientation.
-       */
-      virtual unsigned int
-      standard_to_real_face_line(const unsigned int  line,
-                                 const unsigned int  face,
-                                 const unsigned char face_orientation) const
-      {
-        Assert(false, ExcNotImplemented());
-
-        (void)line;
-        (void)face;
-        (void)face_orientation;
-
-        return 0;
-      }
-
-      /**
-       * Combine face and line orientation.
-       */
-      virtual bool
-      combine_face_and_line_orientation(
-        const unsigned int  line,
-        const unsigned char face_orientation,
-        const unsigned char line_orientation) const
-      {
-        Assert(false, ExcNotImplemented());
-
-        (void)line;
-        (void)face_orientation;
-        (void)line_orientation;
-
-        return true;
-      }
-
-      /**
-       * Return reference-cell type of face @p face_no.
-       */
-      virtual dealii::ReferenceCell
-      face_reference_cell(const unsigned int face_no) const
-      {
-        Assert(false, ExcNotImplemented());
-        (void)face_no;
-
-        return ReferenceCells::Invalid;
-      }
-
-      /**
-       * Map face line number to cell line number.
-       */
-      virtual unsigned int
-      face_to_cell_lines(const unsigned int  face,
-                         const unsigned int  line,
-                         const unsigned char face_orientation) const
-      {
-        Assert(false, ExcNotImplemented());
-        (void)face;
-        (void)line;
-        (void)face_orientation;
-
-        return 0;
-      }
-
-      /**
-       * Map face vertex number to cell vertex number.
-       */
-      virtual unsigned int
-      face_to_cell_vertices(const unsigned int  face,
-                            const unsigned int  vertex,
-                            const unsigned char face_orientation) const
-      {
-        Assert(false, ExcNotImplemented());
-        (void)face;
-        (void)vertex;
-        (void)face_orientation;
-
-        return 0;
-      }
-
-      /**
-       * Map an ExodusII vertex number to a deal.II vertex number.
-       */
-      virtual unsigned int
-      exodusii_vertex_to_deal_vertex(const unsigned int vertex_n) const
-      {
-        Assert(false, ExcNotImplemented());
-        (void)vertex_n;
-
-        return 0;
-      }
-
-      /**
-       * Map an ExodusII face number to a deal.II face number.
-       */
-      virtual unsigned int
-      exodusii_face_to_deal_face(const unsigned int face_n) const
-      {
-        Assert(false, ExcNotImplemented());
-        (void)face_n;
-
-        return 0;
-      }
-
-      /**
-       * Indices of child cells that are adjacent to a certain face of the
-       * mother cell.
-       */
-      virtual unsigned int
-      child_cell_on_face(const unsigned int face_n,
-                         const unsigned int subface_n) const
-      {
-        Assert(false, ExcNotImplemented());
-        (void)face_n;
-        (void)subface_n;
-
-        return numbers::invalid_unsigned_int;
-      }
-    };
-
-
-    /**
-     * Base class for tensor-product geometric entities.
-     */
-    template <int dim>
-    struct TensorProductBase : Base
-    {
-      unsigned int
-      n_vertices() const override
-      {
-        return GeometryInfo<dim>::vertices_per_cell;
-      }
-
-      unsigned int
-      n_lines() const override
-      {
-        return GeometryInfo<dim>::lines_per_cell;
-      }
-
-      unsigned int
-      n_faces() const override
-      {
-        return GeometryInfo<dim>::faces_per_cell;
-      }
-
-      unsigned int
-      face_to_cell_lines(const unsigned int  face,
-                         const unsigned int  line,
-                         const unsigned char face_orientation) const override
-      {
-        return GeometryInfo<dim>::face_to_cell_lines(
-          face,
-          line,
-          Utilities::get_bit(face_orientation, 0),
-          Utilities::get_bit(face_orientation, 2),
-          Utilities::get_bit(face_orientation, 1));
-      }
-
-      unsigned int
-      face_to_cell_vertices(const unsigned int  face,
-                            const unsigned int  vertex,
-                            const unsigned char face_orientation) const override
-      {
-        return GeometryInfo<dim>::face_to_cell_vertices(
-          face,
-          vertex,
-          Utilities::get_bit(face_orientation, 0),
-          Utilities::get_bit(face_orientation, 2),
-          Utilities::get_bit(face_orientation, 1));
-      }
-    };
-
-
-
-    /*
-     * Vertex.
-     */
-    struct Vertex : public TensorProductBase<0>
-    {
-      dealii::ReferenceCell
-      face_reference_cell(const unsigned int face_no) const override
-      {
-        (void)face_no;
-        return ReferenceCells::Invalid;
-      }
-
-      virtual unsigned int
-      exodusii_face_to_deal_face(const unsigned int face_n) const override
-      {
-        (void)face_n;
-        AssertIndexRange(face_n, n_faces());
-
-        return 0;
-      }
-    };
-
-
-
-    /*
-     * Line.
-     */
-    struct Line : public TensorProductBase<1>
-    {
-      dealii::ReferenceCell
-      face_reference_cell(const unsigned int face_no) const override
-      {
-        (void)face_no;
-        return ReferenceCells::Vertex;
-      }
-
-      virtual unsigned int
-      exodusii_vertex_to_deal_vertex(const unsigned int vertex_n) const override
-      {
-        AssertIndexRange(vertex_n, n_vertices());
-        return vertex_n;
-      }
-
-      virtual unsigned int
-      exodusii_face_to_deal_face(const unsigned int face_n) const override
-      {
-        AssertIndexRange(face_n, n_faces());
-        return face_n;
-      }
-    };
-
-
-
-    /**
-     * Triangle.
-     */
-    struct Triangle : public Base
-    {
-      unsigned int
-      n_vertices() const override
-      {
-        return 3;
-      }
-
-      unsigned int
-      n_lines() const override
-      {
-        return 3;
-      }
-
-      unsigned int
-      n_faces() const override
-      {
-        return this->n_lines();
-      }
-
-      std::array<unsigned int, 2>
-      standard_vertex_to_face_and_vertex_index(
-        const unsigned int vertex) const override
-      {
-        AssertIndexRange(vertex, 3);
-
-        static const std::array<std::array<unsigned int, 2>, 3> table = {
-          {{{0, 0}}, {{0, 1}}, {{1, 1}}}};
-
-        return table[vertex];
-      }
-
-      unsigned int
-      standard_to_real_face_vertex(
-        const unsigned int  vertex,
-        const unsigned int  face,
-        const unsigned char line_orientation) const override
-      {
-        (void)face;
-
-        static const std::array<std::array<unsigned int, 2>, 2> table = {
-          {{{1, 0}}, {{0, 1}}}};
-
-        return table[line_orientation][vertex];
-      }
-
-      dealii::ReferenceCell
-      face_reference_cell(const unsigned int face_no) const override
-      {
-        (void)face_no;
-
-        AssertIndexRange(face_no, n_faces());
-
-        return dealii::ReferenceCells::Line;
-      }
-
-      unsigned int
-      face_to_cell_lines(const unsigned int  face,
-                         const unsigned int  line,
-                         const unsigned char face_orientation) const override
-      {
-        AssertIndexRange(face, n_faces());
-        AssertDimension(line, 0);
-
-        (void)line;
-        (void)face_orientation;
-
-        return face;
-      }
-
-      unsigned int
-      face_to_cell_vertices(const unsigned int  face,
-                            const unsigned int  vertex,
-                            const unsigned char face_orientation) const override
-      {
-        static const std::array<std::array<unsigned int, 2>, 3> table = {
-          {{{0, 1}}, {{1, 2}}, {{2, 0}}}};
-
-        return table[face][face_orientation ? vertex : (1 - vertex)];
-      }
-
-      virtual unsigned int
-      exodusii_vertex_to_deal_vertex(const unsigned int vertex_n) const override
-      {
-        AssertIndexRange(vertex_n, n_vertices());
-        return vertex_n;
-      }
-
-      virtual unsigned int
-      exodusii_face_to_deal_face(const unsigned int face_n) const override
-      {
-        AssertIndexRange(face_n, n_faces());
-        return face_n;
-      }
-
-      virtual unsigned int
-      child_cell_on_face(const unsigned int face_n,
-                         const unsigned int subface_n) const override
-      {
-        static constexpr unsigned int subcells[3][2] = {{0, 1}, {1, 2}, {2, 0}};
-
-        return subcells[face_n][subface_n];
-      }
-    };
-
-
-
-    /**
-     * Quadrilateral
-     */
-    struct Quadrilateral : public TensorProductBase<2>
-    {
-      std::array<unsigned int, 2>
-      standard_vertex_to_face_and_vertex_index(
-        const unsigned int vertex) const override
-      {
-        return GeometryInfo<2>::standard_quad_vertex_to_line_vertex_index(
-          vertex);
-      }
-
-      unsigned int
-      standard_to_real_face_vertex(
-        const unsigned int  vertex,
-        const unsigned int  face,
-        const unsigned char line_orientation) const override
-      {
-        (void)face;
-
-        return GeometryInfo<2>::standard_to_real_line_vertex(vertex,
-                                                             line_orientation);
-      }
-
-      dealii::ReferenceCell
-      face_reference_cell(const unsigned int face_no) const override
-      {
-        (void)face_no;
-        return dealii::ReferenceCells::Line;
-      }
-
-      virtual unsigned int
-      exodusii_vertex_to_deal_vertex(const unsigned int vertex_n) const override
-      {
-        AssertIndexRange(vertex_n, n_vertices());
-        constexpr std::array<unsigned int, 4> exodus_to_deal{{0, 1, 3, 2}};
-        return exodus_to_deal[vertex_n];
-      }
-
-      virtual unsigned int
-      exodusii_face_to_deal_face(const unsigned int face_n) const override
-      {
-        AssertIndexRange(face_n, n_faces());
-        constexpr std::array<unsigned int, 4> exodus_to_deal{{2, 1, 3, 0}};
-        return exodus_to_deal[face_n];
-      }
-    };
-
-
-
-    /**
-     * Tetrahedron
-     */
-    struct Tetrahedron : public Base
-    {
-      unsigned int
-      n_vertices() const override
-      {
-        return 4;
-      }
-
-      unsigned int
-      n_lines() const override
-      {
-        return 6;
-      }
-
-      unsigned int
-      n_faces() const override
-      {
-        return 4;
-      }
-
-      std::array<unsigned int, 2>
-      standard_line_to_face_and_line_index(
-        const unsigned int line) const override
-      {
-        static const std::array<unsigned int, 2> table[6] = {
-          {{0, 0}}, {{0, 1}}, {{0, 2}}, {{1, 1}}, {{1, 2}}, {{2, 1}}};
-
-        return table[line];
-      }
-
-      unsigned int
-      standard_to_real_face_line(
-        const unsigned int  line,
-        const unsigned int  face,
-        const unsigned char face_orientation) const override
-      {
-        (void)face;
-
-        static const std::array<std::array<unsigned int, 3>, 6> table = {
-          {{{2, 1, 0}},
-           {{0, 1, 2}},
-           {{1, 0, 2}},
-           {{1, 2, 0}},
-           {{0, 2, 1}},
-           {{2, 0, 1}}}};
-
-        return table[face_orientation][line];
-      }
-
-      bool
-      combine_face_and_line_orientation(
-        const unsigned int  line,
-        const unsigned char face_orientation_raw,
-        const unsigned char line_orientation) const override
-      {
-        (void)line;
-        (void)face_orientation_raw;
-
-        return line_orientation;
-      }
-
-      std::array<unsigned int, 2>
-      standard_vertex_to_face_and_vertex_index(
-        const unsigned int vertex) const override
-      {
-        AssertIndexRange(vertex, 4);
-
-        static const std::array<unsigned int, 2> table[4] = {{{0, 0}},
-                                                             {{0, 1}},
-                                                             {{0, 2}},
-                                                             {{1, 2}}};
-
-        return table[vertex];
-      }
-
-      unsigned int
-      standard_to_real_face_vertex(
-        const unsigned int  vertex,
-        const unsigned int  face,
-        const unsigned char face_orientation) const override
-      {
-        AssertIndexRange(face_orientation, 6);
-        (void)face;
-
-        static const std::array<std::array<unsigned int, 3>, 6> table = {
-          {{{0, 2, 1}},
-           {{0, 1, 2}},
-           {{2, 1, 0}},
-           {{1, 2, 0}},
-           {{1, 0, 2}},
-           {{2, 0, 1}}}};
-
-        return table[face_orientation][vertex];
-      }
-
-      dealii::ReferenceCell
-      face_reference_cell(const unsigned int face_no) const override
-      {
-        (void)face_no;
-
-        AssertIndexRange(face_no, n_faces());
-
-        return dealii::ReferenceCells::Triangle;
-      }
-
-      unsigned int
-      face_to_cell_lines(const unsigned int  face,
-                         const unsigned int  line,
-                         const unsigned char face_orientation) const override
-      {
-        AssertIndexRange(face, n_faces());
-
-        const static std::array<std::array<unsigned int, 3>, 4> table = {
-          {{{0, 1, 2}}, {{0, 3, 4}}, {{2, 5, 3}}, {{1, 4, 5}}}};
-
-        return table[face]
-                    [standard_to_real_face_line(line, face, face_orientation)];
-      }
-
-      unsigned int
-      face_to_cell_vertices(const unsigned int  face,
-                            const unsigned int  vertex,
-                            const unsigned char face_orientation) const override
-      {
-        static const std::array<std::array<unsigned int, 3>, 4> table = {
-          {{{0, 1, 2}}, {{1, 0, 3}}, {{0, 2, 3}}, {{2, 1, 3}}}};
-
-        return table[face][standard_to_real_face_vertex(
-          vertex, face, face_orientation)];
-      }
-
-      virtual unsigned int
-      exodusii_vertex_to_deal_vertex(const unsigned int vertex_n) const override
-      {
-        AssertIndexRange(vertex_n, n_vertices());
-        return vertex_n;
-      }
-
-      virtual unsigned int
-      exodusii_face_to_deal_face(const unsigned int face_n) const override
-      {
-        AssertIndexRange(face_n, n_faces());
-        constexpr std::array<unsigned int, 4> exodus_to_deal{{1, 3, 2, 0}};
-        return exodus_to_deal[face_n];
-      }
-    };
-
-
-
-    /**
-     * Pyramid.
-     */
-    struct Pyramid : public Base
-    {
-      unsigned int
-      n_vertices() const override
-      {
-        return 5;
-      }
-
-      unsigned int
-      n_lines() const override
-      {
-        return 8;
-      }
-
-      unsigned int
-      n_faces() const override
-      {
-        return 5;
-      }
-
-      std::array<unsigned int, 2>
-      standard_line_to_face_and_line_index(
-        const unsigned int line) const override
-      {
-        static const std::array<unsigned int, 2> table[8] = {{{0, 0}},
-                                                             {{0, 1}},
-                                                             {{0, 2}},
-                                                             {{0, 3}},
-                                                             {{1, 2}},
-                                                             {{2, 1}},
-                                                             {{1, 1}},
-                                                             {{2, 2}}};
-
-        return table[line];
-      }
-
-      unsigned int
-      standard_to_real_face_line(
-        const unsigned int  line,
-        const unsigned int  face,
-        const unsigned char face_orientation) const override
-      {
-        if (face == 0) // QUAD
-          {
-            return GeometryInfo<3>::standard_to_real_face_line(
-              line,
-              Utilities::get_bit(face_orientation, 0),
-              Utilities::get_bit(face_orientation, 2),
-              Utilities::get_bit(face_orientation, 1));
-          }
-        else // TRI
-          {
-            static const std::array<std::array<unsigned int, 3>, 6> table = {
-              {{{2, 1, 0}},
-               {{0, 1, 2}},
-               {{1, 0, 2}},
-               {{1, 2, 0}},
-               {{0, 2, 1}},
-               {{2, 0, 1}}}};
-
-            return table[face_orientation][line];
-          }
-      }
-
-      bool
-      combine_face_and_line_orientation(
-        const unsigned int  line,
-        const unsigned char face_orientation_raw,
-        const unsigned char line_orientation) const override
-      {
-        (void)line;
-        (void)face_orientation_raw;
-
-        return line_orientation;
-      }
-
-      std::array<unsigned int, 2>
-      standard_vertex_to_face_and_vertex_index(
-        const unsigned int vertex) const override
-      {
-        static const std::array<unsigned int, 2> table[5] = {
-          {{0, 0}}, {{0, 1}}, {{0, 2}}, {{0, 3}}, {{1, 2}}};
-
-        return table[vertex];
-      }
-
-      unsigned int
-      standard_to_real_face_vertex(
-        const unsigned int  vertex,
-        const unsigned int  face,
-        const unsigned char face_orientation) const override
-      {
-        if (face == 0) // Quad
-          {
-            return GeometryInfo<3>::standard_to_real_face_vertex(
-              vertex,
-              Utilities::get_bit(face_orientation, 0),
-              Utilities::get_bit(face_orientation, 2),
-              Utilities::get_bit(face_orientation, 1));
-          }
-        else // Tri
-          {
-            static const std::array<std::array<unsigned int, 3>, 6> table = {
-              {{{0, 2, 1}},
-               {{0, 1, 2}},
-               {{2, 1, 0}},
-               {{1, 2, 0}},
-               {{1, 0, 2}},
-               {{2, 0, 1}}}};
-
-            return table[face_orientation][vertex];
-          }
-      }
-
-      dealii::ReferenceCell
-      face_reference_cell(const unsigned int face_no) const override
-      {
-        AssertIndexRange(face_no, n_faces());
-
-        if (face_no == 0)
-          return dealii::ReferenceCells::Quadrilateral;
-        else
-          return dealii::ReferenceCells::Triangle;
-      }
-
-      unsigned int
-      face_to_cell_vertices(const unsigned int  face,
-                            const unsigned int  vertex,
-                            const unsigned char face_orientation) const override
-      {
-        AssertIndexRange(face, n_faces());
-        if (face == 0)
-          {
-            AssertIndexRange(vertex, 4);
-          }
-        else
-          {
-            AssertIndexRange(vertex, 3);
-          }
-        constexpr auto X = numbers::invalid_unsigned_int;
-        static const std::array<std::array<unsigned int, 4>, 5> table = {
-          {{{0, 1, 2, 3}},
-           {{0, 2, 4, X}},
-           {{3, 1, 4, X}},
-           {{1, 0, 4, X}},
-           {{2, 3, 4, X}}}};
-
-        return table[face][standard_to_real_face_vertex(
-          vertex, face, face_orientation)];
-      }
-
-      virtual unsigned int
-      exodusii_vertex_to_deal_vertex(const unsigned int vertex_n) const override
-      {
-        AssertIndexRange(vertex_n, n_vertices());
-        constexpr std::array<unsigned int, 5> exodus_to_deal{{0, 1, 3, 2, 4}};
-        return exodus_to_deal[vertex_n];
-      }
-
-      virtual unsigned int
-      exodusii_face_to_deal_face(const unsigned int face_n) const override
-      {
-        AssertIndexRange(face_n, n_faces());
-        constexpr std::array<unsigned int, 5> exodus_to_deal{{3, 2, 4, 1, 0}};
-        return exodus_to_deal[face_n];
-      }
-    };
-
-
-
-    /**
-     * Wedge.
-     */
-    struct Wedge : public Base
-    {
-      unsigned int
-      n_vertices() const override
-      {
-        return 6;
-      }
-
-      unsigned int
-      n_lines() const override
-      {
-        return 9;
-      }
-
-      unsigned int
-      n_faces() const override
-      {
-        return 5;
-      }
-
-      std::array<unsigned int, 2>
-      standard_line_to_face_and_line_index(
-        const unsigned int line) const override
-      {
-        static const std::array<unsigned int, 2> table[9] = {{{0, 0}},
-                                                             {{0, 2}},
-                                                             {{0, 1}},
-                                                             {{1, 0}},
-                                                             {{1, 1}},
-                                                             {{1, 2}},
-                                                             {{2, 0}},
-                                                             {{2, 1}},
-                                                             {{3, 1}}};
-
-        return table[line];
-      }
-
-      unsigned int
-      standard_to_real_face_line(
-        const unsigned int  line,
-        const unsigned int  face,
-        const unsigned char face_orientation) const override
-      {
-        if (face > 1) // QUAD
-          {
-            return GeometryInfo<3>::standard_to_real_face_line(
-              line,
-              Utilities::get_bit(face_orientation, 0),
-              Utilities::get_bit(face_orientation, 2),
-              Utilities::get_bit(face_orientation, 1));
-          }
-        else // TRI
-          {
-            static const std::array<std::array<unsigned int, 3>, 6> table = {
-              {{{2, 1, 0}},
-               {{0, 1, 2}},
-               {{1, 0, 2}},
-               {{1, 2, 0}},
-               {{0, 2, 1}},
-               {{2, 0, 1}}}};
-
-            return table[face_orientation][line];
-          }
-      }
-
-      bool
-      combine_face_and_line_orientation(
-        const unsigned int  line,
-        const unsigned char face_orientation_raw,
-        const unsigned char line_orientation) const override
-      {
-        (void)line;
-        (void)face_orientation_raw;
-
-        return line_orientation;
-      }
-
-      std::array<unsigned int, 2>
-      standard_vertex_to_face_and_vertex_index(
-        const unsigned int vertex) const override
-      {
-        static const std::array<std::array<unsigned int, 2>, 6> table = {
-          {{{0, 1}}, {{0, 0}}, {{0, 2}}, {{1, 0}}, {{1, 1}}, {{1, 2}}}};
-
-        return table[vertex];
-      }
-
-      unsigned int
-      standard_to_real_face_vertex(
-        const unsigned int  vertex,
-        const unsigned int  face,
-        const unsigned char face_orientation) const override
-      {
-        if (face > 1) // QUAD
-          {
-            return GeometryInfo<3>::standard_to_real_face_vertex(
-              vertex,
-              Utilities::get_bit(face_orientation, 0),
-              Utilities::get_bit(face_orientation, 2),
-              Utilities::get_bit(face_orientation, 1));
-          }
-        else // TRI
-          {
-            static const std::array<std::array<unsigned int, 3>, 6> table = {
-              {{{0, 2, 1}},
-               {{0, 1, 2}},
-               {{2, 1, 0}},
-               {{1, 2, 0}},
-               {{1, 0, 2}},
-               {{2, 0, 1}}}};
-
-            return table[face_orientation][vertex];
-          }
-      }
-
-      dealii::ReferenceCell
-      face_reference_cell(const unsigned int face_no) const override
-      {
-        AssertIndexRange(face_no, n_faces());
-
-        if (face_no > 1)
-          return dealii::ReferenceCells::Quadrilateral;
-        else
-          return dealii::ReferenceCells::Triangle;
-      }
-
-      unsigned int
-      face_to_cell_vertices(const unsigned int  face,
-                            const unsigned int  vertex,
-                            const unsigned char face_orientation) const override
-      {
-        AssertIndexRange(face, n_faces());
-        if (face < 2)
-          {
-            AssertIndexRange(vertex, 3);
-          }
-        else
-          {
-            AssertIndexRange(vertex, 4);
-          }
-        constexpr auto X = numbers::invalid_unsigned_int;
-        static const std::array<std::array<unsigned int, 4>, 6> table = {
-          {{{1, 0, 2, X}},
-           {{3, 4, 5, X}},
-           {{0, 1, 3, 4}},
-           {{1, 2, 4, 5}},
-           {{2, 0, 5, 3}}}};
-
-        return table[face][standard_to_real_face_vertex(
-          vertex, face, face_orientation)];
-      }
-
-      virtual unsigned int
-      exodusii_vertex_to_deal_vertex(const unsigned int vertex_n) const override
-      {
-        AssertIndexRange(vertex_n, n_vertices());
-        constexpr std::array<unsigned int, 6> exodus_to_deal{
-          {2, 1, 0, 5, 4, 3}};
-        return exodus_to_deal[vertex_n];
-      }
-
-      virtual unsigned int
-      exodusii_face_to_deal_face(const unsigned int face_n) const override
-      {
-        AssertIndexRange(face_n, n_faces());
-        constexpr std::array<unsigned int, 6> exodus_to_deal{{3, 4, 2, 0, 1}};
-        return exodus_to_deal[face_n];
-      }
-    };
-
-
-
-    /**
-     * Hex.
-     */
-    struct Hexahedron : public TensorProductBase<3>
-    {
-      std::array<unsigned int, 2>
-      standard_line_to_face_and_line_index(
-        const unsigned int line) const override
-      {
-        return GeometryInfo<3>::standard_hex_line_to_quad_line_index(line);
-      }
-
-      unsigned int
-      standard_to_real_face_line(
-        const unsigned int  line,
-        const unsigned int  face,
-        const unsigned char face_orientation) const override
-      {
-        (void)face;
-
-        return GeometryInfo<3>::standard_to_real_face_line(
-          line,
-          Utilities::get_bit(face_orientation, 0),
-          Utilities::get_bit(face_orientation, 2),
-          Utilities::get_bit(face_orientation, 1));
-      }
-
-      bool
-      combine_face_and_line_orientation(
-        const unsigned int  line,
-        const unsigned char face_orientation_raw,
-        const unsigned char line_orientation) const override
-      {
-        static const bool bool_table[2][2][2][2] = {
-          {{{true, false},    // lines 0/1, face_orientation=false,
-                              // face_flip=false, face_rotation=false and true
-            {false, true}},   // lines 0/1, face_orientation=false,
-                              // face_flip=true, face_rotation=false and true
-           {{true, true},     // lines 0/1, face_orientation=true,
-                              // face_flip=false, face_rotation=false and true
-            {false, false}}}, // lines 0/1, face_orientation=true,
-                              // face_flip=true, face_rotation=false and true
-
-          {{{true, true}, // lines 2/3 ...
-            {false, false}},
-           {{true, false}, {false, true}}}};
-
-        const bool face_orientation =
-          Utilities::get_bit(face_orientation_raw, 0);
-        const bool face_flip     = Utilities::get_bit(face_orientation_raw, 2);
-        const bool face_rotation = Utilities::get_bit(face_orientation_raw, 1);
-
-        return (
-          static_cast<bool>(line_orientation) ==
-          bool_table[line / 2][face_orientation][face_flip][face_rotation]);
-      }
-
-      std::array<unsigned int, 2>
-      standard_vertex_to_face_and_vertex_index(
-        const unsigned int vertex) const override
-      {
-        return GeometryInfo<3>::standard_hex_vertex_to_quad_vertex_index(
-          vertex);
-      }
-
-      unsigned int
-      standard_to_real_face_vertex(
-        const unsigned int  vertex,
-        const unsigned int  face,
-        const unsigned char face_orientation) const override
-      {
-        (void)face;
-
-        return GeometryInfo<3>::standard_to_real_face_vertex(
-          vertex,
-          Utilities::get_bit(face_orientation, 0),
-          Utilities::get_bit(face_orientation, 2),
-          Utilities::get_bit(face_orientation, 1));
-      }
-
-      dealii::ReferenceCell
-      face_reference_cell(const unsigned int face_no) const override
-      {
-        (void)face_no;
-        return dealii::ReferenceCells::Quadrilateral;
-      }
-
-      virtual unsigned int
-      exodusii_vertex_to_deal_vertex(const unsigned int vertex_n) const override
-      {
-        AssertIndexRange(vertex_n, n_vertices());
-        constexpr std::array<unsigned int, 8> exodus_to_deal{
-          {0, 1, 3, 2, 4, 5, 7, 6}};
-        return exodus_to_deal[vertex_n];
-      }
-
-      virtual unsigned int
-      exodusii_face_to_deal_face(const unsigned int face_n) const override
-      {
-        AssertIndexRange(face_n, n_faces());
-        constexpr std::array<unsigned int, 6> exodus_to_deal{
-          {2, 1, 3, 0, 4, 5}};
-        return exodus_to_deal[face_n];
-      }
-    };
-
-    /**
-     * Return for a given reference-cell type the right Info.
-     */
-    inline const internal::ReferenceCell::Base &
-    get_cell(const dealii::ReferenceCell &type)
-    {
-      static const std::array<std::unique_ptr<internal::ReferenceCell::Base>, 8>
-        gei{{std::make_unique<internal::ReferenceCell::Vertex>(),
-             std::make_unique<internal::ReferenceCell::Line>(),
-             std::make_unique<internal::ReferenceCell::Triangle>(),
-             std::make_unique<internal::ReferenceCell::Quadrilateral>(),
-             std::make_unique<internal::ReferenceCell::Tetrahedron>(),
-             std::make_unique<internal::ReferenceCell::Pyramid>(),
-             std::make_unique<internal::ReferenceCell::Wedge>(),
-             std::make_unique<internal::ReferenceCell::Hexahedron>()}};
-      AssertIndexRange(static_cast<std::uint8_t>(type), 8);
-      return *gei[static_cast<std::uint8_t>(type)];
+      static const bool bool_table[2][2][2][2] = {
+        {{{true, false},    // lines 0/1, face_orientation=false,
+                            // face_flip=false, face_rotation=false and true
+          {false, true}},   // lines 0/1, face_orientation=false,
+                            // face_flip=true, face_rotation=false and true
+         {{true, true},     // lines 0/1, face_orientation=true,
+                            // face_flip=false, face_rotation=false and true
+          {false, false}}}, // lines 0/1, face_orientation=true,
+                            // face_flip=true, face_rotation=false and true
+
+        {{{true, true}, // lines 2/3 ...
+          {false, false}},
+         {{true, false}, {false, true}}}};
+
+      const bool face_orientation = Utilities::get_bit(face_orientation_raw, 0);
+      const bool face_flip        = Utilities::get_bit(face_orientation_raw, 2);
+      const bool face_rotation    = Utilities::get_bit(face_orientation_raw, 1);
+
+      return (static_cast<bool>(line_orientation) ==
+              bool_table[line / 2][face_orientation][face_flip][face_rotation]);
     }
-
-    /**
-     * Return for a given reference-cell type @p and face number @p face_no the
-     * right Info of the @p face_no-th face.
-     */
-    inline const internal::ReferenceCell::Base &
-    get_face(const dealii::ReferenceCell &type, const unsigned int face_no)
-    {
-      return get_cell(get_cell(type).face_reference_cell(face_no));
-    }
-
-  } // namespace ReferenceCell
-} // namespace internal
+  else
+    // TODO: This might actually be wrong for some of the other
+    // kinds of objects. We should check this
+    return true;
+}
 
 
 
@@ -2001,8 +1829,7 @@ namespace internal
     {
       out << "[";
 
-      const unsigned int n_vertices =
-        internal::ReferenceCell::get_cell(entity_type).n_vertices();
+      const unsigned int n_vertices = entity_type.n_vertices();
 
       for (unsigned int i = 0; i < n_vertices; ++i)
         {
@@ -2047,8 +1874,7 @@ inline unsigned char
 ReferenceCell::compute_orientation(const std::array<T, N> &vertices_0,
                                    const std::array<T, N> &vertices_1) const
 {
-  AssertIndexRange(internal::ReferenceCell::get_cell(*this).n_vertices(),
-                   N + 1);
+  AssertIndexRange(n_vertices(), N + 1);
   if (*this == ReferenceCells::Line)
     {
       const std::array<T, 2> i{{vertices_0[0], vertices_0[1]}};

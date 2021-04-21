@@ -349,16 +349,16 @@ MappingFEField<dim, spacedim, VectorType, void>::preserves_vertex_locations()
 template <int dim, int spacedim, typename VectorType>
 bool
 MappingFEField<dim, spacedim, VectorType, void>::is_compatible_with(
-  const ReferenceCell &cell_type) const
+  const ReferenceCell &reference_cell) const
 {
-  Assert(dim == cell_type.get_dimension(),
+  Assert(dim == reference_cell.get_dimension(),
          ExcMessage("The dimension of your mapping (" +
                     Utilities::to_string(dim) +
                     ") and the reference cell cell_type (" +
-                    Utilities::to_string(cell_type.get_dimension()) +
+                    Utilities::to_string(reference_cell.get_dimension()) +
                     " ) do not agree."));
 
-  return euler_dof_handler->get_fe().reference_cell() == cell_type;
+  return euler_dof_handler->get_fe().reference_cell() == reference_cell;
 }
 
 
@@ -591,8 +591,7 @@ MappingFEField<dim, spacedim, VectorType, void>::compute_face_data(
           // TODO: only a single reference cell type possible...
           const auto reference_cell =
             this->euler_dof_handler->get_fe().reference_cell();
-          const auto n_faces =
-            internal::ReferenceCell::get_cell(reference_cell).n_faces();
+          const auto n_faces = reference_cell.n_faces();
 
           // Compute tangentials to the unit cell.
           for (unsigned int i = 0; i < n_faces; ++i)
@@ -645,7 +644,7 @@ MappingFEField<dim, spacedim, VectorType, void>::get_face_data(
     std::make_unique<InternalData>(euler_dof_handler->get_fe(), fe_mask);
   auto &                data = dynamic_cast<InternalData &>(*data_ptr);
   const Quadrature<dim> q(
-    QProjector<dim>::project_to_all_faces(ReferenceCell::get_hypercube<dim>(),
+    QProjector<dim>::project_to_all_faces(ReferenceCells::get_hypercube<dim>(),
                                           quadrature[0]));
   this->compute_face_data(update_flags, q, quadrature[0].size(), data);
 
@@ -663,7 +662,7 @@ MappingFEField<dim, spacedim, VectorType, void>::get_subface_data(
     std::make_unique<InternalData>(euler_dof_handler->get_fe(), fe_mask);
   auto &                data = dynamic_cast<InternalData &>(*data_ptr);
   const Quadrature<dim> q(QProjector<dim>::project_to_all_subfaces(
-    ReferenceCell::get_hypercube<dim>(), quadrature));
+    ReferenceCells::get_hypercube<dim>(), quadrature));
   this->compute_face_data(update_flags, q, quadrature.size(), data);
 
   return data_ptr;
@@ -1727,7 +1726,7 @@ MappingFEField<dim, spacedim, VectorType, void>::fill_fe_face_values(
       face_no,
       numbers::invalid_unsigned_int,
       QProjector<dim>::DataSetDescriptor::face(
-        ReferenceCell::get_hypercube<dim>(),
+        ReferenceCells::get_hypercube<dim>(),
         face_no,
         cell->face_orientation(face_no),
         cell->face_flip(face_no),
@@ -1768,7 +1767,7 @@ MappingFEField<dim, spacedim, VectorType, void>::fill_fe_subface_values(
       face_no,
       numbers::invalid_unsigned_int,
       QProjector<dim>::DataSetDescriptor::subface(
-        ReferenceCell::get_hypercube<dim>(),
+        ReferenceCells::get_hypercube<dim>(),
         face_no,
         subface_no,
         cell->face_orientation(face_no),

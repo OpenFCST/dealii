@@ -154,8 +154,7 @@ MappingFE<dim, spacedim>::InternalData::initialize_face(
 
       // Compute tangentials to the unit cell.
       const auto reference_cell = this->fe.reference_cell();
-      const auto n_faces =
-        internal::ReferenceCell::get_cell(reference_cell).n_faces();
+      const auto n_faces        = reference_cell.n_faces();
 
       for (unsigned int i = 0; i < n_faces; ++i)
         {
@@ -862,9 +861,8 @@ MappingFE<dim, spacedim>::MappingFE(const FiniteElement<dim, spacedim> &fe)
 
   const auto reference_cell = fe.reference_cell();
 
-  const unsigned int n_points = mapping_support_points.size();
-  const unsigned int n_shape_functions =
-    internal::ReferenceCell::get_cell(reference_cell).n_vertices();
+  const unsigned int n_points          = mapping_support_points.size();
+  const unsigned int n_shape_functions = reference_cell.n_vertices();
 
   this->mapping_support_point_weights =
     Table<2, double>(n_points, n_shape_functions);
@@ -1699,7 +1697,13 @@ namespace internal
         const typename Mapping<dim, spacedim>::InternalDataBase &mapping_data,
         const ArrayView<Tensor<rank, spacedim>> &                output)
       {
-        AssertDimension(input.size(), output.size());
+        // In the case of wedges and pyramids, faces might have different
+        // numbers of quadrature points on each face with the result
+        // that input and output have different sizes, since input has
+        // the correct size but the size of output is the maximum of
+        // all possible sizes.
+        AssertIndexRange(input.size(), output.size() + 1);
+
         Assert(
           (dynamic_cast<
              const typename dealii::MappingFE<dim, spacedim>::InternalData *>(
@@ -1719,7 +1723,7 @@ namespace internal
                   typename FEValuesBase<dim>::ExcAccessToUninitializedField(
                     "update_contravariant_transformation"));
 
-                for (unsigned int i = 0; i < output.size(); ++i)
+                for (unsigned int i = 0; i < input.size(); ++i)
                   output[i] =
                     apply_transformation(data.contravariant[i], input[i]);
 
@@ -1740,7 +1744,7 @@ namespace internal
                 if (rank != 1)
                   return;
 
-                for (unsigned int i = 0; i < output.size(); ++i)
+                for (unsigned int i = 0; i < input.size(); ++i)
                   {
                     output[i] =
                       apply_transformation(data.contravariant[i], input[i]);
@@ -1758,7 +1762,7 @@ namespace internal
                   typename FEValuesBase<dim>::ExcAccessToUninitializedField(
                     "update_covariant_transformation"));
 
-                for (unsigned int i = 0; i < output.size(); ++i)
+                for (unsigned int i = 0; i < input.size(); ++i)
                   output[i] = apply_transformation(data.covariant[i], input[i]);
 
                 return;
@@ -2313,16 +2317,16 @@ MappingFE<dim, spacedim>::get_bounding_box(
 template <int dim, int spacedim>
 bool
 MappingFE<dim, spacedim>::is_compatible_with(
-  const ReferenceCell &cell_type) const
+  const ReferenceCell &reference_cell) const
 {
-  Assert(dim == cell_type.get_dimension(),
+  Assert(dim == reference_cell.get_dimension(),
          ExcMessage("The dimension of your mapping (" +
                     Utilities::to_string(dim) +
                     ") and the reference cell cell_type (" +
-                    Utilities::to_string(cell_type.get_dimension()) +
+                    Utilities::to_string(reference_cell.get_dimension()) +
                     " ) do not agree."));
 
-  return fe->reference_cell() == cell_type;
+  return fe->reference_cell() == reference_cell;
 }
 
 
