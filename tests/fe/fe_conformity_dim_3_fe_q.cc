@@ -1,5 +1,21 @@
+// ---------------------------------------------------------------------
+//
+// Copyright (C) 1998 - 2020 by the deal.II authors
+//
+// This file is part of the deal.II library.
+//
+// The deal.II library is free software; you can use it, redistribute
+// it, and/or modify it under the terms of the GNU Lesser General
+// Public License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+// The full text of the license can be found in the file LICENSE.md at
+// the top level directory of deal.II.
+//
+// ---------------------------------------------------------------------
+
 #include <deal.II/fe/fe_q.h>
 
+#include "../tests.h"
 
 // STL
 #include <fstream>
@@ -24,11 +40,11 @@ main(int, char **)
     {
       using namespace FEConforimityTest;
 
-      constexpr int dim = 2;
+      constexpr int dim = 3;
 
-      for (unsigned int fe_degree = 1; fe_degree < 5; ++fe_degree)
+      for (unsigned int fe_degree = 1; fe_degree < 4; ++fe_degree)
         {
-          // H1 conformal
+          // H(div) conformal
           FE_Q<dim> fe(fe_degree);
 
           {

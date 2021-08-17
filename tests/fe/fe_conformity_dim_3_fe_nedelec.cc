@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2021 by the deal.II authors
+// Copyright (C) 1998 - 2020 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -40,13 +40,11 @@ main(int, char **)
     {
       using namespace FEConforimityTest;
 
-      constexpr int dim = 2;
+      constexpr int dim = 3;
 
-      // TODO: This tests only degree 1 since for non standard meshes there is
-      // an orientation issue (even in 2D)
       for (unsigned int fe_degree = 0; fe_degree < 1; ++fe_degree)
         {
-          // H(curl) conformal
+          // H(div) conformal
           FE_Nedelec<dim> fe(fe_degree);
 
           {
