@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2018 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,6 +19,7 @@
 // and on each of these cells each time we evaluate the shape
 // functions.
 
+#include <deal.II/base/numbers.h>
 #include <deal.II/base/quadrature_lib.h>
 
 #include <deal.II/dofs/dof_accessor.h>
@@ -56,7 +57,8 @@ tilt_coordinates(const Point<2> p)
 }
 
 
-void transform_grid(Triangulation<2> &tria, const unsigned int transform)
+void
+transform_grid(Triangulation<2> &tria, const unsigned int transform)
 {
   switch (transform)
     {
@@ -68,7 +70,7 @@ void transform_grid(Triangulation<2> &tria, const unsigned int transform)
       // second round: rotate
       // triangulation
       case 1:
-        GridTools::rotate(3.14159265358 / 2, tria);
+        GridTools::rotate(numbers::PI_2, tria);
         break;
 
       // third round: inflate
@@ -82,7 +84,7 @@ void transform_grid(Triangulation<2> &tria, const unsigned int transform)
       // stretch
       case 3:
         GridTools::scale(.5, tria);
-        GridTools::rotate(-3.14159265358 / 2, tria);
+        GridTools::rotate(-numbers::PI_2, tria);
         GridTools::transform(&stretch_coordinates, tria);
 
         break;

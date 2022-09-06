@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2002 - 2020 by the deal.II authors
+// Copyright (C) 2002 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -27,8 +27,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup mg */
-/*@{*/
+/**
+ * @addtogroup mg
+ * @{
+ */
 
 /**
  * Coarse grid solver using smoother only. This is a little wrapper,
@@ -237,7 +239,7 @@ private:
   LAPACKFullMatrix<number> matrix;
 };
 
-/*@}*/
+/** @} */
 
 #ifndef DOXYGEN
 /* ------------------ Functions for MGCoarseGridApplySmoother -----------*/
@@ -281,7 +283,7 @@ MGCoarseGridApplySmoother<VectorType>::operator()(const unsigned int level,
                                                   VectorType &       dst,
                                                   const VectorType & src) const
 {
-  coarse_smooth->smooth(level, dst, src);
+  coarse_smooth->apply(level, dst, src);
 }
 
 /* ------------------ Functions for MGCoarseGridIterativeSolver ------------ */
@@ -356,23 +358,78 @@ MGCoarseGridIterativeSolver<VectorType,
 
 
 
+namespace internal
+{
+  namespace MGCoarseGridIterativeSolver
+  {
+    template <
+      class VectorType,
+      class SolverType,
+      class MatrixType,
+      class PreconditionerType,
+      std::enable_if_t<
+        std::is_same<VectorType, typename SolverType::vector_type>::value,
+        VectorType> * = nullptr>
+    void
+    solve(SolverType &              solver,
+          const MatrixType &        matrix,
+          const PreconditionerType &preconditioner,
+          VectorType &              dst,
+          const VectorType &        src)
+    {
+      solver.solve(matrix, dst, src, preconditioner);
+    }
+
+    template <
+      class VectorType,
+      class SolverType,
+      class MatrixType,
+      class PreconditionerType,
+      std::enable_if_t<
+        !std::is_same<VectorType, typename SolverType::vector_type>::value,
+        VectorType> * = nullptr>
+    void
+    solve(SolverType &              solver,
+          const MatrixType &        matrix,
+          const PreconditionerType &preconditioner,
+          VectorType &              dst,
+          const VectorType &        src)
+    {
+      typename SolverType::vector_type src_;
+      typename SolverType::vector_type dst_;
+
+      src_ = src;
+      dst_ = dst;
+
+      solver.solve(matrix, dst_, src_, preconditioner);
+
+      dst = dst_;
+    }
+  } // namespace MGCoarseGridIterativeSolver
+} // namespace internal
+
+
+
 template <class VectorType,
           class SolverType,
           class MatrixType,
           class PreconditionerType>
 void
-MGCoarseGridIterativeSolver<VectorType,
-                            SolverType,
-                            MatrixType,
-                            PreconditionerType>::
-operator()(const unsigned int /*level*/,
-           VectorType &      dst,
-           const VectorType &src) const
+                       MGCoarseGridIterativeSolver<
+                         VectorType,
+                         SolverType,
+                         MatrixType,
+                         PreconditionerType>::operator()(const unsigned int /*level*/,
+                                  VectorType &      dst,
+                                  const VectorType &src) const
 {
   Assert(solver != nullptr, ExcNotInitialized());
   Assert(matrix != nullptr, ExcNotInitialized());
   Assert(preconditioner != nullptr, ExcNotInitialized());
-  solver->solve(*matrix, dst, src, *preconditioner);
+
+  dst = 0;
+  internal::MGCoarseGridIterativeSolver::solve(
+    *solver, *matrix, *preconditioner, dst, src);
 }
 
 
@@ -401,10 +458,10 @@ MGCoarseGridHouseholder<number, VectorType>::initialize(
 
 template <typename number, class VectorType>
 void
-MGCoarseGridHouseholder<number, VectorType>::
-operator()(const unsigned int /*level*/,
-           VectorType &      dst,
-           const VectorType &src) const
+MGCoarseGridHouseholder<number, VectorType>::operator()(
+  const unsigned int /*level*/,
+  VectorType &      dst,
+  const VectorType &src) const
 {
   householder.least_squares(dst, src);
 }

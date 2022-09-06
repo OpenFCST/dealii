@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2019 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -34,6 +34,7 @@
 
 #include <deal.II/fe/fe_q.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/intergrid_map.h>
 #include <deal.II/grid/tria_accessor.h>
@@ -44,6 +45,8 @@
 #include <numeric>
 
 #include "../tests.h"
+
+#include "hp_unify_dof_indices.h"
 
 
 template <int dim>
@@ -72,39 +75,21 @@ test()
   fe.push_back(FE_Q<dim>(2));
 
   DoFHandler<dim> dof_handler(triangulation);
-  for (auto &cell : dof_handler.active_cell_iterators())
+  for (const auto &cell : dof_handler.active_cell_iterators() |
+                            IteratorFilters::LocallyOwnedCell())
     {
-      if (cell->is_locally_owned())
-        {
-          if (cell->id().to_string() == "0_0:")
-            cell->set_active_fe_index(0);
-          if (cell->id().to_string() == "1_0:")
-            cell->set_active_fe_index(1);
-          if (cell->id().to_string() == "2_0:")
-            cell->set_active_fe_index(2);
-          if (cell->id().to_string() == "3_0:")
-            cell->set_active_fe_index(0);
-        }
+      if (cell->id().to_string() == "0_0:")
+        cell->set_active_fe_index(0);
+      if (cell->id().to_string() == "1_0:")
+        cell->set_active_fe_index(1);
+      if (cell->id().to_string() == "2_0:")
+        cell->set_active_fe_index(2);
+      if (cell->id().to_string() == "3_0:")
+        cell->set_active_fe_index(0);
     }
   dof_handler.distribute_dofs(fe);
 
-  deallog << "Processor: " << Utilities::MPI::this_mpi_process(MPI_COMM_WORLD)
-          << std::endl;
-  for (auto &cell : dof_handler.active_cell_iterators())
-    {
-      deallog << "  Cell: " << cell << std::endl;
-
-      std::vector<types::global_dof_index> dof_indices(
-        cell->get_fe().dofs_per_cell);
-      cell->get_dof_indices(dof_indices);
-      deallog << "    ";
-      for (auto i : dof_indices)
-        deallog << i << ' ';
-      deallog << std::endl;
-    }
-  deallog << "  n_locally_owned_dofs: " << dof_handler.n_locally_owned_dofs()
-          << std::endl;
-  deallog << "  n_global_dofs: " << dof_handler.n_dofs() << std::endl;
+  log_dof_diagnostics(dof_handler);
 }
 
 

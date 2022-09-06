@@ -15,7 +15,7 @@
 
 
 // verify restrictions on level differences imposed by
-// DoFHandler::prepare_coarsening_and_refinement()
+// hp::Refinement::limit_p_level_difference()
 //
 // sequentially increase the p-level of the center cell in a hyper_cross
 // geometry and verify that all other comply to the level difference
@@ -30,6 +30,7 @@
 
 #include <deal.II/fe/fe_q.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_generator.h>
 
 #include <deal.II/hp/fe_collection.h>
@@ -73,7 +74,7 @@ test(const unsigned int fes_size, const unsigned int max_difference)
   bool fe_indices_changed;
   tria.signals.post_p4est_refinement.connect(
     [&]() {
-      const internal::parallel::distributed::TemporarilyMatchRefineFlags<dim>
+      const parallel::distributed::TemporarilyMatchRefineFlags<dim>
         refine_modifier(tria);
       fe_indices_changed =
         hp::Refinement::limit_p_level_difference(dofh,
@@ -99,26 +100,26 @@ test(const unsigned int fes_size, const unsigned int max_difference)
 
       // display number of cells for each FE index
       std::vector<unsigned int> count(fes.size(), 0);
-      for (const auto &cell : dofh.active_cell_iterators())
-        if (cell->is_locally_owned())
-          count[cell->active_fe_index()]++;
+      for (const auto &cell :
+           dofh.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+        count[cell->active_fe_index()]++;
       Utilities::MPI::sum(count, tria.get_communicator(), count);
       deallog << "cycle:" << i << ", fe count:" << count << std::endl;
     }
 
 #ifdef DEBUG
   // check each cell's active FE index by its distance from the center
-  for (const auto &cell : dofh.active_cell_iterators())
-    if (cell->is_locally_owned())
-      {
-        const double       distance = cell->center().distance(Point<dim>());
-        const unsigned int expected_level =
-          (sequence.size() - 1) -
-          max_difference * static_cast<unsigned int>(std::round(distance));
+  for (const auto &cell :
+       dofh.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+    {
+      const double       distance = cell->center().distance(Point<dim>());
+      const unsigned int expected_level =
+        (sequence.size() - 1) -
+        max_difference * static_cast<unsigned int>(std::round(distance));
 
-        Assert(cell->active_fe_index() == sequence[expected_level],
-               ExcInternalError());
-      }
+      Assert(cell->active_fe_index() == sequence[expected_level],
+             ExcInternalError());
+    }
 #endif
 
   deallog << "OK" << std::endl;

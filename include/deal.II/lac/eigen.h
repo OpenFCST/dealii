@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -33,8 +33,10 @@
 DEAL_II_NAMESPACE_OPEN
 
 
-/*!@addtogroup Solvers */
-/*@{*/
+/**
+ * @addtogroup Solvers
+ * @{
+ */
 
 /**
  * Power method (von Mises) for eigenvalue computations.
@@ -186,7 +188,7 @@ protected:
   AdditionalData additional_data;
 };
 
-/*@}*/
+/** @} */
 //---------------------------------------------------------------------------
 
 
@@ -224,7 +226,7 @@ EigenPower<VectorType>::solve(double &value, const MatrixType &A, VectorType &x)
 
   // Main loop
   int iter = 0;
-  for (; conv == SolverControl::iterate; iter++)
+  for (; conv == SolverControl::iterate; ++iter)
     {
       y.add(additional_data.shift, x);
 
@@ -321,9 +323,9 @@ EigenInverse<VectorType>::solve(double &          value,
   x *= 1. / length;
 
   // Main loop
-  double    res  = -std::numeric_limits<double>::max();
+  double    res  = std::numeric_limits<double>::lowest();
   size_type iter = 0;
-  for (; conv == SolverControl::iterate; iter++)
+  for (; conv == SolverControl::iterate; ++iter)
     {
       solver.solve(A_s, y, x, prec);
 

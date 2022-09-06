@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2021 by the deal.II authors
+// Copyright (C) 2021 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,14 +25,14 @@ void
 test(
   const MGTransferGlobalCoarseningTools::PolynomialCoarseningSequenceType type)
 {
-  for (unsigned int i = 1; i <= 15; i++)
+  for (unsigned int i = 1; i <= 15; ++i)
     {
       const auto sequence =
         MGTransferGlobalCoarseningTools::create_polynomial_coarsening_sequence(
           i, type);
 
       for (const auto i : sequence)
-        deallog << i << " ";
+        deallog << i << ' ';
       deallog << std::endl;
     }
   deallog << std::endl;

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -39,7 +39,7 @@ namespace internal
         dealii::types::global_dof_index dealii_index =
           triangulation->get_p4est_tree_to_coarse_cell_permutation()[treeidx];
 
-        for (i = 0; i < l; i++)
+        for (i = 0; i < l; ++i)
           {
             typename dealii::Triangulation<dim, spacedim>::cell_iterator cell(
               triangulation, i, dealii_index);
@@ -100,7 +100,7 @@ namespace internal
           *vertices_with_ghost_neighbors = fg->vertices_with_ghost_neighbors;
 
         subids->elem_count = 0;
-        for (i = 0; i < nsides; i++)
+        for (i = 0; i < nsides; ++i)
           {
             if (sides[i].is_ghost)
               {
@@ -127,7 +127,7 @@ namespace internal
         subdomain_ids =
           reinterpret_cast<dealii::types::subdomain_id *>(subids->array);
 
-        for (i = 0; i < nsides; i++)
+        for (i = 0; i < nsides; ++i)
           {
             if (!sides[i].is_ghost)
               {
@@ -140,7 +140,7 @@ namespace internal
                 Assert(!cell->is_ghost(),
                        ExcMessage("local quad found ghost cell"));
 
-                for (j = 0; j < nsubs; j++)
+                for (j = 0; j < nsubs; ++j)
                   {
                     (*vertices_with_ghost_neighbors)[cell->vertex_index(
                                                        sides[i].corner)]
@@ -176,11 +176,11 @@ namespace internal
           *vertices_with_ghost_neighbors = fg->vertices_with_ghost_neighbors;
 
         subids->elem_count = 0;
-        for (i = 0; i < nsides; i++)
+        for (i = 0; i < nsides; ++i)
           {
             if (sides[i].is_hanging)
               {
-                for (j = 0; j < 2; j++)
+                for (j = 0; j < 2; ++j)
                   {
                     if (sides[i].is.hanging.is_ghost[j])
                       {
@@ -207,11 +207,11 @@ namespace internal
         subdomain_ids =
           reinterpret_cast<dealii::types::subdomain_id *>(subids->array);
 
-        for (i = 0; i < nsides; i++)
+        for (i = 0; i < nsides; ++i)
           {
             if (sides[i].is_hanging)
               {
-                for (j = 0; j < 2; j++)
+                for (j = 0; j < 2; ++j)
                   {
                     if (!sides[i].is.hanging.is_ghost[j])
                       {
@@ -221,7 +221,7 @@ namespace internal
                                            sides[i].treeid,
                                            *(sides[i].is.hanging.quad[j]));
 
-                        for (k = 0; k < nsubs; k++)
+                        for (k = 0; k < nsubs; ++k)
                           {
                             (*vertices_with_ghost_neighbors)
                               [cell->vertex_index(
@@ -262,11 +262,11 @@ namespace internal
         int limit                         = (dim == 2) ? 2 : 4;
 
         subids->elem_count = 0;
-        for (i = 0; i < nsides; i++)
+        for (i = 0; i < nsides; ++i)
           {
             if (sides[i].is_hanging)
               {
-                for (j = 0; j < limit; j++)
+                for (j = 0; j < limit; ++j)
                   {
                     if (sides[i].is.hanging.is_ghost[j])
                       {
@@ -293,11 +293,11 @@ namespace internal
         subdomain_ids =
           reinterpret_cast<dealii::types::subdomain_id *>(subids->array);
 
-        for (i = 0; i < nsides; i++)
+        for (i = 0; i < nsides; ++i)
           {
             if (sides[i].is_hanging)
               {
-                for (j = 0; j < limit; j++)
+                for (j = 0; j < limit; ++j)
                   {
                     if (!sides[i].is.hanging.is_ghost[j])
                       {
@@ -307,7 +307,7 @@ namespace internal
                                            sides[i].treeid,
                                            *(sides[i].is.hanging.quad[j]));
 
-                        for (k = 0; k < nsubs; k++)
+                        for (k = 0; k < nsubs; ++k)
                           {
                             if (dim == 2)
                               {
@@ -349,7 +349,7 @@ namespace internal
 
     void (&functions<2>::quadrant_set_morton)(types<2>::quadrant *quadrant,
                                               int                 level,
-                                              uint64_t            id) =
+                                              std::uint64_t       id) =
       p4est_quadrant_set_morton;
 
     int (&functions<2>::quadrant_is_equal)(const types<2>::quadrant *q1,
@@ -535,7 +535,21 @@ namespace internal
     void (&functions<2>::transfer_custom_end)(types<2>::transfer_context *tc) =
       p4est_transfer_custom_end;
 
+#  ifdef P4EST_SEARCH_LOCAL
+    void (&functions<2>::search_partition)(
+      types<2>::forest *                  p4est,
+      int                                 call_post,
+      types<2>::search_partition_callback quadrant_fn,
+      types<2>::search_partition_callback point_fn,
+      sc_array_t *                        points) = p4est_search_partition;
+#  endif
 
+    void (&functions<2>::quadrant_coord_to_vertex)(
+      types<2>::connectivity * connectivity,
+      types<2>::topidx         treeid,
+      types<2>::quadrant_coord x,
+      types<2>::quadrant_coord y,
+      double                   vxyz[3]) = p4est_qcoord_to_vertex;
 
     int (&functions<3>::quadrant_compare)(const void *v1, const void *v2) =
       p8est_quadrant_compare;
@@ -550,7 +564,7 @@ namespace internal
 
     void (&functions<3>::quadrant_set_morton)(types<3>::quadrant *quadrant,
                                               int                 level,
-                                              uint64_t            id) =
+                                              std::uint64_t       id) =
       p8est_quadrant_set_morton;
 
     int (&functions<3>::quadrant_is_equal)(const types<3>::quadrant *q1,
@@ -743,7 +757,22 @@ namespace internal
     void (&functions<3>::transfer_custom_end)(types<3>::transfer_context *tc) =
       p8est_transfer_custom_end;
 
+#  ifdef P4EST_SEARCH_LOCAL
+    void (&functions<3>::search_partition)(
+      types<3>::forest *                  p4est,
+      int                                 call_post,
+      types<3>::search_partition_callback quadrant_fn,
+      types<3>::search_partition_callback point_fn,
+      sc_array_t *                        points) = p8est_search_partition;
+#  endif
 
+    void (&functions<3>::quadrant_coord_to_vertex)(
+      types<3>::connectivity * connectivity,
+      types<3>::topidx         treeid,
+      types<3>::quadrant_coord x,
+      types<3>::quadrant_coord y,
+      types<3>::quadrant_coord z,
+      double                   vxyz[3]) = p8est_qcoord_to_vertex;
 
     template <int dim>
     void
@@ -878,8 +907,9 @@ namespace internal
 
 
     template <>
-    bool quadrant_is_ancestor<1>(types<1>::quadrant const &q1,
-                                 types<1>::quadrant const &q2)
+    bool
+    quadrant_is_ancestor<1>(types<1>::quadrant const &q1,
+                            types<1>::quadrant const &q2)
     {
       // determine level of quadrants
       const int level_1 = (q1 << types<1>::max_n_child_indices_bits) >>
@@ -926,7 +956,8 @@ namespace internal
 
 
     template <>
-    void init_coarse_quadrant<1>(typename types<1>::quadrant &quad)
+    void
+    init_coarse_quadrant<1>(typename types<1>::quadrant &quad)
     {
       quad = 0;
     }

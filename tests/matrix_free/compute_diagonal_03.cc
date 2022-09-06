@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -76,12 +76,10 @@ test()
                auto                quadrature_point = phi.quadrature_point(q);
                VectorizedArrayType coefficient;
 
-               for (unsigned int v = 0;
-                    v < VectorizedArrayType::n_array_elements;
-                    v++)
+               for (unsigned int v = 0; v < VectorizedArrayType::size(); ++v)
                  {
                    Point<dim, Number> point;
-                   for (unsigned int d = 0; d < dim; d++)
+                   for (unsigned int d = 0; d < dim; ++d)
                      point[d] = quadrature_point[d][v];
                    coefficient[v] = (point.square() < 0.5 * 0.5) ? 20 : 1;
                  }

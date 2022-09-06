@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2018 by the deal.II authors
+// Copyright (C) 2013 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -190,7 +190,7 @@ loop()
 
   std::vector<Mapping<dim> *> maps;
   //  maps.push_back (new MappingCartesian<dim>);
-  maps.push_back(new MappingQGeneric<dim>(1));
+  maps.push_back(new MappingQ<dim>(1));
   maps.push_back(new MappingQ<dim>(2));
 
   std::vector<FiniteElement<dim> *> elements;

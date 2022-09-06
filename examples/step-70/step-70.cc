@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2020 by the deal.II authors
+ * Copyright (C) 2020 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -66,7 +66,7 @@ namespace LA
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_fe_field.h>
-#include <deal.II/fe/mapping_q.h>
+#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_in.h>
@@ -282,7 +282,7 @@ namespace Step70
     std::string arguments_for_solid_grid = spacedim == 2 ?
                                              "-.5, -.1: .5, .1: false" :
                                              "-.5, -.1, -.1: .5, .1, .1: false";
-    std::string name_of_particle_grid = "hyper_ball";
+    std::string name_of_particle_grid    = "hyper_ball";
     std::string arguments_for_particle_grid =
       spacedim == 2 ? "0.3, 0.3: 0.1: false" : "0.3, 0.3, 0.3 : 0.1: false";
 
@@ -537,7 +537,7 @@ namespace Step70
     // The next two functions initialize the
     // Particles::ParticleHandler objects used in this class. We have two such
     // objects: One represents passive tracers, used to plot the trajectories
-    // of fluid particles, while the the other represents material particles
+    // of fluid particles, while the other represents material particles
     // of the solid, which are placed at quadrature points of the solid grid.
     void setup_tracer_particles();
     void setup_solid_particles();
@@ -622,12 +622,12 @@ namespace Step70
     parallel::distributed::Triangulation<spacedim>      fluid_tria;
     parallel::distributed::Triangulation<dim, spacedim> solid_tria;
 
-    // Next come descriptions of the finite elements in use, along with
-    // appropriate quadrature formulas and the corresponding DoFHandler objects.
-    // For the current implementation, only `fluid_fe` is really necessary. For
-    // completeness, and to allow easy extension, we also keep the `solid_fe`
-    // around, which is however initialized to a FE_Nothing finite element
-    // space, i.e., one that has no degrees of freedom.
+    // Next come descriptions of the finite elements in use, along with the
+    // corresponding DoFHandler objects. For the current implementation, only
+    // `fluid_fe` is really necessary. For completeness, and to allow easy
+    // extension, we also keep the `solid_fe` around, which is however
+    // initialized to a FE_Nothing finite element space, i.e., one that has no
+    // degrees of freedom.
     //
     // We declare both finite element spaces as `std::unique_ptr` objects rather
     // than regular member variables, to allow their generation after
@@ -635,9 +635,6 @@ namespace Step70
     // they will be initialized in the `initial_setup()` method.
     std::unique_ptr<FiniteElement<spacedim>>      fluid_fe;
     std::unique_ptr<FiniteElement<dim, spacedim>> solid_fe;
-
-    std::unique_ptr<Quadrature<spacedim>> fluid_quadrature_formula;
-    std::unique_ptr<Quadrature<dim>>      solid_quadrature_formula;
 
     DoFHandler<spacedim>      fluid_dh;
     DoFHandler<dim, spacedim> solid_dh;
@@ -1062,7 +1059,7 @@ namespace Step70
     // successive vector elements (this is what the IndexSet::tensor_priduct()
     // function does).
     locally_owned_tracer_particle_coordinates =
-      tracer_particle_handler.locally_relevant_ids().tensor_product(
+      tracer_particle_handler.locally_owned_particle_ids().tensor_product(
         complete_index_set(spacedim));
 
     // At the beginning of the simulation, all particles are in their original
@@ -1082,25 +1079,6 @@ namespace Step70
     // would be coupled to what is occurring in the fluid domain.
     locally_relevant_tracer_particle_coordinates =
       locally_owned_tracer_particle_coordinates;
-
-    // Finally, we make sure that upon refinement, particles are correctly
-    // transferred. When performing local refinement or coarsening, particles
-    // will land in another cell. We could in principle redistribute all
-    // particles after refining, however this would be overly expensive.
-    //
-    // The Particles::ParticleHandler class has a way to transfer information
-    // from a cell to its children or to its parent upon refinement, without the
-    // need to reconstruct the entire data structure. This is done by
-    // registering two callback functions to the triangulation. These
-    // functions will receive a signal when refinement is about to happen, and
-    // when it has just happened, and will take care of transferring all
-    // information to the newly refined grid with minimal computational cost.
-    fluid_tria.signals.pre_distributed_refinement.connect(
-      [&]() { tracer_particle_handler.register_store_callback_function(); });
-
-    fluid_tria.signals.post_distributed_refinement.connect([&]() {
-      tracer_particle_handler.register_load_callback_function(false);
-    });
   }
 
 
@@ -1185,15 +1163,6 @@ namespace Step70
                                                    global_fluid_bounding_boxes,
                                                    properties);
 
-
-    // As in the previous function, we end by making sure that upon refinement,
-    // particles are correctly transferred:
-    fluid_tria.signals.pre_distributed_refinement.connect(
-      [&]() { solid_particle_handler.register_store_callback_function(); });
-
-    fluid_tria.signals.post_distributed_refinement.connect(
-      [&]() { solid_particle_handler.register_load_callback_function(false); });
-
     pcout << "Solid particles: " << solid_particle_handler.n_global_particles()
           << std::endl;
   }
@@ -1230,11 +1199,6 @@ namespace Step70
 
     solid_fe = std::make_unique<FE_Nothing<dim, spacedim>>();
     solid_dh.distribute_dofs(*solid_fe);
-
-    fluid_quadrature_formula =
-      std::make_unique<QGauss<spacedim>>(par.velocity_degree + 1);
-    solid_quadrature_formula =
-      std::make_unique<QGauss<dim>>(par.velocity_degree + 1);
   }
 
 
@@ -1267,8 +1231,8 @@ namespace Step70
     fluid_owned_dofs[1] =
       fluid_dh.locally_owned_dofs().get_view(n_u, n_u + n_p);
 
-    IndexSet locally_relevant_dofs;
-    DoFTools::extract_locally_relevant_dofs(fluid_dh, locally_relevant_dofs);
+    const IndexSet locally_relevant_dofs =
+      DoFTools::extract_locally_relevant_dofs(fluid_dh);
     fluid_relevant_dofs.resize(2);
     fluid_relevant_dofs[0] = locally_relevant_dofs.get_view(0, n_u);
     fluid_relevant_dofs[1] = locally_relevant_dofs.get_view(n_u, n_u + n_p);
@@ -1276,7 +1240,7 @@ namespace Step70
     {
       constraints.reinit(locally_relevant_dofs);
 
-      FEValuesExtractors::Vector velocities(0);
+      const FEValuesExtractors::Vector velocities(0);
       DoFTools::make_hanging_node_constraints(fluid_dh, constraints);
       VectorTools::interpolate_boundary_values(
         fluid_dh,
@@ -1363,14 +1327,15 @@ namespace Step70
 
     TimerOutput::Scope t(computing_timer, "Assemble Stokes terms");
 
+    QGauss<spacedim>   quadrature_formula(fluid_fe->degree + 1);
     FEValues<spacedim> fe_values(*fluid_fe,
-                                 *fluid_quadrature_formula,
+                                 quadrature_formula,
                                  update_values | update_gradients |
                                    update_quadrature_points |
                                    update_JxW_values);
 
     const unsigned int dofs_per_cell = fluid_fe->n_dofs_per_cell();
-    const unsigned int n_q_points    = fluid_quadrature_formula->size();
+    const unsigned int n_q_points    = quadrature_formula.size();
 
     FullMatrix<double> cell_matrix(dofs_per_cell, dofs_per_cell);
     FullMatrix<double> cell_matrix2(dofs_per_cell, dofs_per_cell);
@@ -1492,7 +1457,7 @@ namespace Step70
         // the particle itself. We can then assemble the additional
         // terms in the system matrix and the right hand side as we would
         // normally.
-        const auto &cell = particle->get_surrounding_cell(fluid_tria);
+        const auto &cell = particle->get_surrounding_cell();
         const auto &dh_cell =
           typename DoFHandler<spacedim>::cell_iterator(*cell, &fluid_dh);
         dh_cell->get_dof_indices(fluid_dof_indices);
@@ -1634,7 +1599,18 @@ namespace Step70
 
   // @sect4{Mesh refinement}
 
-  // We deal with mesh refinement in a completely standard way:
+  // We deal with mesh refinement in a completely standard way, except
+  // we now also transfer the particles of the two particle handlers from the
+  // existing to the refined mesh. When performing local refinement or
+  // coarsening, particles will land in another cell. We could in principle
+  // redistribute all particles after refining, however this would be overly
+  // expensive.
+  //
+  // The Particles::ParticleHandler class has a way to transfer information
+  // from a cell to its children or to its parent upon refinement, without the
+  // need to reconstruct the entire data structure. This is done similarly
+  // to the SolutionTransfer class by calling two functions, one to prepare
+  // for refinement, and one to transfer the information after refinement.
   template <int dim, int spacedim>
   void StokesImmersedProblem<dim, spacedim>::refine_and_transfer()
   {
@@ -1680,13 +1656,20 @@ namespace Step70
 
     parallel::distributed::SolutionTransfer<spacedim, LA::MPI::BlockVector>
       transfer(fluid_dh);
+
     fluid_tria.prepare_coarsening_and_refinement();
     transfer.prepare_for_coarsening_and_refinement(locally_relevant_solution);
+    tracer_particle_handler.prepare_for_coarsening_and_refinement();
+    solid_particle_handler.prepare_for_coarsening_and_refinement();
+
     fluid_tria.execute_coarsening_and_refinement();
 
     setup_dofs();
 
     transfer.interpolate(solution);
+    tracer_particle_handler.unpack_after_coarsening_and_refinement();
+    solid_particle_handler.unpack_after_coarsening_and_refinement();
+
     constraints.distribute(solution);
     locally_relevant_solution = solution;
   }
@@ -1865,7 +1848,7 @@ namespace Step70
           tracer_particle_velocities *= time_step;
 
           locally_relevant_tracer_particle_coordinates =
-            tracer_particle_handler.locally_relevant_ids().tensor_product(
+            tracer_particle_handler.locally_owned_particle_ids().tensor_product(
               complete_index_set(spacedim));
 
           relevant_tracer_particle_displacements.reinit(
@@ -1922,7 +1905,7 @@ namespace Step70
 // exception of the handling of input parameter files. We allow the user to
 // specify an optional parameter file as an argument to the program. If
 // nothing is specified, we use the default file "parameters.prm", which is
-// created if non existent. The file name is scanned for the the string "23"
+// created if non existent. The file name is scanned for the string "23"
 // first, and "3" afterwards. If the filename contains the string "23", the
 // problem classes are instantiated with template arguments 2 and 3
 // respectively. If only the string "3" is found, then both template arguments

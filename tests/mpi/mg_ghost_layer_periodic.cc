@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -63,15 +63,15 @@ test()
       for (const auto &cell : tria.cell_iterators())
         if (cell->level_subdomain_id() == tria.locally_owned_subdomain())
           {
-            deallog << Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) << " "
+            deallog << Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) << ' '
                     << cell->id() << " neighbor subdomain ids: ";
             for (unsigned int f : GeometryInfo<dim>::face_indices())
               {
-                deallog << cell->neighbor_or_periodic_neighbor(f)->id() << " ";
+                deallog << cell->neighbor_or_periodic_neighbor(f)->id() << ' ';
                 if (cell->is_active())
                   deallog
                     << cell->neighbor_or_periodic_neighbor(f)->subdomain_id()
-                    << " ";
+                    << ' ';
                 deallog << cell->neighbor_or_periodic_neighbor(f)
                              ->level_subdomain_id()
                         << "  ";

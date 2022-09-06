@@ -1,6 +1,6 @@
 ## ---------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2020 by the deal.II authors
+## Copyright (C) 2012 - 2021 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
@@ -63,9 +63,9 @@ MACRO(_test_cxx20_support)
     )
 
   # Strictly speaking "201709L" indicates support for a preliminary version
-  # of C++20 standard (which will have "202002L" when finalized). gcc-10
+  # of the C++20 standard (which will have "202002L" when finalized). gcc-10
   # exports this version number when configured with C++20 support.
-  # clang-10 exports the final "202002L" version instead.
+  # clang-10 exports the final "202002L" version instead, as does gcc-11.
   CHECK_CXX_SOURCE_COMPILES(
     "
     #include <cmath>

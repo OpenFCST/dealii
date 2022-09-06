@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -61,7 +61,7 @@ plot_all_info(const Triangulation<dim> &tria)
         {
           deallog << cell->line_orientation(line_index) << "  ";
         } // line_index
-      deallog << "}" << std::endl << std::endl;
+      deallog << '}' << std::endl << std::endl;
     } // cell
 }
 
@@ -74,25 +74,22 @@ main(int /*argc*/, char ** /*argv*/)
   deallog.attach(logfile);
 
   /*
-   * 3D test only
+   * 2D test only
    */
   const int          dim = 2;
   Triangulation<dim> tria_test;
 
   deallog << "Testing 2D mesh for orientation tests:" << std::endl;
 
-  for (unsigned int config_switch = 0; config_switch < 4; ++config_switch)
+  for (unsigned int n_rotate_right_square = 0; n_rotate_right_square < 4;
+       ++n_rotate_right_square)
     {
       tria_test.clear();
-
-      bool rotate_left_square  = (((config_switch / 2) % 2) == 1);
-      bool rotate_right_square = ((config_switch % 2) == 1);
 
       bool manipulate_first_cube = true;
 
       GridGenerator::non_standard_orientation_mesh(tria_test,
-                                                   rotate_left_square,
-                                                   rotate_right_square);
+                                                   n_rotate_right_square);
 
       plot_all_info(tria_test);
 

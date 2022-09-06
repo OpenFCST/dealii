@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -34,8 +34,6 @@ class Vector;
 namespace hp
 {
   template <int dim, int spacedim>
-  class DoFHandler;
-  template <int dim, int spacedim>
   class MappingCollection;
 } // namespace hp
 
@@ -44,7 +42,7 @@ namespace VectorTools
   /**
    * @name Assembling of right hand sides
    */
-  //@{
+  /** @{ */
 
   /**
    * Create a right hand side vector for a point source at point @p p. In
@@ -214,12 +212,12 @@ namespace VectorTools
                              const Point<spacedim, double> &  p,
                              const Point<dim, double> &       direction,
                              Vector<double> &                 rhs_vector);
-  // @}
+  /** @} */
 
   /**
    * @name Evaluation of functions and errors
    */
-  //@{
+  /** @{ */
 
   /**
    * Point error evaluation. Find the first cell containing the given point
@@ -529,7 +527,7 @@ namespace VectorTools
               const DoFHandler<dim, spacedim> &           dof,
               const VectorType &                          fe_function,
               const Point<spacedim, double> &             point);
-  //@}
+  /** @} */
 } // namespace VectorTools
 
 DEAL_II_NAMESPACE_CLOSE

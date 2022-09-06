@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2010 - 2020 by the deal.II authors
+ * Copyright (C) 2010 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -228,8 +228,7 @@ namespace Step38
       Triangulation<spacedim> volume_mesh;
       GridGenerator::half_hyper_ball(volume_mesh);
 
-      std::set<types::boundary_id> boundary_ids;
-      boundary_ids.insert(0);
+      const std::set<types::boundary_id> boundary_ids = {0};
 
 #ifdef USE_SIMPLEX
       Triangulation<dim, spacedim> tria_temp;
@@ -359,12 +358,11 @@ namespace Step38
   void
   LaplaceBeltramiProblem<spacedim>::output_results() const
   {
-    DataOut<dim, DoFHandler<dim, spacedim>> data_out;
+    DataOut<dim, spacedim> data_out;
     data_out.attach_dof_handler(dof_handler);
-    data_out.add_data_vector(
-      solution,
-      "solution",
-      DataOut<dim, DoFHandler<dim, spacedim>>::type_dof_data);
+    data_out.add_data_vector(solution,
+                             "solution",
+                             DataOut<dim, spacedim>::type_dof_data);
     data_out.build_patches(mapping, mapping.get_degree());
 
     const std::string filename =

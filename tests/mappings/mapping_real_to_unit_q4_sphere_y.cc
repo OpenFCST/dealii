@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2012 - 2018 by the deal.II authors
+// Copyright (C) 2012 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -78,8 +78,8 @@ test_real_to_unit_cell()
   // of the following point in the
   // reference coordinate system of
   // the cell
-  const Point<dim>     p(-3.56413e+06, 1.74215e+06, 2.14762e+06);
-  MappingQGeneric<dim> map(1);
+  const Point<dim> p(-3.56413e+06, 1.74215e+06, 2.14762e+06);
+  MappingQ<dim>    map(1);
   Triangulation<dim>::active_cell_iterator cell = triangulation.begin_active();
 
   // the following call will fail

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2020 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -197,7 +197,7 @@ namespace Testing
         r[0]          = (seed == 0) ? 1 : seed;
         long int word = r[0];
 
-        for (int i = 1; i < 31; i++)
+        for (int i = 1; i < 31; ++i)
           {
             // This does:
             //   r[i] = (16807 * r[i-1]) % 2147483647;
@@ -210,13 +210,13 @@ namespace Testing
             r[i] = word;
           }
         k = 31;
-        for (int i = 31; i < 34; i++)
+        for (int i = 31; i < 34; ++i)
           {
             r[k % 32] = r[(k + 32 - 31) % 32];
             k         = (k + 1) % 32;
           }
 
-        for (int i = 34; i < 344; i++)
+        for (int i = 34; i < 344; ++i)
           {
             r[k % 32] =
               nonoverflow_add(r[(k + 32 - 31) % 32], r[(k + 32 - 3) % 32]);
@@ -418,15 +418,29 @@ filter_out_small_numbers(const Number number, const double tolerance)
 
 
 /*
- * If we run 64 tests at the same time on a 64-core system, and
- * each of them runs 64 threads, then we get astronomical loads.
- * Limit concurrency to a fixed (small) number of threads, independent
- * of the core count.
+ * If we run 64 tests at the same time on a 64-core system, and each of
+ * them runs 64 threads, then we get astronomical loads. Limit concurrency
+ * to a fixed (small) number of threads, independent of the core count. The
+ * limit defaults to 3 and can be overridden by the environment variable
+ * TEST_N_THREADS.
  */
 inline unsigned int
 testing_max_num_threads()
 {
-  return 3;
+  const int default_n_threads = 3;
+
+  if (const char *penv = std::getenv("TEST_N_THREADS"))
+    try
+      {
+        const int n_threads = Utilities::string_to_int(std::string(penv));
+        return n_threads > 0 ? n_threads : default_n_threads;
+      }
+    catch (...)
+      {
+        return default_n_threads;
+      }
+  else
+    return default_n_threads;
 }
 
 struct LimitConcurrency
@@ -496,12 +510,12 @@ std::string   deallogname;
 std::ofstream deallogfile;
 
 void
-initlog(bool                          console = false,
+initlog(const bool                    console = false,
         const std::ios_base::fmtflags flags   = std::ios::showpoint |
                                               std::ios::left)
 {
   deallogname = "output";
-  deallogfile.open(deallogname.c_str());
+  deallogfile.open(deallogname);
   deallog.attach(deallogfile, true, flags);
   deallog.depth_console(console ? 10 : 0);
 }

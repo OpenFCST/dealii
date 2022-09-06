@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2006 - 2020 by the deal.II authors
+ * Copyright (C) 2006 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -158,7 +158,7 @@ namespace Step27
   resize(Table<dim, T> &coeff, const unsigned int N)
   {
     TableIndices<dim> size;
-    for (unsigned int d = 0; d < dim; d++)
+    for (unsigned int d = 0; d < dim; ++d)
       size[d] = N;
     coeff.reinit(size);
   }
@@ -183,7 +183,7 @@ namespace Step27
 
     QGauss<1>      base_quadrature(2);
     QIterated<dim> quadrature(base_quadrature, max_degree);
-    for (unsigned int i = 0; i < fe_collection.size(); i++)
+    for (unsigned int i = 0; i < fe_collection.size(); ++i)
       fourier_q_collection.push_back(quadrature);
 
     const std::vector<unsigned int> n_coefficients_per_direction(
@@ -228,15 +228,19 @@ namespace Step27
 #ifdef DEBUG
     // We did not think about hp-constraints on ghost cells yet.
     // Thus, we are content with verifying their consistency for now.
+    std::vector<IndexSet> locally_owned_dofs_per_processor =
+      Utilities::MPI::all_gather(dof_handler.get_communicator(),
+                                 dof_handler.locally_owned_dofs());
+
     IndexSet locally_active_dofs;
     DoFTools::extract_locally_active_dofs(dof_handler, locally_active_dofs);
-    AssertThrow(constraints.is_consistent_in_parallel(
-                  dof_handler.locally_owned_dofs_per_processor(),
-                  locally_active_dofs,
-                  mpi_communicator,
-                  /*verbose=*/true),
-                ExcMessage(
-                  "AffineConstraints object contains inconsistencies!"));
+
+    AssertThrow(
+      constraints.is_consistent_in_parallel(locally_owned_dofs_per_processor,
+                                            locally_active_dofs,
+                                            mpi_communicator,
+                                            /*verbose=*/true),
+      ExcMessage("AffineConstraints object contains inconsistencies!"));
 #endif
     constraints.close();
 
@@ -272,51 +276,45 @@ namespace Step27
 
     std::vector<types::global_dof_index> local_dof_indices;
 
-    for (const auto &cell : dof_handler.active_cell_iterators())
-      if (cell->is_locally_owned())
-        {
-          const unsigned int dofs_per_cell = cell->get_fe().dofs_per_cell;
+    for (const auto &cell : dof_handler.active_cell_iterators() |
+                              IteratorFilters::LocallyOwnedCell())
+      {
+        const unsigned int dofs_per_cell = cell->get_fe().dofs_per_cell;
 
-          cell_matrix.reinit(dofs_per_cell, dofs_per_cell);
-          cell_matrix = 0;
+        cell_matrix.reinit(dofs_per_cell, dofs_per_cell);
+        cell_matrix = 0;
 
-          cell_rhs.reinit(dofs_per_cell);
-          cell_rhs = 0;
+        cell_rhs.reinit(dofs_per_cell);
+        cell_rhs = 0;
 
-          hp_fe_values.reinit(cell);
+        hp_fe_values.reinit(cell);
 
-          const FEValues<dim> &fe_values = hp_fe_values.get_present_fe_values();
+        const FEValues<dim> &fe_values = hp_fe_values.get_present_fe_values();
 
-          std::vector<double> rhs_values(fe_values.n_quadrature_points);
-          rhs_function.value_list(fe_values.get_quadrature_points(),
-                                  rhs_values);
+        std::vector<double> rhs_values(fe_values.n_quadrature_points);
+        rhs_function.value_list(fe_values.get_quadrature_points(), rhs_values);
 
-          for (unsigned int q_point = 0;
-               q_point < fe_values.n_quadrature_points;
-               ++q_point)
-            for (unsigned int i = 0; i < dofs_per_cell; ++i)
-              {
-                for (unsigned int j = 0; j < dofs_per_cell; ++j)
-                  cell_matrix(i, j) +=
-                    (fe_values.shape_grad(i, q_point) * // grad phi_i(x_q)
-                     fe_values.shape_grad(j, q_point) * // grad phi_j(x_q)
-                     fe_values.JxW(q_point));           // dx
+        for (unsigned int q_point = 0; q_point < fe_values.n_quadrature_points;
+             ++q_point)
+          for (unsigned int i = 0; i < dofs_per_cell; ++i)
+            {
+              for (unsigned int j = 0; j < dofs_per_cell; ++j)
+                cell_matrix(i, j) +=
+                  (fe_values.shape_grad(i, q_point) * // grad phi_i(x_q)
+                   fe_values.shape_grad(j, q_point) * // grad phi_j(x_q)
+                   fe_values.JxW(q_point));           // dx
 
-                cell_rhs(i) +=
-                  (fe_values.shape_value(i, q_point) * // phi_i(x_q)
-                   rhs_values[q_point] *               // f(x_q)
-                   fe_values.JxW(q_point));            // dx
-              }
+              cell_rhs(i) += (fe_values.shape_value(i, q_point) * // phi_i(x_q)
+                              rhs_values[q_point] *               // f(x_q)
+                              fe_values.JxW(q_point));            // dx
+            }
 
-          local_dof_indices.resize(dofs_per_cell);
-          cell->get_dof_indices(local_dof_indices);
+        local_dof_indices.resize(dofs_per_cell);
+        cell->get_dof_indices(local_dof_indices);
 
-          constraints.distribute_local_to_global(cell_matrix,
-                                                 cell_rhs,
-                                                 local_dof_indices,
-                                                 system_matrix,
-                                                 system_rhs);
-        }
+        constraints.distribute_local_to_global(
+          cell_matrix, cell_rhs, local_dof_indices, system_matrix, system_rhs);
+      }
 
     system_matrix.compress(VectorOperation::add);
     system_rhs.compress(VectorOperation::add);

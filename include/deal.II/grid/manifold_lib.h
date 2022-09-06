@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -29,7 +29,7 @@ DEAL_II_NAMESPACE_OPEN
 // forward declaration
 namespace internal
 {
-  namespace MappingQGenericImplementation
+  namespace MappingQImplementation
   {
     template <int, int>
     class InverseQuadraticApproximation;
@@ -451,7 +451,7 @@ public:
   get_new_point(const ArrayView<const Point<spacedim>> &surrounding_points,
                 const ArrayView<const double> &         weights) const override;
 
-protected:
+private:
   /**
    * A vector orthogonal to the normal direction.
    */
@@ -467,11 +467,15 @@ protected:
    */
   const Point<spacedim> point_on_axis;
 
-private:
   /**
    * Relative tolerance to measure zero distances.
    */
-  double tolerance;
+  const double tolerance;
+
+  /**
+   * The direction vector perpendicular to both direction and normal_direction.
+   */
+  const Tensor<1, spacedim> dxn;
 };
 
 /**
@@ -546,7 +550,7 @@ public:
   push_forward_gradient(const Point<spacedim> &chart_point) const override;
 
 
-protected:
+private:
   /**
    * The direction vector of the major axis.
    */
@@ -561,7 +565,6 @@ protected:
   const double cosh_u;
   const double sinh_u;
 
-private:
   /**
    * @copydoc ChartManifold::get_periodicity()
    *
@@ -863,7 +866,7 @@ private:
  * nature of the manifold that is originally contained in one <i>coarse</i>
  * mesh layer will be applied to more than one <i>fine</i> mesh layer once the
  * mesh gets refined. Note that the mechanisms of
- * TransfiniteInterpolationManifold are also built into the MappingQGeneric
+ * TransfiniteInterpolationManifold are also built into the MappingQ
  * class when only a surface of a cell is subject to a curved description,
  * ensuring that even the default case without this manifold gets optimal
  * convergence rates when applying curved boundary descriptions.
@@ -1148,7 +1151,7 @@ private:
    * A vector of quadratic approximations to the inverse map from real points
    * to chart points for each of the coarse mesh cells.
    */
-  std::vector<internal::MappingQGenericImplementation::
+  std::vector<internal::MappingQImplementation::
                 InverseQuadraticApproximation<dim, spacedim>>
     quadratic_approximation;
 

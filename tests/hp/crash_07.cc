@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2006 - 2018 by the deal.II authors
+// Copyright (C) 2006 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -104,7 +104,7 @@ main()
        cell != dof_handler.end();
        ++cell, ++cell_no)
     cell->set_active_fe_index(0);
-  (++dof_handler.begin_active())->set_active_fe_index(1);
+  (std::next(dof_handler.begin_active()))->set_active_fe_index(1);
   dof_handler.distribute_dofs(fe);
 
   deallog << "n_dofs=" << dof_handler.n_dofs() << std::endl;

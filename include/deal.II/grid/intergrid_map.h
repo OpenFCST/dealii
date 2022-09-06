@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2018 by the deal.II authors
+// Copyright (C) 1999 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -136,7 +136,8 @@ public:
    * refined cell of which the source cell would be created if it were further
    * refined.
    */
-  cell_iterator operator[](const cell_iterator &source_cell) const;
+  cell_iterator
+  operator[](const cell_iterator &source_cell) const;
 
   /**
    * Delete all data of this class.

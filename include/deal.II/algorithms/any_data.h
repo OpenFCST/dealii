@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2018 by the deal.II authors
+// Copyright (C) 2000 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -210,7 +210,7 @@ public:
                  int,
                  std::string,
                  << "Name at position " << arg1 << " is not equal to " << arg2
-                 << ".");
+                 << '.');
 
 private:
   /// The stored data

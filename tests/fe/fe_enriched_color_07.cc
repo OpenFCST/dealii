@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -34,6 +34,7 @@
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_out.h>
@@ -290,13 +291,15 @@ struct ParameterCollection
   void
   print();
 
-  void set_enrichment_point(Point<2> &p, const unsigned int i)
+  void
+  set_enrichment_point(Point<2> &p, const unsigned int i)
   {
     AssertDimension(dim, 2);
     p(0) = points_enrichments[2 * i];
     p(1) = points_enrichments[2 * i + 1];
   }
-  void set_enrichment_point(Point<3> &p, const unsigned int i)
+  void
+  set_enrichment_point(Point<3> &p, const unsigned int i)
   {
     AssertDimension(dim, 3);
     p(0) = points_enrichments[3 * i];
@@ -572,7 +575,7 @@ ParameterCollection::print()
   for (unsigned int i = 0; i < points_enrichments.size(); i = i + dim)
     {
       for (int d = 0; d < dim; ++d)
-        std::cout << points_enrichments[i + d] << " ";
+        std::cout << points_enrichments[i + d] << ' ';
 
       std::cout << std::endl;
     }
@@ -590,7 +593,7 @@ ParameterCollection::print()
 
 /*
  * EstimateEnrichmentFunction is used to estimate enrichment function by
- * solveing a 1D poisson problem with right hand side and boundary
+ * solving a 1D poisson problem with right hand side and boundary
  * expression provided as a string of single variable 'x', to be
  * interpreted as distance from @par center.
  *
@@ -1001,16 +1004,16 @@ plot_shape_function(DoFHandler<dim> &dof_handler, unsigned int patches = 5)
         << std::endl;
       GridOut grid_out;
       grid_out.write_gnuplot(dof_handler.get_triangulation(), f);
-      f << "e" << std::endl;
+      f << 'e' << std::endl;
 
       DoFTools::write_gnuplot_dof_support_point_info(f, support_points);
 
-      f << "e" << std::endl;
+      f << 'e' << std::endl;
 
       std::cout << "...finished printing support points" << std::endl;
     }
 
-  DataOut<dim, DoFHandler<dim>> data_out;
+  DataOut<dim> data_out;
   data_out.attach_dof_handler(dof_handler);
 
   // get material ids:
@@ -1021,7 +1024,7 @@ plot_shape_function(DoFHandler<dim> &dof_handler, unsigned int patches = 5)
     }
   data_out.add_data_vector(fe_index, "fe_index");
 
-  for (unsigned int i = 0; i < shape_functions.size(); i++)
+  for (unsigned int i = 0; i < shape_functions.size(); ++i)
     data_out.add_data_vector(shape_functions[i], names[i]);
 
   data_out.build_patches(patches);
@@ -1367,12 +1370,12 @@ LaplaceProblem<dim>::build_fe_space()
             << "plot '-' using 1:2 with lines notitle, '-' with labels point pt 2 offset 1,1 notitle"
             << std::endl;
           GridOut().write_gnuplot(triangulation, f);
-          f << "e" << std::endl;
+          f << 'e' << std::endl;
 
           for (auto it : dof_handler.active_cell_iterators())
             f << it->center() << " \"" << it->active_fe_index() << "\"\n";
 
-          f << std::flush << "e" << std::endl;
+          f << std::flush << 'e' << std::endl;
           pcout << "...finished print fe indices" << std::endl;
         }
 
@@ -1397,12 +1400,12 @@ LaplaceProblem<dim>::build_fe_space()
             << "plot '-' using 1:2 with lines notitle, '-' with labels point pt 2 offset 1,1 notitle"
             << std::endl;
           GridOut().write_gnuplot(triangulation, f);
-          f << "e" << std::endl;
+          f << 'e' << std::endl;
 
           for (auto it : dof_handler.active_cell_iterators())
             f << it->center() << " \"" << it->index() << "\"\n";
 
-          f << std::flush << "e" << std::endl;
+          f << std::flush << 'e' << std::endl;
 
           pcout << "...end print cell indices" << std::endl;
         }
@@ -1668,7 +1671,7 @@ LaplaceProblem<dim>::output_results(const unsigned int cycle)
       filename += ".vtk";
       std::ofstream output(filename.c_str());
 
-      DataOut<dim, DoFHandler<dim>> data_out;
+      DataOut<dim> data_out;
       data_out.attach_dof_handler(dof_handler);
       data_out.add_data_vector(localized_solution, "solution");
       if (prm.exact_soln_expr != "")
@@ -1724,9 +1727,9 @@ LaplaceProblem<dim>::process_solution()
     }
 
   pcout << "refinement h_smallest Dofs L2_norm H1_norm" << std::endl;
-  pcout << prm.global_refinement << " "
-        << prm.size / std::pow(2.0, prm.global_refinement) << " "
-        << dof_handler.n_dofs() << " " << L2_error << " " << H1_error
+  pcout << prm.global_refinement << ' '
+        << prm.size / std::pow(2.0, prm.global_refinement) << ' '
+        << dof_handler.n_dofs() << ' ' << L2_error << ' ' << H1_error
         << std::endl;
 }
 
@@ -1816,7 +1819,7 @@ LaplaceProblem<dim>::run()
       if (prm.debug_level >= 2 && this_mpi_process == 0)
         output_results(cycle);
 
-      // Donot refine if loop is at the end
+      // Do not refine if loop is at the end
       if (cycle != prm.cycles)
         refine_grid();
 

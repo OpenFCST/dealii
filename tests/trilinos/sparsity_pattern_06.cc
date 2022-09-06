@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -66,8 +66,8 @@ test()
 
   for (const auto &el : sp)
     {
-      deallog << "index: " << el.index() << " = "
-              << "(" << el.row() << " , " << el.column() << ")" << std::endl;
+      deallog << "index: " << el.index() << " = " << '(' << el.row() << " , "
+              << el.column() << ')' << std::endl;
     }
 
   sp.compress();
@@ -75,8 +75,8 @@ test()
   deallog << "after compress:" << std::endl;
   for (const auto &el : sp)
     {
-      deallog << "index: " << el.index() << " = "
-              << "(" << el.row() << " , " << el.column() << ")" << std::endl;
+      deallog << "index: " << el.index() << " = " << '(' << el.row() << " , "
+              << el.column() << ')' << std::endl;
     }
 }
 

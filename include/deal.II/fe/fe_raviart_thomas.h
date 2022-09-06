@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2019 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,11 +18,8 @@
 
 #include <deal.II/base/config.h>
 
-#include <deal.II/base/geometry_info.h>
-#include <deal.II/base/polynomial.h>
-#include <deal.II/base/polynomials_raviart_thomas.h>
+#include <deal.II/base/mutex.h>
 #include <deal.II/base/table.h>
-#include <deal.II/base/tensor_product_polynomials.h>
 
 #include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_poly_tensor.h>
@@ -31,8 +28,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup fe */
-/*@{*/
+/**
+ * @addtogroup fe
+ * @{
+ */
 
 /**
  * Implementation of Raviart-Thomas (RT) elements. The Raviart-Thomas space
@@ -51,13 +50,15 @@ DEAL_II_NAMESPACE_OPEN
  * field must be continuous across the line (or surface) even though
  * the tangential component may not be. As a consequence, the
  * Raviart-Thomas element is constructed in such a way that (i) it is
- * @ref vector_valued "vector-valued", (ii) the shape functions are
+ * @ref vector_valued "vector-valued",
+ * (ii) the shape functions are
  * discontinuous, but (iii) the normal component of the vector field
  * represented by each shape function is continuous across the faces
  * of cells.
  *
  * Other properties of the Raviart-Thomas element are that (i) it is
- * @ref GlossPrimitive "not a primitive element"; (ii) the shape functions
+ * @ref GlossPrimitive "not a primitive element"
+ * ; (ii) the shape functions
  * are defined so that certain integrals over the faces are either zero
  * or one, rather than the common case of certain point values being
  * either zero or one. (There is, however, the FE_RaviartThomasNodal
@@ -223,9 +224,10 @@ private:
    * <code>adjust_quad_dof_index_for_face_orientation_table</code> declared in
    * fe.cc. We need to fill it with the correct values in case of non-standard,
    * flipped (rotated by +180 degrees) or rotated (rotated by +90 degrees)
-   *faces. These are given in the form three flags (face_orientation, face_flip,
-   * face_rotation), see the documentation in GeometryInfo<dim> and
-   * this @ref GlossFaceOrientation "glossary entry on face orientation".
+   * faces. These are given in the form three flags (face_orientation,
+   * face_flip, face_rotation), see the documentation in GeometryInfo<dim> and
+   * this
+   * @ref GlossFaceOrientation "glossary entry on face orientation".
    *
    * <h3>Example: Raviart-Thomas Elements of order 2 (tensor polynomial
    * degree 3)</h3>
@@ -252,7 +254,7 @@ private:
    * dof_index / n</code> (integer division). The indices <code>i</code> and
    * <code>j</code> can then be used to compute the offset.
    *
-   * For our example of Raviart-Thomas elements this means if if the
+   * For our example of Raviart-Thomas elements this means if the
    * switches are <code>(true | true | true)</code> that means we rotate the
    * face first by + 90 degree(counterclockwise) then by another +180
    * degrees but we do not flip it since the face has standard
@@ -302,36 +304,29 @@ private:
 
 /**
  * The Raviart-Thomas elements with node functionals defined as point values
- * in Gauss points.
+ * in Gauss-Lobatto points.
  *
  * <h3>Description of node values</h3>
  *
  * For this Raviart-Thomas element, the node values are not cell and face
- * moments with respect to certain polynomials, but the values in quadrature
+ * moments with respect to certain polynomials, but the values at quadrature
  * points. Following the general scheme for numbering degrees of freedom, the
- * node values on edges are first, edge by edge, according to the natural
- * ordering of the edges of a cell. The interior degrees of freedom are last.
+ * node values on faces (edges in 2D, quads in 3D) are first, face by face,
+ * according to the natural ordering of the faces of a cell. The interior
+ * degrees of freedom are last.
  *
  * For an RT-element of degree <i>k</i>, we choose <i>(k+1)<sup>d-1</sup></i>
- * Gauss points on each face. These points are ordered lexicographically with
- * respect to the orientation of the face. This way, the normal component
- * which is in <i>Q<sub>k</sub></i> is uniquely determined. Furthermore, since
- * this Gauss-formula is exact on <i>Q<sub>2k+1</sub></i>, these node values
- * correspond to the exact integration of the moments of the RT-space.
+ * Gauss-Lobatto points on each face, as defined by QGaussLobatto. For degree
+ * $k=0$, the midpoint is chosen. These points are ordered lexicographically
+ * with respect to the orientation of the face. This way, the normal component
+ * which is in <i>Q<sub>k</sub></i>, is uniquely determined.
  *
- * In the interior of the cells, the moments are with respect to an
- * anisotropic <i>Q<sub>k</sub></i> space, where the test functions are one
- * degree lower in the direction corresponding to the vector component under
- * consideration. This is emulated by using an anisotropic Gauss formula for
- * integration.
- *
- * @todo The current implementation is for Cartesian meshes only. You must use
- * MappingCartesian.
- *
- * @todo Even if this element is implemented for two and three space
- * dimensions, the definition of the node values relies on consistently
- * oriented faces in 3D. Therefore, care should be taken on complicated
- * meshes.
+ * These face polynomials are extended into the interior by the means of a
+ * QGaussLobatto formula for the normal direction. In other words, the
+ * polynomials are the tensor product of Lagrange polynomials on the points of
+ * a QGaussLobatto formula with $(k+2)$ points in the normal direction with
+ * Lagrange polynomials on the points of a QGaussLobatto quadrature formula
+ * with $(k+1)$ points.
  *
  * @note The degree stored in the member variable
  * FiniteElementData<dim>::degree is higher by one than the constructor
@@ -359,11 +354,6 @@ public:
   clone() const override;
 
   virtual void
-  convert_generalized_support_point_values_to_dof_values(
-    const std::vector<Vector<double>> &support_point_values,
-    std::vector<double> &              nodal_values) const override;
-
-  virtual void
   get_face_interpolation_matrix(const FiniteElement<dim> &source,
                                 FullMatrix<double> &      matrix,
                                 const unsigned int face_no = 0) const override;
@@ -374,6 +364,12 @@ public:
     const unsigned int        subface,
     FullMatrix<double> &      matrix,
     const unsigned int        face_no = 0) const override;
+
+  virtual void
+  convert_generalized_support_point_values_to_dof_values(
+    const std::vector<Vector<double>> &support_point_values,
+    std::vector<double> &              nodal_values) const override;
+
   virtual bool
   hp_constraints_are_implemented() const override;
 
@@ -394,55 +390,40 @@ public:
   compare_for_domination(const FiniteElement<dim> &fe_other,
                          const unsigned int codim = 0) const override final;
 
+  virtual const FullMatrix<double> &
+  get_restriction_matrix(
+    const unsigned int         child,
+    const RefinementCase<dim> &refinement_case =
+      RefinementCase<dim>::isotropic_refinement) const override;
+
+  virtual const FullMatrix<double> &
+  get_prolongation_matrix(
+    const unsigned int         child,
+    const RefinementCase<dim> &refinement_case =
+      RefinementCase<dim>::isotropic_refinement) const override;
+
 private:
-  /**
-   * Only for internal use. Its full name is @p get_dofs_per_object_vector
-   * function and it creates the @p dofs_per_object vector that is needed
-   * within the constructor to be passed to the constructor of @p
-   * FiniteElementData.
-   */
-  static std::vector<unsigned int>
-  get_dpo_vector(const unsigned int degree);
-
-  /**
-   * Compute the vector used for the @p restriction_is_additive field passed
-   * to the base class's constructor.
-   */
-  static std::vector<bool>
-  get_ria_vector(const unsigned int degree);
-
   /**
    * This function returns @p true, if the shape function @p shape_index has
    * non-zero function values somewhere on the face @p face_index.
-   *
-   * Right now, this is only implemented for RT0 in 1D. Otherwise, returns
-   * always @p true.
    */
   virtual bool
   has_support_on_face(const unsigned int shape_index,
                       const unsigned int face_index) const override;
 
   /**
-   * Initialize the FiniteElement<dim>::generalized_support_points and
-   * FiniteElement<dim>::generalized_face_support_points fields. Called from
-   * the constructor.
-   *
-   * See the
-   * @ref GlossGeneralizedSupport "glossary entry on generalized support points"
-   * for more information.
-   */
-  void
-  initialize_support_points(const unsigned int rt_degree);
-
-  /**
    * Initialize the permutation pattern and the pattern of sign change.
    */
   void
   initialize_quad_dof_index_permutation_and_sign_change();
+
+  /*
+   * Mutex for protecting initialization of restriction and embedding matrix.
+   */
+  mutable Threads::Mutex mutex;
 };
 
-
-/*@}*/
+/** @} */
 
 /* -------------- declaration of explicit specializations ------------- */
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2011 - 2018 by the deal.II authors
+// Copyright (C) 2011 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -70,8 +70,8 @@ test()
 
   if (myid == 0)
     {
-      deallog << myid * 2 << ":" << v(myid * 2) << std::endl;
-      deallog << myid * 2 + 1 << ":" << v(myid * 2 + 1) << std::endl;
+      deallog << myid * 2 << ':' << v(myid * 2) << std::endl;
+      deallog << myid * 2 + 1 << ':' << v(myid * 2 + 1) << std::endl;
     }
 
   v(1) = -7;
@@ -79,8 +79,8 @@ test()
 
   if (myid == 0)
     {
-      deallog << myid * 2 << ":" << v(myid * 2) << std::endl;
-      deallog << myid * 2 + 1 << ":" << v(myid * 2 + 1) << std::endl;
+      deallog << myid * 2 << ':' << v(myid * 2) << std::endl;
+      deallog << myid * 2 + 1 << ':' << v(myid * 2 + 1) << std::endl;
     }
 
   // import ghosts onto all procs

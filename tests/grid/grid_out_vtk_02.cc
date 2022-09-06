@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2018 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -89,7 +89,7 @@ test()
                 if (cell->level_subdomain_id() != 4294967294)
                   deallog << cell->level_subdomain_id();
                 else
-                  deallog << "-";
+                  deallog << '-';
               deallog << std::endl;
             }
           deallog << std::endl;

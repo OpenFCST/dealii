@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -14,7 +14,7 @@
 // ---------------------------------------------------------------------
 
 #include <deal.II/base/bounding_box.h>
-#include <deal.II/base/mpi.h>
+#include <deal.II/base/mpi_stub.h>
 
 #include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_tools.h>
@@ -156,10 +156,9 @@ namespace GridTools
           typename Triangulation<dim, spacedim>::active_cell_iterator>>
           boxes;
         boxes.reserve(tria->n_active_cells());
-        for (const auto &cell : tria->active_cell_iterators())
-          if (cell->is_locally_owned())
-            boxes.emplace_back(
-              std::make_pair(mapping->get_bounding_box(cell), cell));
+        for (const auto &cell : tria->active_cell_iterators() |
+                                  IteratorFilters::LocallyOwnedCell())
+          boxes.emplace_back(mapping->get_bounding_box(cell), cell);
 
         locally_owned_cell_bounding_boxes_rtree = pack_rtree(boxes);
         update_flags =

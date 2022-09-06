@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -34,6 +34,7 @@
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_in.h>
 #include <deal.II/grid/grid_out.h>
+#include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/tria.h>
 
 #include <deal.II/numerics/data_out.h>
@@ -136,7 +137,7 @@ test(const FiniteElement<dim, spacedim> &fe, const unsigned int n_components)
 
       deallog << "Files " << output_basename + ".h5"
               << " and " << output_basename + ".xdmf"
-              << " created succesfully!" << std::endl;
+              << " created successfully!" << std::endl;
     }
 }
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2006 - 2018 by the deal.II authors
+// Copyright (C) 2006 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -74,7 +74,7 @@ test_real_to_unit_cell()
     }
 
 
-  MappingQGeneric<dim, spacedim> map(1);
+  MappingQ<dim, spacedim> map(1);
 
   typename Triangulation<dim, spacedim>::active_cell_iterator cell =
     triangulation.begin_active();

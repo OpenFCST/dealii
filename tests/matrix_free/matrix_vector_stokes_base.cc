@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -265,7 +265,8 @@ test()
     constraints.push_back(&constraints_p);
     QGauss<1> quad(degree + 2);
     // no parallelism
-    mf_data->reinit(dofs,
+    mf_data->reinit(MappingQ1<dim>{},
+                    dofs,
                     constraints,
                     quad,
                     typename MatrixFree<dim>::AdditionalData(

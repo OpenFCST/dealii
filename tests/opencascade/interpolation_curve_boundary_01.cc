@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2014 - 2018 by the deal.II authors
+// Copyright (C) 2014 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -51,7 +51,7 @@ template <int spacedim>
 void
 test()
 {
-  deallog << "Testing <2," << spacedim << ">" << std::endl;
+  deallog << "Testing <2," << spacedim << '>' << std::endl;
 
   Triangulation<2, spacedim> tria1;
   Triangulation<2, spacedim> tria2;

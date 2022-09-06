@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2003 - 2020 by the deal.II authors
+ * Copyright (C) 2003 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -408,8 +408,7 @@ namespace Step50
                          local_dof_indices[j]) // ( boundary(i) && boundary(j)
                                                // && i==j )
                    ))
-                {
-                }
+                {}
               else
                 {
                   cell_matrix(i, j) = 0;

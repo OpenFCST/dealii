@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2009 - 2020 by the deal.II authors
+ * Copyright (C) 2009 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -352,8 +352,7 @@ namespace Step35
                                    const unsigned int) const
     {
       const unsigned int n_points = points.size();
-      Assert(values.size() == n_points,
-             ExcDimensionMismatch(values.size(), n_points));
+      AssertDimension(values.size(), n_points);
       for (unsigned int i = 0; i < n_points; ++i)
         values[i] = Velocity<dim>::value(points[i]);
     }
@@ -411,8 +410,7 @@ namespace Step35
       (void)component;
       AssertIndexRange(component, 1);
       const unsigned int n_points = points.size();
-      Assert(values.size() == n_points,
-             ExcDimensionMismatch(values.size(), n_points));
+      AssertDimension(values.size(), n_points);
       for (unsigned int i = 0; i < n_points; ++i)
         values[i] = Pressure<dim>::value(points[i]);
     }
@@ -494,7 +492,7 @@ namespace Step35
                    double,
                    << " The time step " << arg1 << " is out of range."
                    << std::endl
-                   << " The permitted range is (0," << arg2 << "]");
+                   << " The permitted range is (0," << arg2 << ']');
 
     void create_triangulation_and_dofs(const unsigned int n_refines);
 

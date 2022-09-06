@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2018 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -32,7 +32,7 @@ void
 test(std::string filename)
 {
   deallog.get_file_stream()
-    << " Tria<" << dim << "," << spacedim << ">: " << std::endl;
+    << " Tria<" << dim << ',' << spacedim << ">: " << std::endl;
   Triangulation<dim, spacedim> tria;
   GridIn<dim, spacedim>        gi;
   gi.attach_triangulation(tria);

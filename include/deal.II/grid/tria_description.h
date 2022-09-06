@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2020 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,10 +18,13 @@
 
 #include <deal.II/base/config.h>
 
-#include <deal.II/base/mpi.h>
+#include <deal.II/base/mpi_stub.h>
 
 #include <deal.II/grid/cell_id.h>
+#include <deal.II/grid/reference_cell.h>
 #include <deal.II/grid/tria.h>
+
+#include <deal.II/lac/la_parallel_vector.h>
 
 
 DEAL_II_NAMESPACE_OPEN
@@ -70,6 +73,20 @@ struct CellData
    * Indices of the vertices of this cell. These indices correspond
    * to entries in the vector of vertex locations passed to
    * Triangulation::create_triangulation().
+   *
+   * By default, the constructor of this class initializes this variable to
+   * have as many entries as it takes to describe a hypercube cell (i.e., a
+   * ReferenceCells::Line, ReferenceCells::Quadrilateral, or
+   * ReferenceCells::Hexahedron). This is historical and dates back to the time
+   * where deal.II could only deal with these kinds of cells. If you want an
+   * object of the current type to describe, for example, a triangle or
+   * tetrahedron, then you either have to call this constructor with an explicit
+   * argument different from the default value, or manually resize the
+   * `vertices` member variable after construction.
+   *
+   * The kind of cell described by the current object is then determined by
+   * calling ReferenceCell::n_vertices_to_type() on the number of vertices
+   * described by this array.
    */
   std::vector<unsigned int> vertices;
 
@@ -119,10 +136,20 @@ struct CellData
    *
    * - vertex indices to invalid values
    * - boundary or material id zero (the default for boundary or material ids)
-   * - manifold id to numbers::flat_manifold_id
+   * - manifold id to numbers::flat_manifold_id.
+   *
+   * By default, the constructor initializes the `vertices` member variable to
+   * have as many entries as it takes to describe a hypercube cell (i.e., a
+   * ReferenceCells::Line, ReferenceCells::Quadrilateral, or
+   * ReferenceCells::Hexahedron). This is historical and dates back to the time
+   * where deal.II could only deal with these kinds of cells. If you want an
+   * object of the current type to describe, for example, a triangle or
+   * tetrahedron, then you either have to call this constructor with an explicit
+   * argument different from the default value, or manually resize the
+   * `vertices` member variable after construction.
    */
-  CellData(
-    const unsigned int n_vertices = GeometryInfo<structdim>::vertices_per_cell);
+  CellData(const unsigned int n_vertices =
+             ReferenceCells::get_hypercube<structdim>().n_vertices());
 
   /**
    * Comparison operator.
@@ -203,17 +230,26 @@ struct SubCellData
 {
   /**
    * A vector of CellData<1> objects that describe boundary and manifold
-   * information for edges of 2d or 3d triangulations.
+   * information for edges of 2d or 3d triangulations. For 2d triangulations,
+   * edges (lines) are of course the faces of the cells.
    *
-   * This vector may not be used in the creation of 1d triangulations.
+   * This vector must not be used in the creation of 1d triangulations.
    */
   std::vector<CellData<1>> boundary_lines;
 
   /**
    * A vector of CellData<2> objects that describe boundary and manifold
-   * information for quads of 3d triangulations.
+   * information for triangles and quads of 3d triangulations. The name of
+   * the variable is historical and dates back to a time when deal.II only
+   * supported hexahedral meshes in 3d, where then all boundary faces were
+   * necessarily quadrilaterals. However, the variable is now also used to
+   * describe boundary triangles for tetrahedral and mixed meshes.
    *
-   * This vector may not be used in the creation of 1d or 2d triangulations.
+   * Whether an element in this array describes a boundary triangle or a
+   * boundary quad is determined by how many elements the `vertices`
+   * member variable of `CellData<2>` stores.
+   *
+   * This vector must not be used in the creation of 1d or 2d triangulations.
    */
   std::vector<CellData<2>> boundary_quads;
 
@@ -424,6 +460,48 @@ namespace TriangulationDescription
      * dealii::parallel::distributed::Triangulation, where the partitioning is
      * adopted unaltered.
      *
+     * Example for a serial Triangulation:
+     *
+     * @code
+     * Triangulation<dim, spacedim> tria_base;
+     *
+     * // fill serial triangulation (e.g., read external mesh)
+     * GridIn<dim, spacedim> grid_in;
+     * grid_in.attach_triangulation(tria_base);
+     * grid_in.read(file_name);
+     *
+     * // partition serial triangulation
+     * GridTools::partition_triangulation(
+     *   Utilities::MPI::n_mpi_processes(comm), tria_base);
+     *
+     * // create description
+     * const TriangulationDescription::Description<dim, spacedim> description =
+     *   TriangulationDescription::Utilities::
+     *     create_description_from_triangulation(tria_base, comm);
+     *
+     * // create triangulation
+     * parallel::fullydistributed::Triangulation<dim, spacedim> tria_pft(comm);
+     * tria_pft.create_triangulation(description);
+     * @endcode
+     *
+     * Example for parallel::distributed::Triangulation (partitioning can be
+     * skipped, since the triangulation has already been partitioned by p4est):
+     *
+     * @code
+     * parallel::distributed::Triangulation<dim, spacedim> tria_base(comm);
+     *
+     * // fill tria_base (not shown)
+     *
+     * // create triangulation
+     * const TriangulationDescription::Description<dim, spacedim> description =
+     *   TriangulationDescription::Utilities::
+     *     create_description_from_triangulation(tria_base, comm);
+     *
+     * // create triangulation
+     * parallel::fullydistributed::Triangulation<dim, spacedim> tria_pft(comm);
+     * tria_pft.create_triangulation(description);
+     * @endcode
+     *
      * @param tria Partitioned input triangulation.
      * @param comm MPI_Communicator to be used. In the case
      *   of dealii::parallel::distributed::Triangulation, the communicators have
@@ -431,7 +509,7 @@ namespace TriangulationDescription
      * @param settings See the description of the Settings enumerator.
      * @param my_rank_in Construct Description for the specified rank (only
      *   working for serial triangulations that have been partitioned by
-     *   functions like GridToold::partition_triangulation()).
+     *   functions like GridTools::partition_triangulation()).
      * @return Description to be used to set up a Triangulation.
      *
      * @note If construct_multigrid_hierarchy is set in the settings, the source
@@ -446,6 +524,47 @@ namespace TriangulationDescription
         TriangulationDescription::Settings::default_setting,
       const unsigned int my_rank_in = numbers::invalid_unsigned_int);
 
+    /**
+     * Similar to the above function but the owner of active cells are provided
+     * by a cell vector (see also
+     * parallel::TriangulationBase::global_active_cell_index_partitioner() and
+     * CellAccessor::global_active_cell_index()). This function allows to
+     * repartition distributed Triangulation objects.
+     *
+     * If the setup of multigrid levels is requested, they are partitioned
+     * according to a first-child policy.
+     *
+     * @note The communicator is extracted from the vector @p partition.
+     *
+     * @note The triangulation @p tria can be set up on a subcommunicator of the
+     *   communicator of @p partitioner. All processes that are not part of that
+     *   subcommunicator need to set up the local triangulation with the
+     *   special-purpose communicator MPI_COMM_NULL.
+     *
+     * @note The multgrid levels are currently not constructed, since
+     *   @p partition only describes the partitioning of the active level.
+     */
+    template <int dim, int spacedim>
+    Description<dim, spacedim>
+    create_description_from_triangulation(
+      const Triangulation<dim, spacedim> &              tria,
+      const LinearAlgebra::distributed::Vector<double> &partition,
+      const TriangulationDescription::Settings          settings =
+        TriangulationDescription::Settings::default_setting);
+
+    /**
+     * Similar to the above function but allowing the user to prescribe the
+     * partitioning of the multigrid levels.
+     */
+    template <int dim, int spacedim>
+    Description<dim, spacedim>
+    create_description_from_triangulation(
+      const Triangulation<dim, spacedim> &              tria,
+      const LinearAlgebra::distributed::Vector<double> &partition,
+      const std::vector<LinearAlgebra::distributed::Vector<double>>
+        &                                      mg_partitions,
+      const TriangulationDescription::Settings settings =
+        TriangulationDescription::Settings::default_setting);
 
     /**
      * Construct a TriangulationDescription::Description. In contrast
@@ -455,6 +574,35 @@ namespace TriangulationDescription
      * every n-th/each root of a group of size group_size) create a serial
      * triangulation and the TriangulationDescription::Description for all
      * processes in its group, which is communicated.
+     *
+     * This function can also be used to read an external mesh only once (by
+     * the root process and a group consisting all processes). The following
+     * code snippet shows a modified version of the example provided in the
+     * documentation of create_description_from_triangulation().
+     * Function calls that only need to be performed by the root process
+     * (read and partition mesh) have been moved into `std::function` objects.
+     *
+     * @code
+     * // create and partition serial triangulation and create description
+     * const TriangulationDescription::Description<dim, spacedim> description =
+     *   TriangulationDescription::Utilities::
+     *     create_description_from_triangulation_in_groups<dim, spacedim>(
+     *       [file_name](auto &tria_base) {
+     *         GridIn<dim, spacedim> grid_in;
+     *         grid_in.attach_triangulation(tria_base);
+     *         grid_in.read(file_name);
+     *       },
+     *       [](auto &tria_base, const auto comm, const auto group_size) {
+     *         GridTools::partition_triangulation(
+     *           Utilities::MPI::n_mpi_processes(comm), tria_base);
+     *       },
+     *       comm,
+     *       Utilities::MPI::n_mpi_processes(comm));
+     *
+     * // create triangulation
+     * parallel::fullydistributed::Triangulation<dim, spacedim> tria_pft(comm);
+     * tria_pft.create_triangulation(description);
+     * @endcode
      *
      * @note A reasonable group size is the size of a NUMA domain or the
      * size of a compute node.
@@ -553,8 +701,8 @@ namespace TriangulationDescription
 
   template <int dim, int spacedim>
   bool
-  Description<dim, spacedim>::
-  operator==(const Description<dim, spacedim> &other) const
+  Description<dim, spacedim>::operator==(
+    const Description<dim, spacedim> &other) const
   {
     if (this->coarse_cells != other.coarse_cells)
       return false;

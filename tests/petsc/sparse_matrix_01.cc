@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -15,7 +15,7 @@
 
 
 
-// check SparseMatrix::add(other, factor)
+// check SparseMatrix::add(factor, other)
 
 #include <deal.II/lac/petsc_sparse_matrix.h>
 
@@ -48,21 +48,21 @@ test()
 
   deallog << "before: " << m(0, 1) << std::endl;
   for (unsigned int i = 0; i < s; ++i)
-    deallog << m(i, i) << " ";
+    deallog << m(i, i) << ' ';
   deallog << std::endl;
 
-  m.add(m2, 1.0);
+  m.add(1.0, m2);
 
   deallog << "after: " << m(0, 1) << std::endl;
   for (unsigned int i = 0; i < s; ++i)
-    deallog << m(i, i) << " ";
+    deallog << m(i, i) << ' ';
   deallog << std::endl;
 
-  m.add(m2, -1.0);
+  m.add(-1.0, m2);
 
   deallog << "back to original: " << m(0, 1) << std::endl;
   for (unsigned int i = 0; i < s; ++i)
-    deallog << m(i, i) << " ";
+    deallog << m(i, i) << ' ';
   deallog << std::endl;
 
   deallog << "OK" << std::endl;

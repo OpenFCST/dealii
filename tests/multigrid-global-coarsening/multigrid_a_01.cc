@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -15,8 +15,8 @@
 
 
 /**
- * Test p-multigrid for a uniformly refined mesh both for simplex and
- * hypercube mesh.
+ * Test global-coarsening multigrid for a uniformly refined mesh both for
+ * simplex and hypercube mesh.
  */
 
 #include "multigrid_util.h"
@@ -95,10 +95,10 @@ test(const unsigned int n_refinements,
 
   // set up transfer operator
   for (unsigned int l = min_level; l < max_level; ++l)
-    transfers[l + 1].reinit_geometric_transfer(dof_handlers[l + 1],
-                                               dof_handlers[l],
-                                               constraints[l + 1],
-                                               constraints[l]);
+    transfers[l + 1].reinit(dof_handlers[l + 1],
+                            dof_handlers[l],
+                            constraints[l + 1],
+                            constraints[l]);
 
   MGTransferGlobalCoarsening<dim, VectorType> transfer(
     transfers,
@@ -124,8 +124,8 @@ test(const unsigned int n_refinements,
            operators,
            transfer);
 
-  deallog << dim << " " << fe_degree_fine << " " << n_refinements << " "
-          << (do_simplex_mesh ? "tri " : "quad") << " "
+  deallog << dim << ' ' << fe_degree_fine << ' ' << n_refinements << ' '
+          << (do_simplex_mesh ? "tri " : "quad") << ' '
           << solver_control.last_step() << std::endl;
 
   static unsigned int counter = 0;
@@ -142,7 +142,7 @@ test(const unsigned int n_refinements,
       data_out.add_data_vector(
         results[l],
         "solution",
-        DataOut_DoFData<DoFHandler<dim>, dim>::DataVectorType::type_dof_data);
+        DataOut_DoFData<dim, dim>::DataVectorType::type_dof_data);
       data_out.build_patches(*mapping_, 2);
 
       std::ofstream output("test." + std::to_string(dim) + "." +

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2018 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -22,6 +22,8 @@
 
 #include <deal.II/base/qprojector.h>
 #include <deal.II/base/quadrature_lib.h>
+
+#include <deal.II/grid/reference_cell.h>
 
 #include "../tests.h"
 
@@ -92,7 +94,7 @@ check_cells(std::vector<Quadrature<dim> *> &quadratures)
         }
       while (err < 1e-14);
       // Uncomment here for testing
-      //      deallog << " (Int " << quadrature_int << ',' << exact_int << ")";
+      //      deallog << " (Int " << quadrature_int << ',' << exact_int << ')';
       deallog << " is exact for polynomials of degree " << i - 1 << std::endl;
 
       if (dim == 1)
@@ -127,8 +129,10 @@ check_faces(const std::vector<Quadrature<dim - 1> *> &quadratures,
     {
       Quadrature<dim> quadrature(
         sub == false ?
-          QProjector<dim>::project_to_all_faces(*quadratures[n]) :
-          QProjector<dim>::project_to_all_subfaces(*quadratures[n]));
+          QProjector<dim>::project_to_all_faces(
+            ReferenceCells::get_hypercube<dim>(), *quadratures[n]) :
+          QProjector<dim>::project_to_all_subfaces(
+            ReferenceCells::get_hypercube<dim>(), *quadratures[n]));
       const std::vector<Point<dim>> &points  = quadrature.get_points();
       const std::vector<double> &    weights = quadrature.get_weights();
 
@@ -185,7 +189,7 @@ check_faces(const std::vector<Quadrature<dim - 1> *> &quadratures,
       while (err < (dim == 3 ? 8 : 1) * 2e-14);
       // Uncomment here for testing
       //      deallog << " (Int " << quadrature_int << '-' << exact_int << '='
-      //      << err << ")";
+      //      << err << ')';
       deallog << " is exact for polynomials of degree " << i - 1 << std::endl;
     }
   deallog.pop();

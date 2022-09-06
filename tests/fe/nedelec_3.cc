@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2018 by the deal.II authors
+// Copyright (C) 2013 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -101,7 +101,7 @@ check(const unsigned int p)
           for (unsigned int d = 0; d < dim; ++d)
             deallog << (d == 0 ? "" : " ") << shape_values[q](d);
 
-          deallog << "]" << std::endl;
+          deallog << ']' << std::endl;
         };
 
       deallog << std::endl;

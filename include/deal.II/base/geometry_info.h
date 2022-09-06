@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -520,7 +520,7 @@ struct RefinementPossibilities
    * local coordinate system within the global coordinate system of the
    * space it lives in.
    */
-  enum Possibilities
+  enum Possibilities : std::uint8_t
   {
     /**
      * Do not perform refinement.
@@ -590,7 +590,7 @@ struct RefinementPossibilities<1>
    * local coordinate system within the global coordinate system of the
    * space it lives in.
    */
-  enum Possibilities
+  enum Possibilities : std::uint8_t
   {
     /**
      * Do not refine.
@@ -656,7 +656,7 @@ struct RefinementPossibilities<2>
    * local coordinate system within the global coordinate system of the
    * space it lives in.
    */
-  enum Possibilities
+  enum Possibilities : std::uint8_t
   {
     /**
      * Do not refine.
@@ -731,7 +731,7 @@ struct RefinementPossibilities<3>
    * local coordinate system within the global coordinate system of the
    * space it lives in.
    */
-  enum Possibilities
+  enum Possibilities : std::uint8_t
   {
     /**
      * Do not refine.
@@ -832,7 +832,8 @@ public:
    * Return the intersection of the refinement flags represented by the
    * current object and the one given as argument.
    */
-  RefinementCase operator&(const RefinementCase &r) const;
+  RefinementCase
+  operator&(const RefinementCase &r) const;
 
   /**
    * Return the negation of the refinement flags represented by the current
@@ -1437,8 +1438,12 @@ struct GeometryInfo<0>
  * This class provides dimension independent information to all topological
  * structures that make up the unit, or
  * @ref GlossReferenceCell "reference cell".
- * This class has been
+ * That said, this class only describes information about hypercube reference
+ * cells (i.e., lines, quadrilaterals, or hexahedra), which historically
+ * were the only kinds of cells supported by deal.II. This is no longer the
+ * case today, and consequently this class has been
  * superseded by the ReferenceCell class -- see there for more information.
+ * The rest of this class's documentation is therefore partly historical.
  *
  *
  * It is the one central point in the library where information about the
@@ -2826,8 +2831,8 @@ RefinementCase<dim>::operator|(const RefinementCase<dim> &r) const
 
 
 template <int dim>
-inline RefinementCase<dim> RefinementCase<dim>::
-                           operator&(const RefinementCase<dim> &r) const
+inline RefinementCase<dim>
+RefinementCase<dim>::operator&(const RefinementCase<dim> &r) const
 {
   return RefinementCase<dim>(static_cast<std::uint8_t>(value & r.value));
 }
@@ -3670,6 +3675,10 @@ GeometryInfo<2>::face_refinement_case(
                    RefinementCase<dim>::isotropic_refinement + 1);
   AssertIndexRange(face_no, GeometryInfo<dim>::faces_per_cell);
 
+  // simple special case
+  if (cell_refinement_case == RefinementCase<dim>::cut_xy)
+    return RefinementCase<1>::cut_x;
+
   const RefinementCase<dim - 1>
     ref_cases[RefinementCase<dim>::isotropic_refinement +
               1][GeometryInfo<dim>::faces_per_cell / 2] = {
@@ -3700,6 +3709,10 @@ GeometryInfo<3>::face_refinement_case(
   AssertIndexRange(cell_refinement_case,
                    RefinementCase<dim>::isotropic_refinement + 1);
   AssertIndexRange(face_no, GeometryInfo<dim>::faces_per_cell);
+
+  // simple special case
+  if (cell_refinement_case == RefinementCase<dim>::cut_xyz)
+    return RefinementCase<dim - 1>::cut_xy;
 
   const RefinementCase<dim - 1>
     ref_cases[RefinementCase<dim>::isotropic_refinement + 1]
@@ -3811,6 +3824,10 @@ GeometryInfo<3>::line_refinement_case(
                    RefinementCase<dim>::isotropic_refinement + 1);
   AssertIndexRange(line_no, GeometryInfo<dim>::lines_per_cell);
 
+  // simple special case
+  if (cell_refinement_case == RefinementCase<dim>::cut_xyz)
+    return RefinementCase<1>::cut_x;
+
   // array indicating, which simple refine
   // case cuts a line in direction x, y or
   // z. For example, cut_y and everything
@@ -3878,8 +3895,8 @@ GeometryInfo<2>::min_cell_refinement_case_for_face_refinement(
   AssertIndexRange(face_no, GeometryInfo<dim>::faces_per_cell);
 
   if (face_refinement_case == RefinementCase<dim>::cut_x)
-    return (face_no / 2) ? RefinementCase<dim>::cut_x :
-                           RefinementCase<dim>::cut_y;
+    return (face_no / 2) != 0u ? RefinementCase<dim>::cut_x :
+                                 RefinementCase<dim>::cut_y;
   else
     return RefinementCase<dim>::no_refinement;
 }
@@ -3974,7 +3991,8 @@ GeometryInfo<2>::min_cell_refinement_case_for_line_refinement(
   (void)dim;
   AssertIndexRange(line_no, GeometryInfo<dim>::lines_per_cell);
 
-  return (line_no / 2) ? RefinementCase<2>::cut_x : RefinementCase<2>::cut_y;
+  return (line_no / 2) != 0u ? RefinementCase<2>::cut_x :
+                               RefinementCase<2>::cut_y;
 }
 
 
@@ -4715,7 +4733,7 @@ inline Point<dim, Number>
 GeometryInfo<dim>::project_to_unit_cell(const Point<dim, Number> &q)
 {
   Point<dim, Number> p;
-  for (unsigned int i = 0; i < dim; i++)
+  for (unsigned int i = 0; i < dim; ++i)
     p[i] = std::min(std::max(q[i], Number(0.)), Number(1.));
 
   return p;
@@ -4729,7 +4747,7 @@ GeometryInfo<dim>::distance_to_unit_cell(const Point<dim> &p)
 {
   double result = 0.0;
 
-  for (unsigned int i = 0; i < dim; i++)
+  for (unsigned int i = 0; i < dim; ++i)
     {
       result = std::max(result, -p[i]);
       result = std::max(result, p[i] - 1.);

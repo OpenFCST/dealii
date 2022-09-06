@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -26,6 +26,7 @@
 #include <deal.II/fe/mapping_fe.h>
 
 #include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/reference_cell.h>
 
 #include <deal.II/hp/q_collection.h>
 
@@ -79,7 +80,7 @@ test<2>()
                                             quad_ref);
 
     const auto print = [&](const unsigned int face_no) {
-      deallog << "face_no=" << face_no << ":" << std::endl;
+      deallog << "face_no=" << face_no << ':' << std::endl;
       for (unsigned int q = 0,
                         i = QProjector<dim>::DataSetDescriptor::face(
                           ReferenceCells::Quadrilateral,
@@ -91,8 +92,8 @@ test<2>()
            q < quad_ref[face_no].size();
            ++q, ++i)
         {
-          deallog << quad.point(i) << " ";
-          deallog << quad.weight(i) << " ";
+          deallog << quad.point(i) << ' ';
+          deallog << quad.weight(i) << ' ';
           deallog << std::endl;
         }
       deallog << std::endl;
@@ -130,11 +131,11 @@ test<2>()
         {
           mapping.fill_fe_face_values(cell, face_no, quad_ref, *data_ref, data);
 
-          deallog << "face_no=" << face_no << ":" << std::endl;
+          deallog << "face_no=" << face_no << ':' << std::endl;
           for (unsigned int q = 0; q < quad_ref[face_no].size(); ++q)
             {
-              deallog << data.quadrature_points[q] << " ";
-              deallog << data.JxW_values[q] << " ";
+              deallog << data.quadrature_points[q] << ' ';
+              deallog << data.JxW_values[q] << ' ';
               deallog << std::endl;
             }
           deallog << std::endl;
@@ -200,7 +201,7 @@ test<2>()
           fe_face_values.get_function_values(vector_1, values_1);
 
           for (unsigned int q = 0; q < values_0.size(); ++q)
-            deallog << values_0[q] << " " << values_1[q] << " " << std::endl;
+            deallog << values_0[q] << ' ' << values_1[q] << ' ' << std::endl;
 
           deallog << std::endl;
         }
@@ -241,10 +242,10 @@ test<2>()
                                                Vector<double>(dim));
           fe_face_values.get_function_values(vector_0, values_0);
 
-          deallog << "face_no=" << face_no << ":" << std::endl;
+          deallog << "face_no=" << face_no << ':' << std::endl;
 
           for (unsigned int q = 0; q < values_0.size(); ++q)
-            deallog << values_0[q][0] << " " << values_0[q][1] << " "
+            deallog << values_0[q][0] << ' ' << values_0[q][1] << ' '
                     << std::endl;
 
           deallog << std::endl;
@@ -295,11 +296,11 @@ test<3>()
                                                Vector<double>(dim));
           fe_face_values.get_function_values(vector_0, values_0);
 
-          deallog << "face_no=" << face_no << ":" << std::endl;
+          deallog << "face_no=" << face_no << ':' << std::endl;
 
           for (unsigned int q = 0; q < values_0.size(); ++q)
-            deallog << values_0[q][0] << " " << values_0[q][1] << " "
-                    << values_0[q][2] << " " << std::endl;
+            deallog << values_0[q][0] << ' ' << values_0[q][1] << ' '
+                    << values_0[q][2] << ' ' << std::endl;
 
           deallog << std::endl;
         }

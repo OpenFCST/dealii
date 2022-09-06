@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -87,8 +87,8 @@ test(const Triangulation<dim> &tr,
         {
           deallog << i << ": ( ";
           for (unsigned int d = 0; d < dim; ++d)
-            deallog << cell->vertex(i)[d] << " ";
-          deallog << ")" << std::endl;
+            deallog << cell->vertex(i)[d] << ' ';
+          deallog << ')' << std::endl;
         }
 
       bool cell_ok = true;

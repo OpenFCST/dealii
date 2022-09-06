@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2019 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -24,12 +24,11 @@
 
 #include <deal.II/grid/tria_accessor.h>
 
-#include <deal.II/hp/dof_handler.h>
-
 DEAL_II_DISABLE_EXTRA_DIAGNOSTICS
 #include <boost/container/small_vector.hpp>
 DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
 
+#include <set>
 #include <vector>
 
 DEAL_II_NAMESPACE_OPEN
@@ -140,7 +139,8 @@ namespace internal
  * A class that gives access to the degrees of freedom stored in a DoFHandler
  * object. Accessors are used to access the data that pertains to edges,
  * faces, and cells of a triangulation. The concept is explained in more
- * detail in connection to @ref Iterators.
+ * detail in connection to
+ * @ref Iterators.
  *
  * This class follows mainly the route laid out by the accessor library
  * declared in the triangulation library (TriaAccessor). It enables the user
@@ -216,13 +216,13 @@ public:
    * A static variable that allows users of this class to discover the value
    * of the second template argument.
    */
-  static const unsigned int dimension = dim;
+  static constexpr unsigned int dimension = dim;
 
   /**
    * A static variable that allows users of this class to discover the value
    * of the third template argument.
    */
-  static const unsigned int space_dimension = spacedim;
+  static constexpr unsigned int space_dimension = spacedim;
 
   /**
    * Declare an alias to the base class to make accessing some of the
@@ -269,6 +269,24 @@ public:
               const DoFHandler<dim, spacedim> *   dof_handler);
 
   /**
+   * Copy constructor.
+   */
+  DoFAccessor(const DoFAccessor<structdim, dim, spacedim, level_dof_access> &) =
+    default;
+
+  /**
+   * Move constructor.
+   */
+  DoFAccessor(                                                    // NOLINT
+    DoFAccessor<structdim, dim, spacedim, level_dof_access> &&) = // NOLINT
+    default;                                                      // NOLINT
+
+  /**
+   * Destructor.
+   */
+  ~DoFAccessor() = default;
+
+  /**
    * Conversion constructor. This constructor exists to make certain
    * constructs simpler to write in dimension independent code. For example,
    * it allows assigning a face iterator to a line iterator, an operation that
@@ -309,6 +327,14 @@ public:
   DoFAccessor<structdim, dim, spacedim, level_dof_access> &
   operator=(const DoFAccessor<structdim, dim, spacedim, level_dof_access> &da) =
     delete;
+
+  /**
+   * Move assignment operator.
+   */
+  DoFAccessor<structdim, dim, spacedim, level_dof_access> &       // NOLINT
+  operator=(                                                      // NOLINT
+    DoFAccessor<structdim, dim, spacedim, level_dof_access> &&) = // NOLINT
+    default;                                                      // NOLINT
 
   /**
    * @}
@@ -418,9 +444,9 @@ public:
    * <code>cell-@>active_fe_index</code> as last argument.
    */
   void
-  get_dof_indices(std::vector<types::global_dof_index> &dof_indices,
-                  const unsigned int                    fe_index =
-                    DoFHandler<dim, spacedim>::invalid_fe_index) const;
+  get_dof_indices(
+    std::vector<types::global_dof_index> &dof_indices,
+    const unsigned int fe_index = numbers::invalid_fe_index) const;
 
   /**
    * Return the global multilevel indices of the degrees of freedom that live
@@ -429,19 +455,18 @@ public:
    * level this line lives on.
    */
   void
-  get_mg_dof_indices(const int                             level,
-                     std::vector<types::global_dof_index> &dof_indices,
-                     const unsigned int                    fe_index =
-                       DoFHandler<dim, spacedim>::invalid_fe_index) const;
+  get_mg_dof_indices(
+    const int                             level,
+    std::vector<types::global_dof_index> &dof_indices,
+    const unsigned int fe_index = numbers::invalid_fe_index) const;
 
   /**
    * Set the level DoF indices that are returned by get_mg_dof_indices.
    */
   void
-  set_mg_dof_indices(
-    const int                                   level,
-    const std::vector<types::global_dof_index> &dof_indices,
-    const unsigned int fe_index = DoFHandler<dim, spacedim>::invalid_fe_index);
+  set_mg_dof_indices(const int                                   level,
+                     const std::vector<types::global_dof_index> &dof_indices,
+                     const unsigned int fe_index = numbers::invalid_fe_index);
 
   /**
    * Global DoF index of the <i>i</i> degree associated with the @p vertexth
@@ -451,20 +476,24 @@ public:
    * ::DoFHandler class, this value must be equal to its default value since
    * that class only supports the same finite element on all cells anyway.
    *
-   * However, when hp-capabilities are enabled, different finite element
-   * objects may be used on different cells. On faces between two cells, as
-   * well as vertices, there may therefore be two sets of degrees of freedom,
-   * one for each of the finite elements used on the adjacent cells.  In order
-   * to specify which set of degrees of freedom to work on, the last argument
-   * is used to disambiguate. Finally, if this function is called for a cell
+   * However, when hp-capabilities are enabled, different finite
+   * element objects may be used on different cells. On faces between
+   * two cells, as well as vertices, there may therefore be two sets
+   * of degrees of freedom, one for each of the finite elements used
+   * on the adjacent cells.  In order to specify which set of degrees
+   * of freedom to work on, the last argument is used to
+   * disambiguate. Finally, if this function is called for a cell
    * object, there can only be a single set of degrees of freedom, and
-   * fe_index has to match the result of active_fe_index().
+   * `fe_index` has to match the result of
+   * `cell->active_fe_index()`. Alternatively, if `fe_index` is left
+   * to its default value when this function is called on a cell, then
+   * this is interpreted as equal to `cell->active_fe_index()`.
    */
   types::global_dof_index
-  vertex_dof_index(const unsigned int vertex,
-                   const unsigned int i,
-                   const unsigned int fe_index =
-                     DoFHandler<dim, spacedim>::invalid_fe_index) const;
+  vertex_dof_index(
+    const unsigned int vertex,
+    const unsigned int i,
+    const unsigned int fe_index = numbers::invalid_fe_index) const;
 
   /**
    * Return the global DoF index of the <code>i</code>th degree of freedom
@@ -472,11 +501,11 @@ public:
    * see vertex_dof_index().
    */
   types::global_dof_index
-  mg_vertex_dof_index(const int          level,
-                      const unsigned int vertex,
-                      const unsigned int i,
-                      const unsigned int fe_index =
-                        DoFHandler<dim, spacedim>::invalid_fe_index) const;
+  mg_vertex_dof_index(
+    const int          level,
+    const unsigned int vertex,
+    const unsigned int i,
+    const unsigned int fe_index = numbers::invalid_fe_index) const;
 
   /**
    * Index of the <i>i</i>th degree of freedom of this object.
@@ -507,8 +536,7 @@ public:
    */
   types::global_dof_index
   dof_index(const unsigned int i,
-            const unsigned int fe_index =
-              DoFHandler<dim, spacedim>::invalid_fe_index) const;
+            const unsigned int fe_index = numbers::invalid_fe_index) const;
 
   /**
    * Return the dof_index on the given level. Also see dof_index.
@@ -685,46 +713,20 @@ protected:
   void
   set_dof_index(const unsigned int            i,
                 const types::global_dof_index index,
-                const unsigned int            fe_index =
-                  DoFHandler<dim, spacedim>::invalid_fe_index) const;
+                const unsigned int fe_index = numbers::invalid_fe_index) const;
 
   void
   set_mg_dof_index(const int                     level,
                    const unsigned int            i,
                    const types::global_dof_index index) const;
 
-  /**
-   * Set the global index of the <i>i</i> degree on the @p vertex-th vertex of
-   * the present cell to @p index.
-   *
-   * The last argument denotes the finite element index. For the standard
-   * ::DoFHandler class, this value must be equal to its default value since
-   * that class only supports the same finite element on all cells anyway.
-   *
-   * However, when the relevant DoFHandler has hp-capabilities, different
-   * finite element objects may be used on different cells. On faces between
-   * two cells, as well as vertices, there may therefore be two sets of
-   * degrees of freedom, one for each of the finite elements used on the
-   * adjacent cells.  In order to specify which set of degrees of freedom to
-   * work on, the last argument is used to disambiguate. Finally, if this
-   * function is called for a cell object, there can only be a single set of
-   * degrees of freedom, and fe_index has to match the result of
-   * active_fe_index().
-   */
   void
-  set_vertex_dof_index(const unsigned int            vertex,
-                       const unsigned int            i,
-                       const types::global_dof_index index,
-                       const unsigned int            fe_index =
-                         DoFHandler<dim, spacedim>::invalid_fe_index) const;
-
-  void
-  set_mg_vertex_dof_index(const int                     level,
-                          const unsigned int            vertex,
-                          const unsigned int            i,
-                          const types::global_dof_index index,
-                          const unsigned int            fe_index =
-                            DoFHandler<dim, spacedim>::invalid_fe_index) const;
+  set_mg_vertex_dof_index(
+    const int                     level,
+    const unsigned int            vertex,
+    const unsigned int            i,
+    const types::global_dof_index index,
+    const unsigned int            fe_index = numbers::invalid_fe_index) const;
 
   // Iterator classes need to be friends because they need to access
   // operator== and operator!=.
@@ -765,13 +767,13 @@ public:
    * A static variable that allows users of this class to discover the value
    * of the second template argument.
    */
-  static const unsigned int dimension = 1;
+  static constexpr unsigned int dimension = 1;
 
   /**
    * A static variable that allows users of this class to discover the value
    * of the third template argument.
    */
-  static const unsigned int space_dimension = spacedim;
+  static constexpr unsigned int space_dimension = spacedim;
 
   /**
    * Declare an alias to the base class to make accessing some of the
@@ -821,7 +823,8 @@ public:
   /**
    * Constructor. This constructor exists in order to maintain interface
    * compatibility with the other accessor classes. However, it doesn't do
-   * anything useful here and so may not actually be called.
+   * anything useful here and so may not actually be called except to
+   * default-construct iterator objects.
    */
   DoFAccessor(const Triangulation<1, spacedim> *,
               const int                                  = 0,
@@ -852,6 +855,22 @@ public:
     const DoFAccessor<structdim2, dim2, spacedim2, level_dof_access2> &);
 
   /**
+   * Copy constructor.
+   */
+  DoFAccessor(const DoFAccessor<0, 1, spacedim, level_dof_access> &) = default;
+
+  /**
+   * Move constructor.
+   */
+  // NOLINTNEXTLINE OSX does not compile with noexcept
+  DoFAccessor(DoFAccessor<0, 1, spacedim, level_dof_access> &&) = default;
+
+  /**
+   * Destructor.
+   */
+  ~DoFAccessor() = default;
+
+  /**
    * Copy operator. These operators are usually used in a context like
    * <tt>iterator a,b; *a=*b;</tt>. Presumably, the intent here is to copy the
    * object pointed to
@@ -862,6 +881,13 @@ public:
    */
   DoFAccessor<0, 1, spacedim, level_dof_access> &
   operator=(const DoFAccessor<0, 1, spacedim, level_dof_access> &da) = delete;
+
+  /**
+   * Move assignment operator.
+   */
+  DoFAccessor<0, 1, spacedim, level_dof_access> &
+  operator=(DoFAccessor<0, 1, spacedim, level_dof_access> &&) noexcept =
+    default;
 
   /**
    * @}
@@ -1147,7 +1173,8 @@ protected:
   /**
    * Reset the DoF handler pointer.
    */
-  void set_dof_handler(DoFHandler<1, spacedim> *dh);
+  void
+  set_dof_handler(DoFHandler<1, spacedim> *dh);
 
   /**
    * Set the index of the <i>i</i>th degree of freedom of this object to @p
@@ -1169,31 +1196,6 @@ protected:
    */
   void
   set_dof_index(
-    const unsigned int            i,
-    const types::global_dof_index index,
-    const unsigned int fe_index = AccessorData::invalid_fe_index) const;
-
-  /**
-   * Set the global index of the <i>i</i> degree on the @p vertex-th vertex of
-   * the present cell to @p index.
-   *
-   * The last argument denotes the finite element index. For the standard
-   * ::DoFHandler class, this value must be equal to its default value since
-   * that class only supports the same finite element on all cells anyway.
-   *
-   * However, when the relevant DoFHandler has hp-capabilities, different
-   * finite element objects may be used on different cells. On faces between
-   * two cells, as well as vertices, there may therefore be two sets of
-   * degrees of freedom, one for each of the finite elements used on the
-   * adjacent cells.  In order to specify which set of degrees of freedom to
-   * work on, the last argument is used to disambiguate. Finally, if this
-   * function is called for a cell object, there can only be a single set of
-   * degrees of freedom, and fe_index has to match the result of
-   * active_fe_index().
-   */
-  void
-  set_vertex_dof_index(
-    const unsigned int            vertex,
     const unsigned int            i,
     const types::global_dof_index index,
     const unsigned int fe_index = AccessorData::invalid_fe_index) const;
@@ -1297,8 +1299,7 @@ public:
   void
   set_dof_index(const unsigned int            i,
                 const types::global_dof_index index,
-                const unsigned int            fe_index =
-                  DoFHandler<dim, spacedim>::invalid_fe_index) const;
+                const unsigned int fe_index = numbers::invalid_fe_index) const;
 };
 
 
@@ -1400,6 +1401,25 @@ public:
     const DoFAccessor<structdim2, dim2, spacedim2, level_dof_access2> &);
 
   /**
+   * Copy constructor.
+   */
+  DoFCellAccessor(
+    const DoFCellAccessor<dimension_, space_dimension_, level_dof_access> &) =
+    default;
+
+  /**
+   * Move constructor.
+   */
+  DoFCellAccessor(                                                  // NOLINT
+    DoFCellAccessor<dimension_, space_dimension_, level_dof_access> // NOLINT
+      &&) = default;                                                // NOLINT
+
+  /**
+   * Destructor
+   */
+  ~DoFCellAccessor() = default;
+
+  /**
    * Copy operator. These operators are usually used in a context like
    * <tt>iterator a,b; *a=*b;</tt>. Presumably, the intent here is to copy the
    * object pointed to
@@ -1412,6 +1432,14 @@ public:
   operator=(
     const DoFCellAccessor<dimension_, space_dimension_, level_dof_access> &da) =
     delete;
+
+  /**
+   * Move assignment operator.
+   */
+  DoFCellAccessor<dimension_, space_dimension_, level_dof_access> & // NOLINT
+  operator=(                                                        // NOLINT
+    DoFCellAccessor<dimension_, space_dimension_, level_dof_access> // NOLINT
+      &&) = default;                                                // NOLINT
 
   /**
    * @}
@@ -1711,6 +1739,15 @@ public:
    * of the respective finite element class for a description of what the
    * prolongation matrices represent in this case.
    *
+   * @note Cells set the values of DoFs independently and might overwrite
+   * previously set values in the global vector, for example when calling the
+   * same function earlier from a different cell. By setting @p perform_check,
+   * you can enable a check that the previous value and the one to be set here
+   * are at least roughly the same. In practice, they might be slightly
+   * different because they are computed in a way that theoretically ensures
+   * that they are the same, but in practice they are only equal up to
+   * round-off.
+   *
    * @note Unlike the get_dof_values() function, this function is only
    * available on cells, rather than on lines, quads, and hexes, since
    * interpolation is presently only provided for cells by the finite element
@@ -1719,6 +1756,24 @@ public:
   template <class OutputVector, typename number>
   void
   set_dof_values_by_interpolation(
+    const Vector<number> &local_values,
+    OutputVector &        values,
+    const unsigned int    fe_index =
+      DoFHandler<dimension_, space_dimension_>::invalid_fe_index,
+    const bool perform_check = false) const;
+
+  /**
+   * Similar to set_dof_values_by_interpolation() with the difference that
+   * values are added into the vector.
+   *
+   * @note In parallel::distributed::SolutionTransfer, this function is used
+   *   to accumulate the contributions of all cells to a DoF; with a
+   *   subsequent multiplication with the inverse of the valence, finally,
+   *   the average value is obtained.
+   */
+  template <class OutputVector, typename number>
+  void
+  distribute_local_to_global_by_interpolation(
     const Vector<number> &local_values,
     OutputVector &        values,
     const unsigned int    fe_index =

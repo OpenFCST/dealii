@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -41,7 +41,7 @@ namespace
   Lh(const Point<dim> &x_q, const TableIndices<dim> &indices)
   {
     double res = 1.0;
-    for (unsigned int d = 0; d < dim; d++)
+    for (unsigned int d = 0; d < dim; ++d)
       {
         const double x = 2.0 * (x_q[d] - 0.5);
         Assert((x_q[d] <= 1.0) && (x_q[d] >= 0.), ExcLegendre(d, x_q[d]));
@@ -61,7 +61,7 @@ namespace
   multiplier(const TableIndices<dim> &indices)
   {
     double res = 1.0;
-    for (unsigned int d = 0; d < dim; d++)
+    for (unsigned int d = 0; d < dim; ++d)
       res *= (0.5 + indices[d]);
 
     return res;
@@ -216,7 +216,7 @@ namespace FESeries
         component_ != numbers::invalid_unsigned_int,
         ExcMessage(
           "For vector-valued problems, you need to explicitly specify for "
-          "which vector component you will want to do a Fourier decomposition "
+          "which vector component you will want to do a Legendre decomposition "
           "by setting the 'component' argument of this constructor."));
 
     AssertIndexRange(component, fe_collection[0].n_components());
@@ -232,23 +232,9 @@ namespace FESeries
 
 
   template <int dim, int spacedim>
-  Legendre<dim, spacedim>::Legendre(
-    const unsigned int                     n_coefficients_per_direction,
-    const hp::FECollection<dim, spacedim> &fe_collection,
-    const hp::QCollection<dim> &           q_collection)
-    : Legendre<dim, spacedim>(
-        std::vector<unsigned int>(fe_collection.size(),
-                                  n_coefficients_per_direction),
-        fe_collection,
-        q_collection)
-  {}
-
-
-
-  template <int dim, int spacedim>
   inline bool
-  Legendre<dim, spacedim>::
-  operator==(const Legendre<dim, spacedim> &legendre) const
+  Legendre<dim, spacedim>::operator==(
+    const Legendre<dim, spacedim> &legendre) const
   {
     return (
       (n_coefficients_per_direction == legendre.n_coefficients_per_direction) &&
@@ -323,8 +309,8 @@ namespace FESeries
     Assert(local_dof_values.size() == matrix.n(),
            ExcDimensionMismatch(local_dof_values.size(), matrix.n()));
 
-    for (unsigned int i = 0; i < unrolled_coefficients.size(); i++)
-      for (unsigned int j = 0; j < local_dof_values.size(); j++)
+    for (unsigned int i = 0; i < unrolled_coefficients.size(); ++i)
+      for (unsigned int j = 0; j < local_dof_values.size(); ++j)
         unrolled_coefficients[i] += matrix[i][j] * local_dof_values[j];
 
     legendre_coefficients.fill(unrolled_coefficients.begin());

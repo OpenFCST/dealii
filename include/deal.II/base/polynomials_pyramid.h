@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -24,12 +24,6 @@
 DEAL_II_NAMESPACE_OPEN
 
 /**
- * A namespace for functions and classes that provide support for simplex
- * reference cell entities, i.e., triangles and tetrahedrons.
- *
- *  @ingroup simplex
- */
-/**
  * Polynomials defined on pyramid entities. This class is basis of
  * FE_PyramidP.
  */
@@ -40,7 +34,7 @@ public:
   /**
    * Make the dimension available to the outside.
    */
-  static const unsigned int dimension = dim;
+  static constexpr unsigned int dimension = dim;
 
   /*
    * Constructor taking the polynomial @p degree as input.
@@ -137,7 +131,7 @@ ScalarLagrangePolynomialPyramid<dim>::compute_derivative(
   Assert(order == 1, ExcNotImplemented());
   const auto grad = compute_grad(i, p);
 
-  for (unsigned int i = 0; i < dim; i++)
+  for (unsigned int i = 0; i < dim; ++i)
     der[i] = grad[i];
 
   return der;

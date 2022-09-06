@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -46,19 +46,17 @@ test()
                                               Point<dim>(),
                                               0);
 
-  particle_handler.insert_particle(particle, tr.begin_active());
+  typename Triangulation<dim, spacedim>::active_cell_iterator cell =
+    tr.begin_active();
+  while (!cell->is_locally_owned())
+    ++cell;
+
+  particle_handler.insert_particle(particle, cell);
   particle_handler.update_cached_numbers();
 
-  // initiate data transfer
-  tr.signals.pre_distributed_repartition.connect([&particle_handler]() {
-    particle_handler.register_store_callback_function();
-  });
-
-  tr.signals.post_distributed_repartition.connect([&particle_handler]() {
-    particle_handler.register_load_callback_function(false);
-  });
-
+  particle_handler.prepare_for_coarsening_and_refinement();
   tr.repartition();
+  particle_handler.unpack_after_coarsening_and_refinement();
 
   deallog << "OK" << std::endl;
 }

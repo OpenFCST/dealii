@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2019 by the deal.II authors
+// Copyright (C) 2009 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -99,9 +99,8 @@ test()
 
 
   // ----- transfer -----
-  parallel::distributed::
-    SolutionTransfer<dim, TrilinosWrappers::MPI::Vector, DoFHandler<dim>>
-      soltrans(dh);
+  parallel::distributed::SolutionTransfer<dim, TrilinosWrappers::MPI::Vector>
+    soltrans(dh);
 
   soltrans.prepare_for_coarsening_and_refinement(old_solution);
   tria.execute_coarsening_and_refinement();

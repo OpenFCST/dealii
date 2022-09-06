@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2020 by the deal.II authors
+ * Copyright (C) 2020 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -66,6 +66,7 @@
 #include <deal.II/fe/fe_system.h>
 
 #include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/tria_accessor.h>
 #include <deal.II/grid/tria_iterator.h>
@@ -1901,13 +1902,17 @@ namespace Euler_DG
 #ifdef DEAL_II_WITH_P4EST
 #  ifdef HEX
     parallel::distributed::Triangulation<dim> triangulation;
-    MappingQGeneric<dim>                      mapping;
 #  else
     parallel::fullydistributed::Triangulation<dim> triangulation;
-    MappingFE<dim>                                 mapping;
 #  endif
 #else
     Triangulation<dim>                                  triangulation;
+#endif
+
+#ifdef HEX
+    MappingQ<dim> mapping;
+#else
+    MappingFE<dim>                                      mapping;
 #endif
 
     FESystem<dim>   fe;
@@ -2389,10 +2394,10 @@ namespace Euler_DG
       pcout << "Running with "
             << Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD)
             << " MPI processes" << std::endl;
-      pcout << "Vectorization over " << n_vect_number << " "
+      pcout << "Vectorization over " << n_vect_number << ' '
             << (std::is_same<Number, double>::value ? "doubles" : "floats")
             << " = " << n_vect_bits << " bits ("
-            << Utilities::System::get_current_vectorization_level() << ")"
+            << Utilities::System::get_current_vectorization_level() << ')'
             << std::endl;
       */
     }
@@ -2420,10 +2425,10 @@ namespace Euler_DG
 #endif
 
     double min_vertex_distance = std::numeric_limits<double>::max();
-    for (const auto &cell : triangulation.active_cell_iterators())
-      if (cell->is_locally_owned())
-        min_vertex_distance =
-          std::min(min_vertex_distance, cell->minimum_vertex_distance());
+    for (const auto &cell : triangulation.active_cell_iterators() |
+                              IteratorFilters::LocallyOwnedCell())
+      min_vertex_distance =
+        std::min(min_vertex_distance, cell->minimum_vertex_distance());
     min_vertex_distance =
       Utilities::MPI::min(min_vertex_distance, MPI_COMM_WORLD);
 

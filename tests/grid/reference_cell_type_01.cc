@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -31,17 +31,17 @@ test()
   GridGenerator::subdivided_hyper_cube(tria, 3);
 
   for (const auto &cell : tria.active_cell_iterators())
-    deallog << static_cast<int>(cell->reference_cell()) << " ";
+    deallog << static_cast<int>(cell->reference_cell()) << ' ';
   deallog << std::endl;
 
   if (dim != 1)
     for (const auto &face : tria.active_face_iterators())
-      deallog << static_cast<int>(face->reference_cell()) << " ";
+      deallog << static_cast<int>(face->reference_cell()) << ' ';
   deallog << std::endl;
 
   for (const auto &cell : tria.active_cell_iterators())
     for (const auto &face : cell->face_iterators())
-      deallog << static_cast<int>(face->reference_cell()) << " ";
+      deallog << static_cast<int>(face->reference_cell()) << ' ';
   deallog << std::endl;
 }
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2010 - 2020 by the deal.II authors
+// Copyright (C) 2010 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -422,7 +422,7 @@ namespace Step39
     output_results(const unsigned int cycle) const;
 
     parallel::distributed::Triangulation<dim> triangulation;
-    const MappingQGeneric<dim>                mapping;
+    const MappingQ<dim>                       mapping;
     const FiniteElement<dim> &                fe;
     DoFHandler<dim>                           dof_handler;
 

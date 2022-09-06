@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -23,13 +23,14 @@
 #include <deal.II/fe/fe_simplex_p_bubbles.h>
 #include <deal.II/fe/fe_wedge_p.h>
 #include <deal.II/fe/mapping_fe.h>
+#include <deal.II/fe/mapping_q.h>
 #include <deal.II/fe/mapping_q1.h>
-#include <deal.II/fe/mapping_q_generic.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/reference_cell.h>
 #include <deal.II/grid/tria.h>
 
+#include <iostream>
 #include <memory>
 
 DEAL_II_NAMESPACE_OPEN
@@ -112,7 +113,7 @@ ReferenceCell::get_default_mapping(const unsigned int degree) const
   AssertDimension(dim, get_dimension());
 
   if (is_hyper_cube())
-    return std::make_unique<MappingQGeneric<dim, spacedim>>(degree);
+    return std::make_unique<MappingQ<dim, spacedim>>(degree);
   else if (is_simplex())
     return std::make_unique<MappingFE<dim, spacedim>>(
       FE_SimplexP<dim, spacedim>(degree));
@@ -127,7 +128,7 @@ ReferenceCell::get_default_mapping(const unsigned int degree) const
       Assert(false, ExcNotImplemented());
     }
 
-  return std::make_unique<MappingQGeneric<dim, spacedim>>(degree);
+  return std::make_unique<MappingQ<dim, spacedim>>(degree);
 }
 
 
@@ -202,10 +203,11 @@ ReferenceCell::get_nodal_type_quadrature() const
   // desired type the first time we encounter a particular
   // reference cell
   const auto create_quadrature = [](const ReferenceCell &reference_cell) {
-    Triangulation<dim> tria;
-    GridGenerator::reference_cell(reference_cell, tria);
+    std::vector<Point<dim>> vertices(reference_cell.n_vertices());
+    for (const unsigned int v : reference_cell.vertex_indices())
+      vertices[v] = reference_cell.vertex<dim>(v);
 
-    return Quadrature<dim>(tria.get_vertices());
+    return Quadrature<dim>(vertices);
   };
 
   if (is_hyper_cube())
@@ -453,6 +455,135 @@ ReferenceCell::vtk_lagrange_type() const
 
   return VTKCellType::VTK_INVALID;
 }
+
+
+
+unsigned int
+ReferenceCell::gmsh_element_type() const
+{
+  /*
+    From the GMSH documentation:
+
+    elm-type
+    defines the geometrical type of the n-th element:
+
+    1
+    Line (2 nodes).
+
+    2
+    Triangle (3 nodes).
+
+    3
+    Quadrangle (4 nodes).
+
+    4
+    Tetrahedron (4 nodes).
+
+    5
+    Hexahedron (8 nodes).
+
+    6
+    Prism (6 nodes).
+
+    7
+    Pyramid (5 nodes).
+
+    8
+    Second order line (3 nodes: 2 associated with the vertices and 1 with the
+    edge).
+
+    9
+    Second order triangle (6 nodes: 3 associated with the vertices and 3 with
+    the edges).
+
+    10 Second order quadrangle (9 nodes: 4 associated with the
+    vertices, 4 with the edges and 1 with the face).
+
+    11 Second order tetrahedron (10 nodes: 4 associated with the vertices and 6
+    with the edges).
+
+    12 Second order hexahedron (27 nodes: 8 associated with the vertices, 12
+    with the edges, 6 with the faces and 1 with the volume).
+
+    13 Second order prism (18 nodes: 6 associated with the vertices, 9 with the
+    edges and 3 with the quadrangular faces).
+
+    14 Second order pyramid (14 nodes: 5 associated with the vertices, 8 with
+    the edges and 1 with the quadrangular face).
+
+    15 Point (1 node).
+  */
+
+  if (*this == ReferenceCells::Vertex)
+    return 15;
+  else if (*this == ReferenceCells::Line)
+    return 1;
+  else if (*this == ReferenceCells::Triangle)
+    return 2;
+  else if (*this == ReferenceCells::Quadrilateral)
+    return 3;
+  else if (*this == ReferenceCells::Tetrahedron)
+    return 4;
+  else if (*this == ReferenceCells::Pyramid)
+    return 7;
+  else if (*this == ReferenceCells::Wedge)
+    return 6;
+  else if (*this == ReferenceCells::Hexahedron)
+    return 5;
+  else if (*this == ReferenceCells::Invalid)
+    {
+      Assert(false, ExcNotImplemented());
+      return numbers::invalid_unsigned_int;
+    }
+
+  Assert(false, ExcNotImplemented());
+
+  return numbers::invalid_unsigned_int;
+}
+
+
+
+std::ostream &
+operator<<(std::ostream &out, const ReferenceCell &reference_cell)
+{
+  AssertThrow(out.fail() == false, ExcIO());
+
+  // Output as an integer to avoid outputting it as a character with
+  // potentially non-printing value:
+  out << static_cast<unsigned int>(reference_cell.kind);
+  return out;
+}
+
+
+
+std::istream &
+operator>>(std::istream &in, ReferenceCell &reference_cell)
+{
+  AssertThrow(in.fail() == false, ExcIO());
+
+  // Read the information as an integer and convert it to the correct type
+  unsigned int value;
+  in >> value;
+  reference_cell.kind = static_cast<decltype(reference_cell.kind)>(value);
+
+  // Ensure that the object we read is valid
+  Assert(
+    (reference_cell == ReferenceCells::Vertex) ||
+      (reference_cell == ReferenceCells::Line) ||
+      (reference_cell == ReferenceCells::Triangle) ||
+      (reference_cell == ReferenceCells::Quadrilateral) ||
+      (reference_cell == ReferenceCells::Tetrahedron) ||
+      (reference_cell == ReferenceCells::Hexahedron) ||
+      (reference_cell == ReferenceCells::Wedge) ||
+      (reference_cell == ReferenceCells::Pyramid) ||
+      (reference_cell == ReferenceCells::Invalid),
+    ExcMessage(
+      "The reference cell kind just read does not correspond to one of the valid choices. There must be an error."));
+
+  return in;
+}
+
+
 
 #include "reference_cell.inst"
 

@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2016 - 2020 by the deal.II authors
+ * Copyright (C) 2016 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -103,7 +103,7 @@ test()
       MatrixFree<dim, double>::AdditionalData::partition_color;
     data.mapping_update_flags =
       update_values | update_gradients | update_JxW_values;
-    mf_data->reinit(dof_handler, constraints, quad, data);
+    mf_data->reinit(MappingQ1<dim>{}, dof_handler, constraints, quad, data);
   }
 
 
@@ -147,10 +147,11 @@ test()
 
     const unsigned int num_arnoldi_vectors = 2 * eigenvalues.size() + 2;
     PArpackSolver<LinearAlgebra::distributed::Vector<double>>::AdditionalData
-    additional_data(num_arnoldi_vectors,
-                    PArpackSolver<LinearAlgebra::distributed::Vector<double>>::
-                      largest_magnitude,
-                    true);
+      additional_data(
+        num_arnoldi_vectors,
+        PArpackSolver<
+          LinearAlgebra::distributed::Vector<double>>::largest_magnitude,
+        true);
 
     SolverControl solver_control(dof_handler.n_dofs(),
                                  1e-9,
@@ -179,10 +180,10 @@ test()
                       eigenvalues.size());
     deallog.depth_file(previous_depth);
 
-    for (unsigned int i = 0; i < lambda.size(); i++)
+    for (unsigned int i = 0; i < lambda.size(); ++i)
       eigenvalues[i] = lambda[i].real();
 
-    for (unsigned int i = 0; i < eigenvalues.size(); i++)
+    for (unsigned int i = 0; i < eigenvalues.size(); ++i)
       deallog << eigenvalues[i] << std::endl;
 
     // make sure that we have eigenvectors and they are mass-orthonormal:
@@ -196,7 +197,7 @@ test()
         {
           mass.vmult(Bx, eigenfunctions[i]);
 
-          for (unsigned int j = 0; j < eigenfunctions.size(); j++)
+          for (unsigned int j = 0; j < eigenfunctions.size(); ++j)
             Assert(std::abs(eigenfunctions[j] * Bx - (i == j)) < precision,
                    ExcMessage("Eigenvectors " + Utilities::int_to_string(i) +
                               " and " + Utilities::int_to_string(j) +

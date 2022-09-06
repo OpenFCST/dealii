@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -55,7 +55,7 @@ check_this(const DoFHandler<dim> &dof_handler)
     {
       const unsigned int line = l * (sp.n_rows() / 20);
       for (unsigned int c = 0; c < sp.row_length(line); ++c)
-        deallog << sp.column_number(line, c) << " ";
+        deallog << sp.column_number(line, c) << ' ';
       deallog << std::endl;
     }
 
@@ -67,7 +67,8 @@ check_this(const DoFHandler<dim> &dof_handler)
   unsigned int hash = 0;
   for (unsigned int l = 0; l < sp.n_rows(); ++l)
     hash +=
-      l * (sp.row_length(l) + (sp.begin(l) - sp.begin()) +
-           (sp.row_length(l) > 1 ? ++sp.begin(l) : sp.begin(l))->column());
+      l *
+      (sp.row_length(l) + (sp.begin(l) - sp.begin()) +
+       (sp.row_length(l) > 1 ? std::next(sp.begin(l)) : sp.begin(l))->column());
   deallog << hash << std::endl;
 }

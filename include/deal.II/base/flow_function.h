@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2007 - 2018 by the deal.II authors
+// Copyright (C) 2007 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -20,8 +20,8 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/function.h>
+#include <deal.II/base/mutex.h>
 #include <deal.II/base/point.h>
-#include <deal.II/base/thread_management.h>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -158,7 +158,7 @@ namespace Functions
      * Construct an object for the given channel radius <tt>r</tt> and the
      * Reynolds number <tt>Re</tt>.
      */
-    PoisseuilleFlow<dim>(const double r, const double Re);
+    PoisseuilleFlow(const double r, const double Re);
 
     virtual ~PoisseuilleFlow() override = default;
 

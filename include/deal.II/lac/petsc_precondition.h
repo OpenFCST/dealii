@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2020 by the deal.II authors
+// Copyright (C) 2004 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -396,72 +396,6 @@ namespace PETScWrappers
      */
     AdditionalData additional_data;
   };
-
-
-
-  /**
-   * A class that implements the interface to use the PETSc Eisenstat
-   * preconditioner, which implements SSOR on the diagonal block owned by
-   * each processor.
-   *
-   * See the comment in the base class
-   * @ref PreconditionBase
-   * for when this preconditioner may or may not work.
-   *
-   * @ingroup PETScWrappers
-   */
-  class PreconditionEisenstat : public PreconditionBase
-  {
-  public:
-    /**
-     * Standardized data struct to pipe additional flags to the
-     * preconditioner.
-     */
-    struct AdditionalData
-    {
-      /**
-       * Constructor. By default, set the damping parameter to one.
-       */
-      AdditionalData(const double omega = 1);
-
-      /**
-       * Relaxation parameter.
-       */
-      double omega;
-    };
-
-    /**
-     * Empty Constructor. You need to call initialize() before using this
-     * object.
-     */
-    PreconditionEisenstat() = default;
-
-    /**
-     * Constructor. Take the matrix which is used to form the preconditioner,
-     * and additional flags if there are any.
-     */
-    PreconditionEisenstat(
-      const MatrixBase &    matrix,
-      const AdditionalData &additional_data = AdditionalData());
-
-    /**
-     * Initialize the preconditioner object and calculate all data that is
-     * necessary for applying it in a solver. This function is automatically
-     * called when calling the constructor with the same arguments and is only
-     * used if you create the preconditioner without arguments.
-     */
-    void
-    initialize(const MatrixBase &    matrix,
-               const AdditionalData &additional_data = AdditionalData());
-
-  protected:
-    /**
-     * Store a copy of the flags for this particular preconditioner.
-     */
-    AdditionalData additional_data;
-  };
-
-
 
   /**
    * A class that implements the interface to use the PETSc Incomplete
@@ -1027,7 +961,7 @@ namespace PETScWrappers
    * Alias for backwards-compatibility.
    * @deprecated Use PETScWrappers::PreconditionBase instead.
    */
-  using PreconditionerBase DEAL_II_DEPRECATED_EARLY = PreconditionBase;
+  using PreconditionerBase DEAL_II_DEPRECATED = PreconditionBase;
 } // namespace PETScWrappers
 
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2020 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -53,11 +53,11 @@ test(const MPI_Comm comm)
                                                          src.size()),
                                  ArrayView<double>(dst.data(), dst.size()));
 
-  for (size_t i = 0; i < src.size(); i++)
-    deallog << static_cast<int>(src[i]) << " ";
+  for (size_t i = 0; i < src.size(); ++i)
+    deallog << static_cast<int>(src[i]) << ' ';
   deallog << std::endl;
-  for (size_t i = 0; i < dst.size(); i++)
-    deallog << static_cast<int>(dst[i]) << " ";
+  for (size_t i = 0; i < dst.size(); ++i)
+    deallog << static_cast<int>(dst[i]) << ' ';
   deallog << std::endl;
 }
 

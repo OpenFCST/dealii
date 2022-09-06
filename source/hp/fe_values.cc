@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -135,7 +135,8 @@ namespace hp
   template <int dim, int q_dim, class FEValuesType>
   FEValuesBase<dim, q_dim, FEValuesType>::FEValuesBase(
     const FEValuesBase<dim, q_dim, FEValuesType> &other)
-    : fe_collection(other.fe_collection)
+    : Subscriptor(other)
+    , fe_collection(other.fe_collection)
     , mapping_collection(other.mapping_collection)
     , q_collection(other.q_collection)
     , q_collections(other.q_collections)

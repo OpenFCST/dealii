@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -57,7 +57,8 @@ test(TimerOutput::OutputType output_type)
 
   std::string s = ss.str();
   std::replace_if(s.begin(), s.end(), ::isdigit, ' ');
-  std::replace_if(s.begin(), s.end(), [](char x) { return x == '.'; }, ' ');
+  std::replace_if(
+    s.begin(), s.end(), [](char x) { return x == '.'; }, ' ');
   deallog << s << std::endl << std::endl;
 }
 

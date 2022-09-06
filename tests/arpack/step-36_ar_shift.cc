@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2016 - 2020 by the deal.II authors
+ * Copyright (C) 2016 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -192,7 +192,7 @@ namespace Step36
 
 
     double min_spurious_eigenvalue = std::numeric_limits<double>::max(),
-           max_spurious_eigenvalue = -std::numeric_limits<double>::max();
+           max_spurious_eigenvalue = std::numeric_limits<double>::lowest();
 
     for (unsigned int i = 0; i < dof_handler.n_dofs(); ++i)
       if (constraints.is_constrained(i))
@@ -246,7 +246,7 @@ namespace Step36
         {
           mass_matrix.vmult(Bx, eigenfunctions[i]);
 
-          for (unsigned int j = 0; j < eigenfunctions.size(); j++)
+          for (unsigned int j = 0; j < eigenfunctions.size(); ++j)
             if (std::abs(eigenfunctions[j] * Bx - (i == j)) > 1e-8)
               deallog << "Eigenvectors " + Utilities::int_to_string(i) +
                            " and " + Utilities::int_to_string(j) +

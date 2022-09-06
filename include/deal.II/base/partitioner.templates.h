@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,6 +19,7 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/cuda_size.h>
+#include <deal.II/base/mpi_tags.h>
 #include <deal.II/base/partitioner.h>
 
 #include <deal.II/lac/cuda_kernels.templates.h>
@@ -88,7 +89,7 @@ namespace Utilities
                            n_ghost_indices() :
                          ghost_array.data();
 
-      for (unsigned int i = 0; i < n_ghost_targets; i++)
+      for (unsigned int i = 0; i < n_ghost_targets; ++i)
         {
           // allow writing into ghost indices even though we are in a
           // const function
@@ -117,7 +118,7 @@ namespace Utilities
         initialize_import_indices_plain_dev();
 #    endif
 
-      for (unsigned int i = 0; i < n_import_targets; i++)
+      for (unsigned int i = 0; i < n_import_targets; ++i)
         {
 #    if defined(DEAL_II_COMPILER_CUDA_AWARE) && \
       defined(DEAL_II_MPI_WITH_CUDA_SUPPORT)
@@ -226,7 +227,7 @@ namespace Utilities
                     }
                   else
                     {
-#    if defined(DEAL_II_COMPILER_CUDA_AWARE)
+#    ifdef DEAL_II_COMPILER_CUDA_AWARE
                       cudaError_t cuda_error =
                         cudaMemcpy(ghost_array.data() + ghost_range.first,
                                    ghost_array.data() + offset,
@@ -315,7 +316,7 @@ namespace Utilities
 
       // initiate the receive operations
       Number *temp_array_ptr = temporary_storage.data();
-      for (unsigned int i = 0; i < n_import_targets; i++)
+      for (unsigned int i = 0; i < n_import_targets; ++i)
         {
           AssertThrow(
             static_cast<std::size_t>(import_targets_data[i].second) *
@@ -342,7 +343,7 @@ namespace Utilities
       // move the data to send to the front of the array
       AssertIndexRange(n_ghost_indices(), n_ghost_indices_in_larger_set + 1);
       Number *ghost_array_ptr = ghost_array.data();
-      for (unsigned int i = 0; i < n_ghost_targets; i++)
+      for (unsigned int i = 0; i < n_ghost_targets; ++i)
         {
           // in case we only sent a subset of indices, we now need to move the
           // data to the correct positions and delete the old content
@@ -376,7 +377,7 @@ namespace Utilities
                         }
                       else
                         {
-#    if defined(DEAL_II_COMPILER_CUDA_AWARE)
+#    ifdef DEAL_II_COMPILER_CUDA_AWARE
                           cudaError_t cuda_error =
                             cudaMemcpy(ghost_array_ptr + offset,
                                        ghost_array.data() + my_ghosts->first,
@@ -440,16 +441,15 @@ namespace Utilities
       // standards. To avoid this, we use std::abs on default types but
       // simply return the number on unsigned types
       template <typename Number>
-      typename std::enable_if<
-        !std::is_unsigned<Number>::value,
-        typename numbers::NumberTraits<Number>::real_type>::type
+      std::enable_if_t<!std::is_unsigned<Number>::value,
+                       typename numbers::NumberTraits<Number>::real_type>
       get_abs(const Number a)
       {
         return std::abs(a);
       }
 
       template <typename Number>
-      typename std::enable_if<std::is_unsigned<Number>::value, Number>::type
+      std::enable_if_t<std::is_unsigned<Number>::value, Number>
       get_abs(const Number a)
       {
         return a;
@@ -525,7 +525,7 @@ namespace Utilities
                    "import_from_ghosted_array_start as is passed "
                    "to import_from_ghosted_array_finish."));
 
-#      if defined(DEAL_II_COMPILER_CUDA_AWARE)
+#      ifdef DEAL_II_COMPILER_CUDA_AWARE
           if (std::is_same<MemorySpaceType, MemorySpace::CUDA>::value)
             {
               cudaMemset(ghost_array.data(),
@@ -620,7 +620,10 @@ namespace Utilities
                 // p::d::SolutionTransfer. The rationale is that during
                 // interpolation on two elements sharing the face, values on
                 // this face obtained from each side might be different due to
-                // additions being done in different order.
+                // additions being done in different order. If the local
+                // value is zero, it indicates that the local process has not
+                // set the value during the cell loop and its value can be
+                // safely overridden.
                 Assert(*read_position == Number() ||
                          internal::get_abs(locally_owned_array[j] -
                                            *read_position) <=

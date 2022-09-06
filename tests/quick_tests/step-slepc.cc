@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2013 - 2018 by the deal.II authors
+ * Copyright (C) 2013 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -170,7 +170,7 @@ LaplaceEigenspectrumProblem::solve()
       {
         B.vmult(Bx, x[i]);
 
-        for (unsigned int j = 0; j < x.size(); j++)
+        for (unsigned int j = 0; j < x.size(); ++j)
           if (j != i)
             Assert(std::abs(x[j] * Bx) < precision,
                    ExcMessage("Eigenvectors " + Utilities::int_to_string(i) +

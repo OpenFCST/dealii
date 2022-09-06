@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -57,7 +57,7 @@ do_test(const FiniteElement<dim> &fe_fine, const FiniteElement<dim> &fe_coarse)
   tria.refine_global();
 
   for (auto &cell : tria.active_cell_iterators())
-    if (cell->active() && cell->center()[0] < 0.5)
+    if (cell->is_active() && cell->center()[0] < 0.5)
       cell->set_refine_flag();
   tria.execute_coarsening_and_refinement();
 
@@ -79,10 +79,10 @@ do_test(const FiniteElement<dim> &fe_fine, const FiniteElement<dim> &fe_coarse)
 
   // setup transfer operator
   MGTwoLevelTransfer<dim, LinearAlgebra::distributed::Vector<Number>> transfer;
-  transfer.reinit_polynomial_transfer(dof_handler_fine,
-                                      dof_handler_coarse,
-                                      constraint_fine,
-                                      constraint_coarse);
+  transfer.reinit(dof_handler_fine,
+                  dof_handler_coarse,
+                  constraint_fine,
+                  constraint_coarse);
 
   test_transfer_operator(transfer, dof_handler_fine, dof_handler_coarse);
 }

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2020 by the deal.II authors
+// Copyright (C) 2009 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -71,7 +71,7 @@ test(const Triangulation<dim> &tr)
   FE_DGPMonomial<dim> fe(2);
   deallog << "FE=" << fe.get_name() << std::endl;
 
-  MappingQGeneric<dim> mapping(1);
+  MappingQ<dim> mapping(1);
   deallog << "Mapping=Q1" << std::endl;
 
 

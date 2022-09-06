@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2012 - 2020 by the deal.II authors
+// Copyright (C) 2012 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -26,7 +26,6 @@
 #include <deal.II/fe/fe_q_bubbles.h>
 #include <deal.II/fe/fe_tools.h>
 #include <deal.II/fe/fe_values.h>
-#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria.h>
@@ -281,7 +280,7 @@ FE_Q_Bubbles<dim, spacedim>::get_name() const
   unsigned int index = 0;
 
   // Decode the support points in one coordinate direction.
-  for (unsigned int j = 0; j < dofs_per_cell; j++)
+  for (unsigned int j = 0; j < dofs_per_cell; ++j)
     {
       if ((dim > 1) ? (unit_support_points[j](1) == 0 &&
                        ((dim > 2) ? unit_support_points[j](2) == 0 : true)) :
@@ -303,7 +302,7 @@ FE_Q_Bubbles<dim, spacedim>::get_name() const
            "Could not decode support points in one coordinate direction."));
 
   // Check whether the support points are equidistant.
-  for (unsigned int j = 0; j < n_points; j++)
+  for (unsigned int j = 0; j < n_points; ++j)
     if (std::fabs(points[j] - static_cast<double>(j) / (this->degree - 1)) >
         1e-15)
       {
@@ -325,7 +324,7 @@ FE_Q_Bubbles<dim, spacedim>::get_name() const
       // Check whether the support points come from QGaussLobatto.
       const QGaussLobatto<1> points_gl(n_points);
       type = true;
-      for (unsigned int j = 0; j < n_points; j++)
+      for (unsigned int j = 0; j < n_points; ++j)
         if (points[j] != points_gl.point(j)(0))
           {
             type = false;

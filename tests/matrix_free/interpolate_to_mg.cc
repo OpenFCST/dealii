@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -234,14 +234,14 @@ test(const unsigned int n_glob_ref = 2, const unsigned int n_ref = 0)
                   {
                     std::cout << "dofs: ";
                     for (const auto i : dof_indices)
-                      std::cout << i << " ";
+                      std::cout << i << ' ';
                     std::cout << std::endl << "values: ";
                     std::vector<LevelNumberType> local_values(
                       dof_indices.size());
                     level_projection[level].extract_subvector_to(dof_indices,
                                                                  local_values);
                     for (const auto v : local_values)
-                      std::cout << v << " ";
+                      std::cout << v << ' ';
                     std::cout << std::endl
                               << "val(q)=" << q_values[q] << std::endl;
                     std::cout << "MGTransfer indices:" << std::endl;

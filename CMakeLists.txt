@@ -1,6 +1,6 @@
 ## ---------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2020 by the deal.II authors
+## Copyright (C) 2012 - 2022 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
@@ -33,19 +33,26 @@
 MESSAGE(STATUS "This is CMake ${CMAKE_VERSION}")
 MESSAGE(STATUS "")
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.1.0)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.3.0)
 
 #
-# We support all policy changes up to version 3.1.0. Thus, explicitly set
-# all policies CMP0001 - CMP0054 to new for version 3.1 (and later) to
-# avoid some unnecessary warnings.
+# We support all policy changes up to version 3.3. Thus, explicitly set all
+# policies CMP0001 - CMP0054 to new for version 3.3 (and later) to avoid
+# some unnecessary warnings.
 #
-CMAKE_POLICY(VERSION 3.1.0)
+CMAKE_POLICY(VERSION 3.3.0)
 
 IF("${CMAKE_VERSION}" VERSION_LESS "3.11" AND POLICY CMP0037)
-  # allow to override "test" target for quick tests
+  # Allow to override "test" target for quick tests.
   CMAKE_POLICY(SET CMP0037 OLD)
 ENDIF()
+
+IF(POLICY CMP0075)
+  # Use CMAKE_REQUIRED_LIBRARIES also in include file checks. We set the
+  # policy to NEW explicitly in order to avoid spurious configure warnings.
+  CMAKE_POLICY(SET CMP0075 NEW)
+ENDIF()
+
 
 LIST(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules/)
 

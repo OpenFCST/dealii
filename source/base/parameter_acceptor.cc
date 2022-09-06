@@ -1,6 +1,6 @@
 //-----------------------------------------------------------
 //
-//    Copyright (C) 2017 - 2020 by the deal.II authors
+//    Copyright (C) 2017 - 2022 by the deal.II authors
 //
 //    This file is part of the deal.II library.
 //
@@ -94,7 +94,7 @@ void
 ParameterAcceptor::initialize(std::istream &input_stream, ParameterHandler &prm)
 
 {
-  AssertThrow(input_stream, ExcIO());
+  AssertThrow(input_stream.fail() == false, ExcIO());
   declare_all_parameters(prm);
   prm.parse_input(input_stream);
   parse_all_parameters(prm);

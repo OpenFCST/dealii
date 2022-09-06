@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2014 - 2020 by the deal.II authors
+// Copyright (C) 2014 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -222,7 +222,7 @@ private:
   compute_inverse_diagonal()
   {
     data.initialize_dof_vector(inverse_diagonal_entries);
-    unsigned int dummy;
+    unsigned int dummy = 0;
     data.cell_loop(&LaplaceOperator::local_diagonal_cell,
                    this,
                    inverse_diagonal_entries,
@@ -349,8 +349,7 @@ do_test(const DoFHandler<dim> &dof)
 
   MappingQ<dim>                                          mapping(fe_degree + 1);
   LaplaceOperator<dim, fe_degree, n_q_points_1d, double> fine_matrix;
-  std::set<types::boundary_id>                           dirichlet_boundaries;
-  dirichlet_boundaries.insert(0);
+  const std::set<types::boundary_id> dirichlet_boundaries = {0};
   fine_matrix.initialize(mapping, dof, dirichlet_boundaries);
 
   LinearAlgebra::distributed::Vector<double> in, sol;

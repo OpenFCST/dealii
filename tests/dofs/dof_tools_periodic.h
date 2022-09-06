@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2019 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -60,7 +60,8 @@ output_bool_vector(std::vector<bool> &v)
 
 
 
-void set_boundary_ids(Triangulation<1> &)
+void
+set_boundary_ids(Triangulation<1> &)
 {}
 
 

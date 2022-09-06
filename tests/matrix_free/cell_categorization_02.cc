@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,7 +25,9 @@
 #include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe_q.h>
+#include <deal.II/fe/mapping_q1.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_tools.h>
 
@@ -103,15 +105,15 @@ test()
 
   data.cell_vectorization_categories_strict = true;
   data.cell_vectorization_category.resize(tria.n_active_cells());
-  for (const auto &cell : tria.active_cell_iterators())
-    if (cell->is_locally_owned())
-      {
-        AssertIndexRange(cell->active_cell_index(), tria.n_active_cells());
-        data.cell_vectorization_category[cell->active_cell_index()] =
-          cell->material_id();
-      }
+  for (const auto &cell :
+       tria.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+    {
+      AssertIndexRange(cell->active_cell_index(), tria.n_active_cells());
+      data.cell_vectorization_category[cell->active_cell_index()] =
+        cell->material_id();
+    }
 
-  mf_data.reinit(dof, constraints, QGauss<1>(2), data);
+  mf_data.reinit(MappingQ1<dim>{}, dof, constraints, QGauss<1>(2), data);
 
   const unsigned int max_level = tria.n_global_levels() - 1;
   std::vector<typename MatrixFree<dim, float>::AdditionalData>
@@ -153,7 +155,8 @@ test()
 
       mg_mf_data[level] = std::make_shared<MatrixFree<dim, float>>();
 
-      mg_mf_data[level]->reinit(dof,
+      mg_mf_data[level]->reinit(MappingQ1<dim>{},
+                                dof,
                                 level_constraints,
                                 QGauss<1>(2),
                                 mg_additional_data[level]);
@@ -162,7 +165,8 @@ test()
   for (unsigned int i = 0; i < mf_data.n_cell_batches(); ++i)
     {
       const unsigned int m_id = mf_data.get_cell_iterator(i, 0)->material_id();
-      for (unsigned int c = 0; c < mf_data.n_components_filled(i); ++c)
+      for (unsigned int c = 0; c < mf_data.n_active_entries_per_cell_batch(i);
+           ++c)
         {
           const unsigned int c_id =
             mf_data.get_cell_iterator(i, c)->material_id();
@@ -177,7 +181,9 @@ test()
         {
           const unsigned int m_id =
             level_data->get_cell_iterator(i, 0)->material_id();
-          for (unsigned int c = 0; c < level_data->n_components_filled(i); ++c)
+          for (unsigned int c = 0;
+               c < level_data->n_active_entries_per_cell_batch(i);
+               ++c)
             {
               const unsigned int c_id =
                 level_data->get_cell_iterator(i, c)->material_id();

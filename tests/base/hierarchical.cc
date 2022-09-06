@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2018 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -39,9 +39,9 @@ main()
   for (unsigned int i = 0; i <= div; ++i)
     {
       const double x = 1. * i / div;
-      deallog << x << " ";
+      deallog << x << ' ';
       for (unsigned int j = 0; j < p.size(); ++j)
-        deallog << p[j].value(x) << " ";
+        deallog << p[j].value(x) << ' ';
       deallog << std::endl;
     }
 }

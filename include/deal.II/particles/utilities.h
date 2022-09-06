@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -26,7 +26,6 @@
 
 #include <deal.II/fe/component_mask.h>
 #include <deal.II/fe/fe.h>
-#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/grid_tools_cache.h>
 
@@ -197,7 +196,6 @@ namespace Particles
           return; // nothing else to do here
         }
 
-      const auto &tria     = field_dh.get_triangulation();
       const auto &fe       = field_dh.get_fe();
       auto        particle = particle_handler.begin();
 
@@ -224,7 +222,7 @@ namespace Particles
 
       while (particle != particle_handler.end())
         {
-          const auto &cell = particle->get_surrounding_cell(tria);
+          const auto &cell = particle->get_surrounding_cell();
           const auto &dh_cell =
             typename DoFHandler<dim, spacedim>::cell_iterator(*cell, &field_dh);
           dh_cell->get_dof_indices(dof_indices);

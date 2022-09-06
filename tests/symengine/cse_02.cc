@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -58,11 +58,11 @@ main(int argc, char *argv[])
                               SE::parse("asin((a+b)*c)")};
 
   deallog.push("Independents");
-  for (unsigned int i = 0; i < independents.size(); i++)
+  for (unsigned int i = 0; i < independents.size(); ++i)
     deallog << *(independents[i]) << std::endl;
   deallog.pop();
   deallog.push("Dependents");
-  for (unsigned int i = 0; i < dependents.size(); i++)
+  for (unsigned int i = 0; i < dependents.size(); ++i)
     deallog << *(dependents[i]) << std::endl;
   deallog.pop();
 

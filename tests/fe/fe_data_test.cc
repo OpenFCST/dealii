@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -89,7 +89,8 @@ test_2d_3d(std::vector<FiniteElement<dim> *> &fe_datas)
 
 
 
-void test_2d_3d(std::vector<FiniteElement<1> *> &fe_datas)
+void
+test_2d_3d(std::vector<FiniteElement<1> *> &fe_datas)
 {}
 
 

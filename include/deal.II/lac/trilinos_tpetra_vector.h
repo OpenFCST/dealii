@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,9 +19,10 @@
 
 #include <deal.II/base/config.h>
 
-#if defined(DEAL_II_TRILINOS_WITH_TPETRA) && defined(DEAL_II_WITH_MPI)
+#ifdef DEAL_II_TRILINOS_WITH_TPETRA
 
 #  include <deal.II/base/index_set.h>
+#  include <deal.II/base/mpi_stub.h>
 #  include <deal.II/base/subscriptor.h>
 
 #  include <deal.II/lac/trilinos_tpetra_communication_pattern.h>
@@ -34,7 +35,6 @@
 #  include <Tpetra_Core.hpp>
 #  include <Tpetra_Vector.hpp>
 #  include <Tpetra_Version.hpp>
-#  include <mpi.h>
 
 #  include <memory>
 

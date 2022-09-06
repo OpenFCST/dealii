@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2019 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,23 +18,24 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/mpi.h>
+
 #include <deal.II/lac/trilinos_tpetra_vector.h>
 
 #ifdef DEAL_II_TRILINOS_WITH_TPETRA
 
-#  ifdef DEAL_II_WITH_MPI
+#  include <deal.II/base/index_set.h>
+#  include <deal.II/base/trilinos_utilities.h>
 
-#    include <deal.II/base/index_set.h>
+#  include <deal.II/lac/read_write_vector.h>
 
-#    include <deal.II/lac/read_write_vector.h>
+#  include <boost/io/ios_state.hpp>
 
-#    include <boost/io/ios_state.hpp>
+#  include <Teuchos_DefaultMpiComm.hpp>
+#  include <Tpetra_Import_def.hpp>
+#  include <Tpetra_Map_def.hpp>
 
-#    include <Teuchos_DefaultMpiComm.hpp>
-#    include <Tpetra_Import_def.hpp>
-#    include <Tpetra_Map_def.hpp>
-
-#    include <memory>
+#  include <memory>
 
 
 DEAL_II_NAMESPACE_OPEN
@@ -302,7 +303,8 @@ namespace LinearAlgebra
 
 
     template <typename Number>
-    Number Vector<Number>::operator*(const VectorSpaceVector<Number> &V) const
+    Number
+    Vector<Number>::operator*(const VectorSpaceVector<Number> &V) const
     {
       // Check that casting will work.
       Assert(dynamic_cast<const Vector<Number> *>(&V) != nullptr,
@@ -625,7 +627,7 @@ namespace LinearAlgebra
                           const bool         scientific,
                           const bool         across) const
     {
-      AssertThrow(out, ExcIO());
+      AssertThrow(out.fail() == false, ExcIO());
       boost::io::ios_flags_saver restore_flags(out);
 
       // Get a representation of the vector and loop over all
@@ -653,7 +655,7 @@ namespace LinearAlgebra
 
       // restore the representation
       // of the vector
-      AssertThrow(out, ExcIO());
+      AssertThrow(out.fail() == false, ExcIO());
     }
 
 
@@ -683,8 +685,6 @@ namespace LinearAlgebra
 } // namespace LinearAlgebra
 
 DEAL_II_NAMESPACE_CLOSE
-
-#  endif
 
 #endif
 

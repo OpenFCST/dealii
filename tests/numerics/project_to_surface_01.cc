@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2018 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -63,7 +63,8 @@ do_rotate(Triangulation<dim> &tria)
 }
 
 
-void do_rotate(Triangulation<1> &)
+void
+do_rotate(Triangulation<1> &)
 {}
 
 
@@ -117,7 +118,7 @@ test()
           else
             deallog << cell->vertex(1);
 
-          deallog << ")" << std::endl;
+          deallog << ')' << std::endl;
         }
       tria.clear();
     }

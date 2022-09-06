@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -32,6 +32,7 @@
 
 #include <deal.II/fe/fe_q.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria_accessor.h>
 #include <deal.II/grid/tria_iterator.h>
@@ -59,14 +60,14 @@ test(MPI_Comm mpi_communicator)
   DoFHandler<dim> dof_handler(triangulation);
 
   // set active_fe_index mostly randomly
-  for (const auto &cell : dof_handler.active_cell_iterators())
-    if (cell->is_locally_owned())
-      cell->set_active_fe_index(cell->active_cell_index() % fe.size());
+  for (const auto &cell : dof_handler.active_cell_iterators() |
+                            IteratorFilters::LocallyOwnedCell())
+    cell->set_active_fe_index(cell->active_cell_index() % fe.size());
 
   dof_handler.distribute_dofs(fe);
 
   if (Utilities::MPI::this_mpi_process(mpi_communicator) == 0)
-    deallog << "   n_procs/n_dofs: "
+    deallog << "n_procs/n_dofs: "
             << Utilities::MPI::n_mpi_processes(mpi_communicator) << '/'
             << dof_handler.n_dofs() << std::endl;
 }

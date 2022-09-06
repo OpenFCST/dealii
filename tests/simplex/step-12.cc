@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -348,7 +348,7 @@ namespace Step12
           for (unsigned int i = 0; i < n_dofs; ++i)
             for (unsigned int j = 0; j < n_dofs; ++j)
               copy_data_face.cell_matrix(i, j) +=
-                fe_iv.jump(i, qpoint) // [\phi_i]
+                fe_iv.jump_in_shape_values(i, qpoint) // [\phi_i]
                 *
                 fe_iv.shape_value((beta_dot_n > 0), j, qpoint) // phi_j^{upwind}
                 * beta_dot_n                                   // (\beta . n)
@@ -420,7 +420,7 @@ namespace Step12
   AdvectionProblem<dim>::output_results(const unsigned int cycle) const
   {
     const std::string filename = "solution-" + std::to_string(cycle) + ".vtk";
-    std::cout << "  Writing solution to <" << filename << ">" << std::endl;
+    std::cout << "  Writing solution to <" << filename << '>' << std::endl;
     std::ofstream output(filename);
 
     DataOut<dim> data_out;

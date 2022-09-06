@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2018 by the deal.II authors
+// Copyright (C) 2001 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -21,6 +21,7 @@
 #include <deal.II/distributed/tria.h>
 
 #include <deal.II/grid/cell_id.h>
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/grid_tools.h>
@@ -51,24 +52,24 @@ test()
     vertices_with_ghost_neighbors =
       GridTools::compute_vertices_with_ghost_neighbors(tria);
 
-  for (const auto &cell : tria.active_cell_iterators())
-    if (cell->is_locally_owned())
-      {
-        for (const unsigned int v : GeometryInfo<dim>::vertex_indices())
-          {
-            const std::map<unsigned int,
-                           std::set<dealii::types::subdomain_id>>::
-              const_iterator neighbor_subdomains_of_vertex =
-                vertices_with_ghost_neighbors.find(cell->vertex_index(v));
+  for (const auto &cell :
+       tria.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+    {
+      for (const unsigned int v : GeometryInfo<dim>::vertex_indices())
+        {
+          const std::map<unsigned int,
+                         std::set<dealii::types::subdomain_id>>::const_iterator
+            neighbor_subdomains_of_vertex =
+              vertices_with_ghost_neighbors.find(cell->vertex_index(v));
 
-            if (neighbor_subdomains_of_vertex !=
-                vertices_with_ghost_neighbors.end())
-              {
-                map[cell->id()] = ++counter;
-                break;
-              }
-          }
-      }
+          if (neighbor_subdomains_of_vertex !=
+              vertices_with_ghost_neighbors.end())
+            {
+              map[cell->id()] = ++counter;
+              break;
+            }
+        }
+    }
 
   using cell_iterator =
     typename parallel::distributed::Triangulation<dim>::active_cell_iterator;
@@ -78,14 +79,14 @@ test()
       [&](const cell_iterator &cell) {
         DT                 value = map[cell->id()];
         std::ostringstream oss;
-        oss << "pack " << cell->id() << " " << value;
+        oss << "pack " << cell->id() << ' ' << value;
         input.insert(oss.str());
 
         return value;
       },
       [&](const cell_iterator &cell, const DT &data) {
         std::ostringstream oss;
-        oss << "unpack " << cell->id() << " " << data << " from "
+        oss << "unpack " << cell->id() << ' ' << data << " from "
             << cell->subdomain_id();
 
         output.insert(oss.str());

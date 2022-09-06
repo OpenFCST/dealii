@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2018 by the deal.II authors
+// Copyright (C) 2001 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -36,7 +36,7 @@ write_active_fe_index_to_file(const DoFHandler<dim> &dof_handler)
                                                  endc = dof_handler.end();
   for (; cell != endc; ++cell, ++count)
     {
-      deallog << count << " " << cell->active_fe_index() << std::endl;
+      deallog << count << ' ' << cell->active_fe_index() << std::endl;
     }
   deallog << std::endl;
 }
@@ -61,11 +61,11 @@ write_vtk(const DoFHandler<dim> &dof_handler, const std::string filename)
       1, DataComponentInterpretation::component_is_scalar);
   const std::vector<std::string> data_names(1, "active_fe_index");
 
-  DataOut<dim, DoFHandler<dim>> data_out;
+  DataOut<dim> data_out;
   data_out.attach_dof_handler(dof_handler);
   data_out.add_data_vector(active_fe_index,
                            data_names,
-                           DataOut<dim, DoFHandler<dim>>::type_cell_data,
+                           DataOut<dim>::type_cell_data,
                            data_component_interpretation);
   data_out.build_patches();
 

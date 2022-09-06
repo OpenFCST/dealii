@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2020 by the deal.II authors
+// Copyright (C) 2015 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -35,7 +35,7 @@ print(const VECTOR &vec)
 {
   for (types::global_dof_index i = 0; i < vec.size(); ++i)
     {
-      deallog << vec(i) << " ";
+      deallog << vec(i) << ' ';
     }
   deallog << std::endl;
 }

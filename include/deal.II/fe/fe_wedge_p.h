@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -29,18 +29,26 @@ DEAL_II_NAMESPACE_OPEN
  *
  * @note Only implemented for 3D.
  *
- * @ingroup simplex
+ * @relates simplex
  */
 template <int dim, int spacedim = dim>
-class FE_Wedge : public dealii::FE_Poly<dim, spacedim>
+class FE_WedgePoly : public dealii::FE_Poly<dim, spacedim>
 {
 public:
   /**
    * Constructor.
    */
-  FE_Wedge(const unsigned int                                degree,
-           const internal::GenericDoFsPerObject &            dpos,
-           const typename FiniteElementData<dim>::Conformity conformity);
+  FE_WedgePoly(const unsigned int                                degree,
+               const internal::GenericDoFsPerObject &            dpos,
+               const typename FiniteElementData<dim>::Conformity conformity);
+
+  /**
+   * @copydoc dealii::FiniteElement::convert_generalized_support_point_values_to_dof_values()
+   */
+  virtual void
+  convert_generalized_support_point_values_to_dof_values(
+    const std::vector<Vector<double>> &support_point_values,
+    std::vector<double> &              nodal_values) const override;
 };
 
 /**
@@ -48,10 +56,14 @@ public:
  * the finite element space of continuous, piecewise polynomials of
  * degree $k$.
  *
- * @ingroup simplex
+ * @note Currently, only linear (degree=1) and quadratic polynomials
+ *   (degree=2) are implemented. See also the documentation of
+ *   ScalarLagrangePolynomialWedge.
+ *
+ * @relates simplex
  */
 template <int dim, int spacedim = dim>
-class FE_WedgeP : public FE_Wedge<dim, spacedim>
+class FE_WedgeP : public FE_WedgePoly<dim, spacedim>
 {
 public:
   /**
@@ -107,10 +119,14 @@ public:
  * the finite element space of discontinuous, piecewise polynomials of
  * degree $k$.
  *
- * @ingroup simplex
+ * @note Currently, only linear (degree=1) and quadratic polynomials
+ *   (degree=2) are implemented. See also the documentation of
+ *   ScalarLagrangePolynomialWedge.
+ *
+ * @relates simplex
  */
 template <int dim, int spacedim = dim>
-class FE_WedgeDGP : public FE_Wedge<dim, spacedim>
+class FE_WedgeDGP : public FE_WedgePoly<dim, spacedim>
 {
 public:
   /**

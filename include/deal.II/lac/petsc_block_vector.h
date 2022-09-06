@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -37,8 +37,9 @@ namespace PETScWrappers
 
   namespace MPI
   {
-    /*! @addtogroup PETScWrappers
-     *@{
+    /**
+     * @addtogroup PETScWrappers
+     * @{
      */
 
     /**
@@ -285,7 +286,7 @@ namespace PETScWrappers
       DeclException0(ExcNonMatchingBlockVectors);
     };
 
-    /*@}*/
+    /** @} */
 
     /*--------------------- Inline functions --------------------------------*/
 

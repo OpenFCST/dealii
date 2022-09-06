@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2011 - 2020 by the deal.II authors
+// Copyright (C) 2011 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -21,6 +21,7 @@
 
 #include <deal.II/base/cuda.h>
 #include <deal.II/base/cuda_size.h>
+#include <deal.II/base/mpi.h>
 
 #include <deal.II/lac/exceptions.h>
 #include <deal.II/lac/la_parallel_vector.h>
@@ -149,7 +150,6 @@ namespace LinearAlgebra
           else
             {
 #ifdef DEAL_II_WITH_MPI
-#  if DEAL_II_MPI_VERSION_GTE(3, 0)
               allocated_size = new_alloc_size;
 
               const unsigned int size_sm =
@@ -164,22 +164,23 @@ namespace LinearAlgebra
               std::vector<Number *> others(size_sm);
 
               MPI_Info info;
-              MPI_Info_create(&info);
+              int      ierr = MPI_Info_create(&info);
+              AssertThrowMPI(ierr);
 
-              MPI_Info_set(info, "alloc_shared_noncontig", "true");
+              ierr = MPI_Info_set(info, "alloc_shared_noncontig", "true");
+              AssertThrowMPI(ierr);
 
               const std::size_t align_by = 64;
 
-              std::size_t s =
-                ((new_alloc_size * sizeof(Number) + align_by - 1) /
-                 sizeof(Number)) *
-                sizeof(Number);
+              std::size_t s = ((new_alloc_size * sizeof(Number) + align_by) /
+                               sizeof(Number)) *
+                              sizeof(Number);
 
-              auto ierr = MPI_Win_allocate_shared(
+              ierr = MPI_Win_allocate_shared(
                 s, sizeof(Number), info, comm_shared, &data_this, &mpi_window);
               AssertThrowMPI(ierr);
 
-              for (unsigned int i = 0; i < size_sm; i++)
+              for (unsigned int i = 0; i < size_sm; ++i)
                 {
                   int        disp_unit;
                   MPI_Aint   ssize;
@@ -209,7 +210,7 @@ namespace LinearAlgebra
                                    comm_shared);
               AssertThrowMPI(ierr);
 
-              for (unsigned int i = 0; i < size_sm; i++)
+              for (unsigned int i = 0; i < size_sm; ++i)
                 others[i] += n_align_sm[i];
 
               std::vector<unsigned int> new_alloc_sizes(size_sm);
@@ -224,7 +225,7 @@ namespace LinearAlgebra
               AssertThrowMPI(ierr);
 
               data.values_sm.resize(size_sm);
-              for (unsigned int i = 0; i < size_sm; i++)
+              for (unsigned int i = 0; i < size_sm; ++i)
                 data.values_sm[i] =
                   ArrayView<const Number>(others[i], new_alloc_sizes[i]);
 
@@ -235,11 +236,6 @@ namespace LinearAlgebra
                                const auto ierr = MPI_Win_free(&mpi_window);
                                AssertThrowMPI(ierr);
                              }};
-#  else
-              AssertThrow(false,
-                          ExcMessage(
-                            "Sorry, this feature requires MPI 3.0 support"));
-#  endif
 #else
               Assert(false, ExcInternalError());
 #endif
@@ -647,14 +643,17 @@ namespace LinearAlgebra
       const MPI_Comm &                                          comm_sm)
     {
       clear_mpi_requests();
-      partitioner = partitioner_in;
 
       this->comm_sm = comm_sm;
 
       // set vector size and allocate memory
-      const size_type new_allocated_size =
-        partitioner->locally_owned_size() + partitioner->n_ghost_indices();
-      resize_val(new_allocated_size, comm_sm);
+      if (partitioner.get() != partitioner_in.get())
+        {
+          partitioner = partitioner_in;
+          const size_type new_allocated_size =
+            partitioner->locally_owned_size() + partitioner->n_ghost_indices();
+          resize_val(new_allocated_size, comm_sm);
+        }
 
       // initialize to zero
       *this = Number();
@@ -705,6 +704,17 @@ namespace LinearAlgebra
               v.data,
               data);
         }
+    }
+
+
+
+    template <typename Number, typename MemorySpaceType>
+    Vector<Number, MemorySpaceType>::Vector( // NOLINT
+      Vector<Number, MemorySpaceType> &&v)
+      : Vector()
+    {
+      static_cast<Subscriptor &>(*this) = static_cast<Subscriptor &&>(v);
+      this->swap(v);
     }
 
 
@@ -772,8 +782,8 @@ namespace LinearAlgebra
 
     template <typename Number, typename MemorySpaceType>
     inline Vector<Number, MemorySpaceType> &
-    Vector<Number, MemorySpaceType>::
-    operator=(const Vector<Number, MemorySpaceType> &c)
+    Vector<Number, MemorySpaceType>::operator=(
+      const Vector<Number, MemorySpaceType> &c)
     {
 #ifdef _MSC_VER
       return this->operator=<Number>(c);
@@ -787,8 +797,8 @@ namespace LinearAlgebra
     template <typename Number, typename MemorySpaceType>
     template <typename Number2>
     inline Vector<Number, MemorySpaceType> &
-    Vector<Number, MemorySpaceType>::
-    operator=(const Vector<Number2, MemorySpaceType> &c)
+    Vector<Number, MemorySpaceType>::operator=(
+      const Vector<Number2, MemorySpaceType> &c)
     {
       Assert(c.partitioner.get() != nullptr, ExcNotInitialized());
 
@@ -1409,6 +1419,7 @@ namespace LinearAlgebra
 
       std::swap(compress_requests, v.compress_requests);
       std::swap(update_ghost_values_requests, v.update_ghost_values_requests);
+      std::swap(comm_sm, v.comm_sm);
 #endif
 
       std::swap(partitioner, v.partitioner);
@@ -1461,8 +1472,8 @@ namespace LinearAlgebra
 
     template <typename Number, typename MemorySpaceType>
     Vector<Number, MemorySpaceType> &
-    Vector<Number, MemorySpaceType>::
-    operator+=(const VectorSpaceVector<Number> &vv)
+    Vector<Number, MemorySpaceType>::operator+=(
+      const VectorSpaceVector<Number> &vv)
     {
       // Downcast. Throws an exception if invalid.
       using VectorType = Vector<Number, MemorySpaceType>;
@@ -1489,8 +1500,8 @@ namespace LinearAlgebra
 
     template <typename Number, typename MemorySpaceType>
     Vector<Number, MemorySpaceType> &
-    Vector<Number, MemorySpaceType>::
-    operator-=(const VectorSpaceVector<Number> &vv)
+    Vector<Number, MemorySpaceType>::operator-=(
+      const VectorSpaceVector<Number> &vv)
     {
       // Downcast. Throws an exception if invalid.
       using VectorType = Vector<Number, MemorySpaceType>;
@@ -1805,8 +1816,9 @@ namespace LinearAlgebra
 
 
     template <typename Number, typename MemorySpaceType>
-    Number Vector<Number, MemorySpaceType>::
-           operator*(const VectorSpaceVector<Number> &vv) const
+    Number
+    Vector<Number, MemorySpaceType>::operator*(
+      const VectorSpaceVector<Number> &vv) const
     {
       // Downcast. Throws an exception if invalid.
       using VectorType = Vector<Number, MemorySpaceType>;
@@ -2097,7 +2109,7 @@ namespace LinearAlgebra
                                            const bool         across) const
     {
       Assert(partitioner.get() != nullptr, ExcInternalError());
-      AssertThrow(out, ExcIO());
+      AssertThrow(out.fail() == false, ExcIO());
       std::ios::fmtflags old_flags     = out.flags();
       unsigned int       old_precision = out.precision(precision);
 
@@ -2112,7 +2124,7 @@ namespace LinearAlgebra
         // turn
 #ifdef DEAL_II_WITH_MPI
       if (partitioner->n_mpi_processes() > 1)
-        for (unsigned int i = 0; i < partitioner->this_mpi_process(); i++)
+        for (unsigned int i = 0; i < partitioner->this_mpi_process(); ++i)
           {
             const int ierr = MPI_Barrier(partitioner->get_mpi_communicator());
             AssertThrowMPI(ierr);
@@ -2149,7 +2161,7 @@ namespace LinearAlgebra
               out << '(' << partitioner->ghost_indices().nth_index_in_set(i)
                   << '/'
                   << stored_elements[partitioner->locally_owned_size() + i]
-                  << ")" << std::endl;
+                  << ')' << std::endl;
           out << std::endl;
         }
       out << std::flush;
@@ -2170,7 +2182,7 @@ namespace LinearAlgebra
         }
 #endif
 
-      AssertThrow(out, ExcIO());
+      AssertThrow(out.fail() == false, ExcIO());
       // reset output format
       out.flags(old_flags);
       out.precision(old_precision);

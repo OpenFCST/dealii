@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -164,8 +164,7 @@ public:
    * Convert a boost::geometry::point to a dealii::Point.
    */
   template <std::size_t dummy_dim,
-            typename std::enable_if<(dim == dummy_dim) && (dummy_dim != 0),
-                                    int>::type = 0>
+            std::enable_if_t<(dim == dummy_dim) && (dummy_dim != 0), int> = 0>
   Point(const boost::geometry::model::
           point<Number, dummy_dim, boost::geometry::cs::cartesian> &boost_pt);
 
@@ -185,7 +184,7 @@ public:
    * @note This function can also be used in CUDA device code.
    */
   DEAL_II_CUDA_HOST_DEV Number
-                        operator()(const unsigned int index) const;
+  operator()(const unsigned int index) const;
 
   /**
    * Read and write access to the <tt>index</tt>th coordinate.
@@ -288,7 +287,8 @@ public:
    *
    * @note This function can also be used in CUDA device code.
    */
-  DEAL_II_CUDA_HOST_DEV Number operator*(const Tensor<1, dim, Number> &p) const;
+  DEAL_II_CUDA_HOST_DEV Number
+  operator*(const Tensor<1, dim, Number> &p) const;
 
   /**
    * Return the scalar product of this point vector with itself, i.e. the
@@ -436,9 +436,8 @@ Point<dim, Number>::Point(const Number x, const Number y, const Number z)
 
 
 template <int dim, typename Number>
-template <
-  std::size_t dummy_dim,
-  typename std::enable_if<(dim == dummy_dim) && (dummy_dim != 0), int>::type>
+template <std::size_t dummy_dim,
+          std::enable_if_t<(dim == dummy_dim) && (dummy_dim != 0), int>>
 inline Point<dim, Number>::Point(
   const boost::geometry::model::
     point<Number, dummy_dim, boost::geometry::cs::cartesian> &boost_pt)
@@ -548,10 +547,10 @@ Point<dim, Number>::operator-() const
 template <int dim, typename Number>
 template <typename OtherNumber>
 inline DEAL_II_CUDA_HOST_DEV
-    Point<dim,
+  Point<dim,
         typename ProductType<Number,
                              typename EnableIfScalar<OtherNumber>::type>::type>
-    Point<dim, Number>::operator*(const OtherNumber factor) const
+  Point<dim, Number>::operator*(const OtherNumber factor) const
 {
   Point<dim, typename ProductType<Number, OtherNumber>::type> tmp;
   for (unsigned int i = 0; i < dim; ++i)
@@ -580,8 +579,8 @@ inline DEAL_II_CUDA_HOST_DEV
 
 
 template <int dim, typename Number>
-inline DEAL_II_CUDA_HOST_DEV Number Point<dim, Number>::
-                                    operator*(const Tensor<1, dim, Number> &p) const
+inline DEAL_II_CUDA_HOST_DEV Number
+Point<dim, Number>::operator*(const Tensor<1, dim, Number> &p) const
 {
   Number res = Number();
   for (unsigned int i = 0; i < dim; ++i)

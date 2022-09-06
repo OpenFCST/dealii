@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2010 - 2020 by the deal.II authors
+// Copyright (C) 2010 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -116,7 +116,7 @@ SolverRelaxation<VectorType>::solve(const MatrixType &    A,
 
   int iter = 0;
   // Main loop
-  for (; conv == SolverControl::iterate; iter++)
+  for (; conv == SolverControl::iterate; ++iter)
     {
       // Compute residual
       A.vmult(r, x);

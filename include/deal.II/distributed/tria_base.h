@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,7 +19,7 @@
 
 #include <deal.II/base/config.h>
 
-#include <deal.II/base/mpi.h>
+#include <deal.II/base/mpi_stub.h>
 #include <deal.II/base/partitioner.h>
 #include <deal.II/base/smartpointer.h>
 #include <deal.II/base/subscriptor.h>
@@ -66,7 +66,8 @@ namespace parallel
    * @ref GlossMPICommunicator "MPI communicators"
    * or that they have
    * @ref GlossLocallyOwnedCell "locally owned",
-   * @ref GlossGhostCell "ghost", and possibly
+   * @ref GlossGhostCell "ghost",
+   * and possibly
    * @ref GlossArtificialCell "artificial cells".
    * This class provides
    * a number of member functions that allows querying some information
@@ -203,29 +204,19 @@ namespace parallel
 
     /**
      * Return partitioner for the global indices of the cells on the active
-     * level of the triangulation.
+     * level of the triangulation, which is returned by the function
+     * CellAccessor::global_active_cell_index().
      */
     const std::weak_ptr<const Utilities::MPI::Partitioner>
     global_active_cell_index_partitioner() const;
 
     /**
      * Return partitioner for the global indices of the cells on the given @p
-     * level of the triangulation.
+     * level of the triangulation, which is returned by the function
+     * CellAccessor::global_level_cell_index().
      */
     const std::weak_ptr<const Utilities::MPI::Partitioner>
     global_level_cell_index_partitioner(const unsigned int level) const;
-
-    /**
-     * Return a map that, for each vertex, lists all the processors whose
-     * subdomains are adjacent to that vertex.
-     *
-     * @deprecated Use GridTools::compute_vertices_with_ghost_neighbors()
-     * instead of
-     * parallel::TriangulationBase::compute_vertices_with_ghost_neighbors().
-     */
-    DEAL_II_DEPRECATED virtual std::map<unsigned int,
-                                        std::set<dealii::types::subdomain_id>>
-    compute_vertices_with_ghost_neighbors() const;
 
     /**
      * @copydoc dealii::Triangulation::get_boundary_ids()
@@ -301,6 +292,9 @@ namespace parallel
     communicate_locally_moved_vertices(
       const std::vector<bool> &vertex_locally_moved);
 
+    virtual types::coarse_cell_id
+    n_global_coarse_cells() const override;
+
   protected:
     /**
      * MPI communicator to be used for the triangulation. We create a unique
@@ -330,22 +324,31 @@ namespace parallel
        * Number of locally owned active cells of this MPI rank.
        */
       unsigned int n_locally_owned_active_cells;
+
       /**
        * The total number of active cells (sum of @p
        * n_locally_owned_active_cells).
        */
       types::global_cell_index n_global_active_cells;
+
+      /**
+       * Number of global coarse cells.
+       */
+      types::coarse_cell_id number_of_global_coarse_cells;
+
       /**
        * The global number of levels computed as the maximum number of levels
        * taken over all MPI ranks, so <tt>n_levels()<=n_global_levels =
        * max(n_levels() on proc i)</tt>.
        */
       unsigned int n_global_levels;
+
       /**
        * A set containing the subdomain_id (MPI rank) of the owners of the
        * ghost cells on this processor.
        */
       std::set<types::subdomain_id> ghost_owners;
+
       /**
        * A set containing the MPI ranks of the owners of the level ghost cells
        * on this processor (for all levels).
@@ -387,13 +390,6 @@ namespace parallel
     void
     reset_global_cell_indices();
   };
-
-  /**
-   *  Using directive for backwards-compatibility.
-   *  @deprecated Use TriangulationBase instead of Triangulation.
-   */
-  template <int dim, int spacedim = dim>
-  using Triangulation DEAL_II_DEPRECATED = TriangulationBase<dim, spacedim>;
 
 
 
@@ -472,6 +468,24 @@ namespace parallel
       typename dealii::Triangulation<dim, spacedim>::CellStatus;
 
     /**
+     * Return true if the triangulation has hanging nodes.
+     *
+     * In the context of parallel distributed triangulations, every
+     * processor stores only that part of the triangulation it owns locally.
+     * However, it also stores coarser levels, and to guarantee the
+     * 2:1 relationship between cells, this may mean that there are hanging
+     * nodes between cells that are not locally owned or ghost cells (i.e.,
+     * between ghost cells and artificial cells, or between artificial and
+     * artificial cells; see
+     * @ref GlossArtificialCell "the glossary").
+     * One is not typically interested in this case, so the function returns
+     * whether there are hanging nodes between any two cells of the "global"
+     * mesh, i.e., the union of locally owned cells on all processors.
+     */
+    virtual bool
+    has_hanging_nodes() const override;
+
+    /**
      * Save the triangulation into the given file. This file needs to be
      * reachable from all nodes in the computation on a shared network file
      * system. See the SolutionTransfer class on how to store solution vectors
@@ -487,7 +501,16 @@ namespace parallel
      * notify_ready_to_unpack() after calling load().
      */
     virtual void
-    load(const std::string &filename, const bool autopartition = true) = 0;
+    load(const std::string &filename) = 0;
+
+    /**
+     * @copydoc load()
+     *
+     * @deprecated The autopartition parameter has been removed.
+     */
+    DEAL_II_DEPRECATED
+    virtual void
+    load(const std::string &filename, const bool autopartition) = 0;
 
     /**
      * Register a function that can be used to attach data of fixed size
@@ -665,7 +688,8 @@ namespace parallel
      * Save additional cell-attached data into the given file. The first
      * arguments are used to determine the offsets where to write buffers to.
      *
-     * Called by @ref save.
+     * Called by
+     * @ref save.
      */
     void
     save_attached_data(const unsigned int global_first_cell,
@@ -677,7 +701,8 @@ namespace parallel
      * The first arguments are used to determine the offsets where to read
      * buffers from.
      *
-     * Called by @ref load.
+     * Called by
+     * @ref load.
      */
     void
     load_attached_data(const unsigned int global_first_cell,

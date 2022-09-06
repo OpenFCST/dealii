@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2018 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,8 +25,10 @@
 DEAL_II_NAMESPACE_OPEN
 
 
-/*!@addtogroup fe */
-/*@{*/
+/**
+ * @addtogroup fe
+ * @{
+ */
 
 /**
  * Implementation of a scalar Lagrange finite element @p Qp that yields the
@@ -559,11 +561,16 @@ public:
    * Constructor for tensor product polynomials with support points @p points
    * based on a one-dimensional quadrature formula. The degree of the finite
    * element is <tt>points.size()-1</tt>. Note that the first point has to be
-   * 0 and the last one 1. Constructing
+   * 0 and the last one 1, to ensure that the resulting element is continuous.
+   * As a consequence, only *certain* quadrature formulas make sense as
+   * argument to this constructor. Specifically, constructing
    * <tt>FE_Q<dim>(QGaussLobatto<1>(fe_degree+1))</tt> is equivalent to the
    * constructor that specifies the polynomial degree only. For selecting
-   * equidistant nodes at <tt>fe_degree > 2</tt>, construct
-   * <tt>FE_Q<dim>(QIterated<1>(QTrapezoid<1>(),fe_degree))</tt>.
+   * equidistant nodes at <tt>fe_degree > 2</tt>, use
+   * <tt>FE_Q<dim>(QIterated<1>(QTrapezoid<1>(),fe_degree))</tt>, though the
+   * use of equidistant node points is known to lead to poorly conditioned
+   * linear systems with poor interpolation properties for high polynomial
+   * degrees (which is why the default uses the QGaussLobatto points).
    *
    * The *space* created by this constructor is the
    * same as if you had called `FE_Q<dim>(points.size()-1)`, but what *is*
@@ -628,7 +635,7 @@ public:
 
 
 
-/*@}*/
+/** @} */
 
 DEAL_II_NAMESPACE_CLOSE
 

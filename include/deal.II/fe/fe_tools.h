@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -56,8 +56,10 @@ class AffineConstraints;
 #endif
 
 
-/*!@addtogroup feall */
-/*@{*/
+/**
+ * @addtogroup feall
+ * @{
+ */
 
 
 /**
@@ -610,11 +612,11 @@ namespace FETools
 
 
 
-  //@}
+  /** @} */
   /**
    * @name Functions which should be in DoFTools
    */
-  //@{
+  /** @{ */
   /**
    * Compute the interpolation of a the @p dof1-function @p u1 to a @p
    * dof2-function @p u2. @p dof1 and @p dof2 need to be DoFHandlers based on
@@ -861,7 +863,7 @@ namespace FETools
     const AffineConstraints<typename OutVector::value_type> &constraints,
     OutVector &                                              z2);
 
-  //@}
+  /** @} */
   /**
    * The numbering of the degrees of freedom in continuous finite elements is
    * hierarchic, i.e. in such a way that we first number the vertex dofs, in
@@ -881,38 +883,6 @@ namespace FETools
   hierarchic_to_lexicographic_numbering(unsigned int degree);
 
   /**
-   * Like the previous function but instead of returning its result as a value
-   * return it through the last argument.
-   *
-   * @deprecated Use the function that returns the renumbering in a vector
-   * instead.
-   */
-  template <int dim>
-  DEAL_II_DEPRECATED void
-  hierarchic_to_lexicographic_numbering(unsigned int               degree,
-                                        std::vector<unsigned int> &h2l);
-
-  /**
-   * Like the previous functions but using a FiniteElementData instead of the
-   * polynomial degree.
-   *
-   * @deprecated Use the function that returns the renumbering in a vector and
-   * uses the degree of the basis as an argument instead.
-   */
-  template <int dim>
-  DEAL_II_DEPRECATED void
-  hierarchic_to_lexicographic_numbering(const FiniteElementData<dim> &fe_data,
-                                        std::vector<unsigned int> &   h2l);
-
-  /**
-   * @deprecated Use the function that uses the degree of the basis as an
-   * argument instead.
-   */
-  template <int dim>
-  DEAL_II_DEPRECATED std::vector<unsigned int>
-                     hierarchic_to_lexicographic_numbering(const FiniteElementData<dim> &fe_data);
-
-  /**
    * This is the reverse function to the above one, generating the map from
    * the lexicographic to the hierarchical numbering for a given polynomial
    * degree of a continuous finite element. All the remarks made about the
@@ -921,24 +891,6 @@ namespace FETools
   template <int dim>
   std::vector<unsigned int>
   lexicographic_to_hierarchic_numbering(unsigned int degree);
-
-  /**
-   * @deprecated Use the function that returns the renumbering in a vector and
-   * uses the degree of the basis as an argument instead.
-   */
-  template <int dim>
-  DEAL_II_DEPRECATED void
-  lexicographic_to_hierarchic_numbering(const FiniteElementData<dim> &fe_data,
-                                        std::vector<unsigned int> &   l2h);
-
-  /**
-   * @deprecated Use the function that uses the degree of the basis as an
-   * argument instead.
-   */
-  template <int dim>
-  DEAL_II_DEPRECATED std::vector<unsigned int>
-                     lexicographic_to_hierarchic_numbering(const FiniteElementData<dim> &fe_data);
-
 
   /**
    * A namespace that contains functions that help setting up internal
@@ -957,8 +909,10 @@ namespace FETools
    * <li> Tensor product construction (<code>do_tensor_product=true</code>):
    * The tensor product construction, in the simplest case, builds a
    * vector-valued element from scalar elements (see
-   * @ref vector_valued "this documentation module" and
-   * @ref GlossComponent "this glossary entry" for more information).
+   * @ref vector_valued "this documentation module"
+   * and
+   * @ref GlossComponent "this glossary entry"
+   * for more information).
    * To give an example, consider creating a vector-valued element with
    * two vector components, where the first should have linear shape
    * functions and the second quadratic shape functions. In 1d, the
@@ -1364,7 +1318,7 @@ namespace FETools
                  int,
                  << "The dimension " << arg1
                  << " in the finite element string must match "
-                 << "the space dimension " << arg2 << ".");
+                 << "the space dimension " << arg2 << '.');
 
   /**
    * Exception
@@ -1414,8 +1368,8 @@ namespace FETools
                  int,
                  int,
                  int,
-                 << "This is a " << arg1 << "x" << arg2 << " matrix, "
-                 << "but should be a " << arg3 << "x" << arg4 << " matrix.");
+                 << "This is a " << arg1 << 'x' << arg2 << " matrix, "
+                 << "but should be a " << arg3 << 'x' << arg4 << " matrix.");
 
   /**
    * Exception thrown if an embedding matrix was computed inaccurately.
@@ -1531,7 +1485,7 @@ namespace FETools
 
 #endif
 
-/*@}*/
+/** @} */
 
 DEAL_II_NAMESPACE_CLOSE
 

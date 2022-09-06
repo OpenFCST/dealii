@@ -23,10 +23,9 @@
 #include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe_dgq.h>
-#include <deal.II/fe/fe_point_evaluation.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/mapping_fe.h>
-#include <deal.II/fe/mapping_q_generic.h>
+#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/grid_generator.h>
 
@@ -34,6 +33,8 @@
 #include <deal.II/lac/precondition.h>
 #include <deal.II/lac/solver_cg.h>
 #include <deal.II/lac/solver_control.h>
+
+#include <deal.II/matrix_free/fe_point_evaluation.h>
 
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
@@ -89,9 +90,9 @@ print(const Mapping<dim> &                              mapping,
   const auto &tria = dof_handler.get_triangulation();
 
   Vector<double> ranks(tria.n_active_cells());
-  for (const auto &cell : tria.active_cell_iterators())
-    if (cell->is_locally_owned())
-      ranks(cell->active_cell_index()) = cell->subdomain_id();
+  for (const auto &cell :
+       tria.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+    ranks(cell->active_cell_index()) = cell->subdomain_id();
   data_out.add_data_vector(ranks, "rank");
   data_out.add_data_vector(result, "result");
 
@@ -152,15 +153,19 @@ test()
 
   vector_1.update_ghost_values();
   Utilities::MPI::RemotePointEvaluation<dim> evaluation_cache;
-  const auto evaluation_point_results = VectorTools::evaluate_at_points<1>(
+  const auto evaluation_point_results = VectorTools::point_values<1>(
     mapping_1, dof_handler_1, vector_1, evaluation_points, evaluation_cache);
+  const auto evaluation_point_gradient_results =
+    VectorTools::point_gradients<1>(
+      mapping_1, dof_handler_1, vector_1, evaluation_points, evaluation_cache);
   vector_1.zero_out_ghosts();
 
   if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
     for (unsigned int i = 0; i <= n_intervals; ++i)
       {
         if (std::abs(evaluation_points[i][0] - evaluation_point_results[i]) >
-            1e-10)
+              1e-10 ||
+            std::abs(evaluation_point_gradient_results[i][0] - 1.0) > 1e-10)
           Assert(false, ExcNotImplemented());
       }
 

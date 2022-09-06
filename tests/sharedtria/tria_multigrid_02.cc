@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2018 by the deal.II authors
+// Copyright (C) 2008 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -79,8 +79,8 @@ test()
                                                  endc = shared_tria.end(lvl);
       for (; cell != endc; ++cell)
         if (cell->level_subdomain_id() != numbers::artificial_subdomain_id)
-          deallog << "(" << cell->id().to_string() << ","
-                  << cell->level_subdomain_id() << ")" << std::endl;
+          deallog << '(' << cell->id().to_string() << ','
+                  << cell->level_subdomain_id() << ')' << std::endl;
     }
 }
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -15,6 +15,10 @@
 
 // This is a copy of step-44 (git rev 3f7e617) to use as a base-line for
 // results produced via different approaches to be compared to.
+//
+// This variant of the test uses the FE_DGP class to discretize the
+// pressure and dilatation fields, contrary to what is done in commit 3f7e617
+// but in line with the current implementation of the tutorial.
 
 #include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/function.h>
@@ -30,7 +34,7 @@
 #include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/dofs/dof_tools.h>
 
-#include <deal.II/fe/fe_dgp_monomial.h>
+#include <deal.II/fe/fe_dgp.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_tools.h>
@@ -777,9 +781,9 @@ namespace Step44
     , degree(parameters.poly_degree)
     , fe(FE_Q<dim>(parameters.poly_degree),
          dim, // displacement
-         FE_DGPMonomial<dim>(parameters.poly_degree - 1),
+         FE_DGP<dim>(parameters.poly_degree - 1),
          1, // pressure
-         FE_DGPMonomial<dim>(parameters.poly_degree - 1),
+         FE_DGP<dim>(parameters.poly_degree - 1),
          1)
     , // dilatation
     dof_handler_ref(triangulation)
@@ -1251,7 +1255,7 @@ namespace Step44
   {
     pcout << std::endl
           << "Timestep " << time.get_timestep() << " @ " << time.current()
-          << "s" << std::endl;
+          << 's' << std::endl;
     BlockVector<double> newton_update(dofs_per_block);
     error_residual.reset();
     error_residual_0.reset();
@@ -1263,7 +1267,7 @@ namespace Step44
     unsigned int newton_iteration = 0;
     for (; newton_iteration < parameters.max_iterations_NR; ++newton_iteration)
       {
-        pcout << " " << std::setw(2) << newton_iteration << " " << std::flush;
+        pcout << ' ' << std::setw(2) << newton_iteration << ' ' << std::flush;
         tangent_matrix = 0.0;
         system_rhs     = 0.0;
         assemble_system_rhs();
@@ -1308,14 +1312,14 @@ namespace Step44
   {
     static const unsigned int l_width = 155;
     for (unsigned int i = 0; i < l_width; ++i)
-      pcout << "_";
+      pcout << '_';
     pcout << std::endl;
     pcout << "                 SOLVER STEP                  "
           << " |  LIN_IT   LIN_RES    RES_NORM    "
           << " RES_U     RES_P      RES_J     NU_NORM     "
           << " NU_U       NU_P       NU_J " << std::endl;
     for (unsigned int i = 0; i < l_width; ++i)
-      pcout << "_";
+      pcout << '_';
     pcout << std::endl;
   }
   template <int dim>
@@ -1324,7 +1328,7 @@ namespace Step44
   {
     static const unsigned int l_width = 155;
     for (unsigned int i = 0; i < l_width; ++i)
-      pcout << "_";
+      pcout << '_';
     pcout << std::endl;
     const std::pair<double, double> error_dil = get_error_dilation();
     pcout << "Relative errors:" << std::endl

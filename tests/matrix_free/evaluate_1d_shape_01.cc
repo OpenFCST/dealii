@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2018 by the deal.II authors
+// Copyright (C) 2013 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -75,7 +75,7 @@ test()
 
   deallog << "Errors no transpose: ";
   for (unsigned int i = 0; i < M; ++i)
-    deallog << y[i] - y_ref[i] << " ";
+    deallog << y[i] - y_ref[i] << ' ';
   deallog << std::endl;
 
 
@@ -101,7 +101,7 @@ test()
 
   deallog << "Errors transpose:    ";
   for (unsigned int i = 0; i < N; ++i)
-    deallog << x[i] - x_ref[i] << " ";
+    deallog << x[i] - x_ref[i] << ' ';
   deallog << std::endl;
 }
 

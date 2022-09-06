@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -248,16 +248,6 @@ MGTransferSelect<number>::do_copy_to_mg(
            ++i)
         dst[level](i->second) = src(i->first);
     }
-}
-
-
-
-template <int dim, int spacedim>
-void
-MGTransferComponentBase::build_matrices(const DoFHandler<dim, spacedim> &,
-                                        const DoFHandler<dim, spacedim> &mg_dof)
-{
-  build(mg_dof);
 }
 
 
@@ -564,23 +554,6 @@ MGTransferComponentBase::build(const DoFHandler<dim, spacedim> &mg_dof)
                 }
         }
     }
-}
-
-
-
-template <typename number>
-template <int dim, int spacedim>
-void
-MGTransferSelect<number>::build_matrices(
-  const DoFHandler<dim, spacedim> & /*dof*/,
-  const DoFHandler<dim, spacedim> &                     mg_dof,
-  unsigned int                                          select,
-  unsigned int                                          mg_select,
-  const std::vector<unsigned int> &                     t_component,
-  const std::vector<unsigned int> &                     mg_t_component,
-  const std::vector<std::set<types::global_dof_index>> &bdry_indices)
-{
-  build(mg_dof, select, mg_select, t_component, mg_t_component, bdry_indices);
 }
 
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2018 by the deal.II authors
+// Copyright (C) 2001 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -65,7 +65,7 @@ test()
   auto bounding_box =
     GridTools::compute_bounding_box(tria, predicate); // General predicate
 
-  deallog << bounding_box.first << " " << bounding_box.second << std::endl;
+  deallog << bounding_box.first << ' ' << bounding_box.second << std::endl;
 }
 
 

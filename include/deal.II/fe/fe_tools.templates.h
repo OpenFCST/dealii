@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -54,13 +54,10 @@
 #include <deal.II/fe/fe_tools.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_cartesian.h>
-#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/tria_iterator.h>
-
-#include <deal.II/hp/dof_handler.h>
 
 #include <deal.II/lac/full_matrix.h>
 #include <deal.II/lac/householder.h>
@@ -85,41 +82,82 @@ namespace FETools
     {
       AssertDimension(fes.size(), multiplicities.size());
 
-      unsigned int multiplied_dofs_per_vertex = 0;
-      unsigned int multiplied_dofs_per_line   = 0;
-      unsigned int multiplied_dofs_per_quad   = 0;
-      unsigned int multiplied_dofs_per_hex    = 0;
-
       unsigned int multiplied_n_components = 0;
 
       unsigned int degree = 0; // degree is the maximal degree of the components
 
       unsigned int n_components = 0;
       // Get the number of components from the first given finite element.
-      for (unsigned int i = 0; i < fes.size(); i++)
+      for (unsigned int i = 0; i < fes.size(); ++i)
         if (multiplicities[i] > 0)
           {
             n_components = fes[i]->n_components();
             break;
           }
 
-      for (unsigned int i = 0; i < fes.size(); i++)
+      dealii::internal::GenericDoFsPerObject dpo;
+
+      std::vector<dealii::internal::GenericDoFsPerObject> dpos_in(fes.size());
+
+      for (unsigned int i = 0; i < fes.size(); ++i)
+        if (multiplicities[i] > 0)
+          dpos_in[i] =
+            dealii::internal::GenericDoFsPerObject::generate(*fes[i]);
+
+      // helper function to fill a vector of GenericDoFsPerObject
+      // according to multiplicities
+      const auto fill_dpo_vector =
+        [&](const std::function<std::vector<std::vector<unsigned int>> &(
+              dealii::internal::GenericDoFsPerObject &)> &get_vector) {
+          auto &vector_dst = get_vector(dpo);
+
+          // allocate memory
+          for (unsigned int i = 0; i < fes.size(); ++i)
+            if (multiplicities[i] > 0)
+              {
+                const auto &vector_src = get_vector(dpos_in[i]);
+
+                vector_dst.resize(vector_src.size());
+
+                for (unsigned int j = 0; j < vector_src.size(); ++j)
+                  vector_dst[j].assign(vector_src[j].size(), 0);
+
+                break;
+              }
+
+          // fill vector according to multiplicities
+          for (unsigned int i = 0; i < fes.size(); ++i)
+            if (multiplicities[i] > 0)
+              {
+                const auto &vector_src = get_vector(dpos_in[i]);
+
+                for (unsigned int j = 0; j < vector_src.size(); ++j)
+                  for (unsigned int k = 0; k < vector_src[j].size(); ++k)
+                    vector_dst[j][k] += vector_src[j][k] * multiplicities[i];
+              }
+        };
+
+      // go through each field of GenericDoFsPerObject
+      fill_dpo_vector(
+        [](auto &dpo) -> std::vector<std::vector<unsigned int>> & {
+          return dpo.dofs_per_object_exclusive;
+        });
+      fill_dpo_vector(
+        [](auto &dpo) -> std::vector<std::vector<unsigned int>> & {
+          return dpo.dofs_per_object_inclusive;
+        });
+      fill_dpo_vector(
+        [](auto &dpo) -> std::vector<std::vector<unsigned int>> & {
+          return dpo.object_index;
+        });
+      fill_dpo_vector(
+        [](auto &dpo) -> std::vector<std::vector<unsigned int>> & {
+          return dpo.first_object_index_on_face;
+        });
+
+      for (unsigned int i = 0; i < fes.size(); ++i)
         if (multiplicities[i] > 0)
           {
-            // TODO: the implementation makes the assumption that all faces have
-            // the same number of dofs -> don't construct DPO but
-            // PrecomputedFiniteElementData
-            AssertDimension(fes[i]->n_unique_quads(), 1);
-
-            multiplied_dofs_per_vertex +=
-              fes[i]->n_dofs_per_vertex() * multiplicities[i];
-            multiplied_dofs_per_line +=
-              fes[i]->n_dofs_per_line() * multiplicities[i];
-            multiplied_dofs_per_quad +=
-              fes[i]->n_dofs_per_quad(0) * multiplicities[i];
-            multiplied_dofs_per_hex +=
-              fes[i]->n_dofs_per_hex() * multiplicities[i];
-
             multiplied_n_components +=
               fes[i]->n_components() * multiplicities[i];
 
@@ -149,14 +187,6 @@ namespace FETools
             total_conformity = typename FiniteElementData<dim>::Conformity(
               total_conformity & fes[index]->conforming_space);
       }
-
-      std::vector<unsigned int> dpo;
-      dpo.push_back(multiplied_dofs_per_vertex);
-      dpo.push_back(multiplied_dofs_per_line);
-      if (dim > 1)
-        dpo.push_back(multiplied_dofs_per_quad);
-      if (dim > 2)
-        dpo.push_back(multiplied_dofs_per_hex);
 
       BlockIndices block_indices(0, 0);
 
@@ -1030,115 +1060,6 @@ namespace FETools
     return nullptr;
   }
 
-  // Specializations for FE_Q.
-  template <>
-  std::unique_ptr<FiniteElement<1, 1>>
-  FEFactory<FE_Q<1, 1>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_Q<1>>(quad);
-  }
-
-  template <>
-  std::unique_ptr<FiniteElement<2, 2>>
-  FEFactory<FE_Q<2, 2>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_Q<2>>(quad);
-  }
-
-  template <>
-  std::unique_ptr<FiniteElement<3, 3>>
-  FEFactory<FE_Q<3, 3>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_Q<3>>(quad);
-  }
-
-  // Specializations for FE_Q_DG0.
-  template <>
-  std::unique_ptr<FiniteElement<1, 1>>
-  FEFactory<FE_Q_DG0<1, 1>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_Q_DG0<1>>(quad);
-  }
-
-  template <>
-  std::unique_ptr<FiniteElement<2, 2>>
-  FEFactory<FE_Q_DG0<2, 2>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_Q_DG0<2>>(quad);
-  }
-
-  template <>
-  std::unique_ptr<FiniteElement<3, 3>>
-  FEFactory<FE_Q_DG0<3, 3>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_Q_DG0<3>>(quad);
-  }
-
-  // Specializations for FE_Q_Bubbles.
-  template <>
-  std::unique_ptr<FiniteElement<1, 1>>
-  FEFactory<FE_Q_Bubbles<1, 1>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_Q_Bubbles<1>>(quad);
-  }
-
-  template <>
-  std::unique_ptr<FiniteElement<2, 2>>
-  FEFactory<FE_Q_Bubbles<2, 2>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_Q_Bubbles<2>>(quad);
-  }
-
-  template <>
-  std::unique_ptr<FiniteElement<3, 3>>
-  FEFactory<FE_Q_Bubbles<3, 3>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_Q_Bubbles<3>>(quad);
-  }
-
-  // Specializations for FE_DGQArbitraryNodes.
-  template <>
-  std::unique_ptr<FiniteElement<1, 1>>
-  FEFactory<FE_DGQ<1>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_DGQArbitraryNodes<1>>(quad);
-  }
-
-  template <>
-  std::unique_ptr<FiniteElement<1, 2>>
-  FEFactory<FE_DGQ<1, 2>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_DGQArbitraryNodes<1, 2>>(quad);
-  }
-
-  template <>
-  std::unique_ptr<FiniteElement<1, 3>>
-  FEFactory<FE_DGQ<1, 3>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_DGQArbitraryNodes<1, 3>>(quad);
-  }
-
-  template <>
-  std::unique_ptr<FiniteElement<2, 2>>
-  FEFactory<FE_DGQ<2>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_DGQArbitraryNodes<2>>(quad);
-  }
-
-  template <>
-  std::unique_ptr<FiniteElement<2, 3>>
-  FEFactory<FE_DGQ<2, 3>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_DGQArbitraryNodes<2, 3>>(quad);
-  }
-
-  template <>
-  std::unique_ptr<FiniteElement<3, 3>>
-  FEFactory<FE_DGQ<3>>::get(const Quadrature<1> &quad) const
-  {
-    return std::make_unique<FE_DGQArbitraryNodes<3>>(quad);
-  }
-
 
 
   namespace internal
@@ -1249,8 +1170,7 @@ namespace FETools
       std::array<
         std::array<std::map<std::string, std::unique_ptr<const Subscriptor>>,
                    4>,
-        4>
-      fill_default_map()
+        4> inline fill_default_map()
       {
         std::array<
           std::array<std::map<std::string, std::unique_ptr<const Subscriptor>>,
@@ -1564,19 +1484,19 @@ namespace FETools
                         const FiniteElement<dim, spacedim> &fe2,
                         FullMatrix<number> &                matrix)
   {
-    Assert(fe1.n_components() == 1, ExcNotImplemented());
-    Assert(fe1.n_components() == fe2.n_components(),
-           ExcDimensionMismatch(fe1.n_components(), fe2.n_components()));
     Assert(matrix.m() == fe2.n_dofs_per_cell() &&
              matrix.n() == fe1.n_dofs_per_cell(),
            ExcMatrixDimensionMismatch(matrix.m(),
                                       matrix.n(),
                                       fe2.n_dofs_per_cell(),
                                       fe1.n_dofs_per_cell()));
+    AssertDimension(fe1.n_components(), fe2.n_components());
+
     matrix = 0;
 
     const unsigned int n1 = fe1.n_dofs_per_cell();
     const unsigned int n2 = fe2.n_dofs_per_cell();
+    const unsigned int nd = fe1.n_components();
 
     const ReferenceCell reference_cell = fe1.reference_cell();
 
@@ -1584,7 +1504,7 @@ namespace FETools
 
     // First, create a local mass matrix for the unit cell
     Triangulation<dim, spacedim> tr;
-    GridGenerator::reference_cell(reference_cell, tr);
+    GridGenerator::reference_cell(tr, reference_cell);
 
     const auto &mapping =
       reference_cell.template get_default_linear_mapping<dim, spacedim>();
@@ -1595,6 +1515,8 @@ namespace FETools
     Assert(degree != numbers::invalid_unsigned_int, ExcNotImplemented());
     const auto quadrature =
       reference_cell.get_gauss_type_quadrature<dim>(degree + 1);
+
+    const unsigned int nq = quadrature.size();
 
     // Set up FEValues.
     const UpdateFlags flags =
@@ -1608,16 +1530,13 @@ namespace FETools
     // Integrate and invert mass matrix. This happens in the target space
     FullMatrix<double> mass(n2, n2);
 
-    for (unsigned int k = 0; k < quadrature.size(); ++k)
-      {
-        const double dx = val2.JxW(k);
-        for (unsigned int i = 0; i < n2; ++i)
-          {
-            const double v = val2.shape_value(i, k);
-            for (unsigned int j = 0; j < n2; ++j)
-              mass(i, j) += v * val2.shape_value(j, k) * dx;
-          }
-      }
+    for (unsigned int i = 0; i < n2; ++i)
+      for (unsigned int j = 0; j < n2; ++j)
+        for (unsigned int d = 0; d < nd; ++d)
+          for (unsigned int k = 0; k < nq; ++k)
+            mass(i, j) += val2.JxW(k) * val2.shape_value_component(i, k, d) *
+                          val2.shape_value_component(j, k, d);
+
     // Invert the matrix. Gauss-Jordan should be sufficient since we expect
     // the mass matrix to be well-conditioned
     mass.gauss_jordan();
@@ -1632,12 +1551,9 @@ namespace FETools
         b = 0.;
         for (unsigned int i = 0; i < n2; ++i)
           for (unsigned int k = 0; k < quadrature.size(); ++k)
-            {
-              const double dx = val2.JxW(k);
-              const double u  = val1.shape_value(j, k);
-              const double v  = val2.shape_value(i, k);
-              b(i) += u * v * dx;
-            }
+            for (unsigned int d = 0; d < nd; ++d)
+              b(i) += val1.shape_value_component(j, k, d) *
+                      val2.shape_value_component(i, k, d) * val2.JxW(k);
 
         // Multiply by the inverse
         mass.vmult(x, b);
@@ -1792,7 +1708,7 @@ namespace FETools
         // Set up meshes, one with a single
         // reference cell and refine it once
         Triangulation<dim, spacedim> tria;
-        GridGenerator::reference_cell(reference_cell, tria);
+        GridGenerator::reference_cell(tria, reference_cell);
         tria.begin_active()->set_refine_flag(RefinementCase<dim>(ref_case));
         tria.execute_coarsening_and_refinement();
 
@@ -2183,7 +2099,7 @@ namespace FETools
     {
       // set up a triangulation for coarse cell
       Triangulation<dim, spacedim> tr;
-      GridGenerator::reference_cell(reference_cell, tr);
+      GridGenerator::reference_cell(tr, reference_cell);
 
       FEValues<dim, spacedim> coarse(mapping,
                                      fe,
@@ -2239,7 +2155,7 @@ namespace FETools
 
         // create a respective refinement on the triangulation
         Triangulation<dim, spacedim> tr;
-        GridGenerator::reference_cell(reference_cell, tr);
+        GridGenerator::reference_cell(tr, reference_cell);
         tr.begin_active()->set_refine_flag(RefinementCase<dim>(ref_case));
         tr.execute_coarsening_and_refinement();
 
@@ -2326,8 +2242,8 @@ namespace FETools
     // finally loop over all possible refinement cases
     Threads::TaskGroup<> tasks;
     unsigned int         ref_case = (isotropic_only) ?
-                              RefinementCase<dim>::isotropic_refinement :
-                              RefinementCase<dim>::cut_x;
+                                      RefinementCase<dim>::isotropic_refinement :
+                                      RefinementCase<dim>::cut_x;
     for (; ref_case <= RefinementCase<dim>::isotropic_refinement; ++ref_case)
       tasks += Threads::new_task([&, ref_case]() {
         compute_one_case(ref_case, mass, matrices[ref_case - 1]);
@@ -2572,8 +2488,7 @@ namespace FETools
                     // find sub-quadrature
                     position = name.find('(');
                     const std::string subquadrature_name(name, 0, position);
-                    AssertThrow(subquadrature_name == "QTrapez" ||
-                                  subquadrature_name == "QTrapezoid",
+                    AssertThrow(subquadrature_name == "QTrapezoid",
                                 ExcNotImplemented(
                                   "Could not detect quadrature of name " +
                                   subquadrature_name));
@@ -3263,66 +3178,12 @@ namespace FETools
 
 
   template <int dim>
-  void
-  hierarchic_to_lexicographic_numbering(const unsigned int         degree,
-                                        std::vector<unsigned int> &h2l)
-  {
-    AssertDimension(h2l.size(), Utilities::fixed_power<dim>(degree + 1));
-    h2l = hierarchic_to_lexicographic_numbering<dim>(degree);
-  }
-
-
-
-  template <int dim>
-  void
-  hierarchic_to_lexicographic_numbering(const FiniteElementData<dim> &fe,
-                                        std::vector<unsigned int> &   h2l)
-  {
-    Assert(h2l.size() == fe.n_dofs_per_cell(),
-           ExcDimensionMismatch(h2l.size(), fe.n_dofs_per_cell()));
-    hierarchic_to_lexicographic_numbering<dim>(fe.n_dofs_per_line() + 1, h2l);
-  }
-
-
-
-  template <int dim>
-  std::vector<unsigned int>
-  hierarchic_to_lexicographic_numbering(const FiniteElementData<dim> &fe)
-  {
-    Assert(fe.n_components() == 1, ExcInvalidFE());
-    return hierarchic_to_lexicographic_numbering<dim>(fe.n_dofs_per_line() + 1);
-  }
-
-
-
-  template <int dim>
   std::vector<unsigned int>
   lexicographic_to_hierarchic_numbering(const unsigned int degree)
   {
     return Utilities::invert_permutation(
       hierarchic_to_lexicographic_numbering<dim>(degree));
   }
-
-
-
-  template <int dim>
-  void
-  lexicographic_to_hierarchic_numbering(const FiniteElementData<dim> &fe,
-                                        std::vector<unsigned int> &   l2h)
-  {
-    l2h = lexicographic_to_hierarchic_numbering(fe);
-  }
-
-
-
-  template <int dim>
-  std::vector<unsigned int>
-  lexicographic_to_hierarchic_numbering(const FiniteElementData<dim> &fe)
-  {
-    return Utilities::invert_permutation(
-      hierarchic_to_lexicographic_numbering(fe));
-  }
-
 } // namespace FETools
 
 

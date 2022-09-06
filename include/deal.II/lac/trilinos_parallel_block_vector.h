@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2019 by the deal.II authors
+// Copyright (C) 2008 - 2020 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -46,8 +46,9 @@ namespace TrilinosWrappers
 } // namespace TrilinosWrappers
 #  endif
 
-/*! @addtogroup TrilinosWrappers
- *@{
+/**
+ * @addtogroup TrilinosWrappers
+ * @{
  */
 
 namespace TrilinosWrappers
@@ -427,7 +428,7 @@ namespace TrilinosWrappers
 
 } /* namespace TrilinosWrappers */
 
-/*@}*/
+/** @} */
 
 
 namespace internal

@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2009 - 2020 by the deal.II authors
+ * Copyright (C) 2009 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -30,10 +30,10 @@
 #include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/grid_refinement.h>
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_q1.h>
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/numerics/data_out.h>
-#include <deal.II/fe/mapping_q1.h>
 // Here the discontinuous finite elements are defined. They are used in the same
 // way as all other finite elements, though -- as you have seen in previous
 // tutorial programs -- there isn't much user interaction with finite element
@@ -103,8 +103,7 @@ namespace Step12
   {
     (void)component;
     AssertIndexRange(component, 1);
-    Assert(values.size() == points.size(),
-           ExcDimensionMismatch(values.size(), points.size()));
+    AssertDimension(values.size(), points.size());
 
     for (unsigned int i = 0; i < values.size(); ++i)
       {
@@ -126,9 +125,9 @@ namespace Step12
   {
     Assert(dim >= 2, ExcNotImplemented());
 
-    Point<dim> wind_field;
-    wind_field(0) = -p(1);
-    wind_field(1) = p(0);
+    Tensor<1, dim> wind_field;
+    wind_field[0] = -p[1];
+    wind_field[1] = p[0];
     wind_field /= wind_field.norm();
 
     return wind_field;
@@ -576,7 +575,7 @@ namespace Step12
     // First write the grid in eps format.
     {
       const std::string filename = "grid-" + std::to_string(cycle) + ".eps";
-      deallog << "Writing grid to <" << filename << ">" << std::endl;
+      deallog << "Writing grid to <" << filename << '>' << std::endl;
       std::ofstream eps_output(filename);
 
       GridOut grid_out;
@@ -586,7 +585,7 @@ namespace Step12
     // Then output the solution in gnuplot format.
     {
       const std::string filename = "sol-" + std::to_string(cycle) + ".gnuplot";
-      deallog << "Writing solution to <" << filename << ">" << std::endl;
+      deallog << "Writing solution to <" << filename << '>' << std::endl;
       std::ofstream gnuplot_output(filename);
 
       DataOut<dim> data_out;

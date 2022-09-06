@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -30,7 +30,7 @@ log_entry(const ParameterHandler &       prm,
 {
   for (unsigned int i = 0; i < path.size(); ++i)
     {
-      deallog << path[i] << ".";
+      deallog << path[i] << '.';
     }
 
   deallog << entry << " = ";

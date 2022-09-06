@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2018 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -55,7 +55,7 @@ do_test(MPI_Comm communicator)
   typename VectorMemory<VectorType>::Pointer v3(memory);
   *v3 = v1;
 
-  deallog << v1.l2_norm() << " " << v3->l2_norm() << std::endl;
+  deallog << v1.l2_norm() << ' ' << v3->l2_norm() << std::endl;
 }
 
 

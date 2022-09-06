@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2019 by the deal.II authors
+// Copyright (C) 1999 - 2020 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -28,8 +28,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup Solvers */
-/*@{*/
+/**
+ * @addtogroup Solvers
+ * @{
+ */
 
 /**
  * <h3>Quasi-minimal method for symmetric matrices (SQMR)</h3>
@@ -232,7 +234,7 @@ private:
   unsigned int step;
 };
 
-/*@}*/
+/** @} */
 /*------------------------- Implementation ----------------------------*/
 
 #ifndef DOXYGEN
@@ -284,7 +286,7 @@ SolverQMRS<VectorType>::solve(const MatrixType &        A,
   LogStream::Prefix prefix("SQMR");
 
 
-  // temporary vectors, allocated trough the @p VectorMemory object at the
+  // temporary vectors, allocated through the @p VectorMemory object at the
   // start of the actual solution process and deallocated at the end.
   typename VectorMemory<VectorType>::Pointer Vr(this->memory);
   typename VectorMemory<VectorType>::Pointer Vu(this->memory);

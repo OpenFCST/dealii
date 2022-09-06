@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2020 by the deal.II authors
+// Copyright (C) 2013 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -242,11 +242,11 @@ private:
   void
   refine_local();
 
-  Triangulation<dim>         triangulation;
-  const MappingQGeneric<dim> mapping;
-  FESystem<dim>              fe;
-  DoFHandler<dim>            mg_dof_handler;
-  DoFHandler<dim>            mg_dof_handler_renumbered;
+  Triangulation<dim>  triangulation;
+  const MappingQ<dim> mapping;
+  FESystem<dim>       fe;
+  DoFHandler<dim>     mg_dof_handler;
+  DoFHandler<dim>     mg_dof_handler_renumbered;
 
   const unsigned int                             degree;
   std::vector<std::set<types::global_dof_index>> boundary_indices,
@@ -377,11 +377,11 @@ LaplaceProblem<dim>::test()
   for (unsigned int l = 0; l < triangulation.n_levels(); ++l)
     {
       diff(d[l], mg_dof_handler_renumbered, u[l], l);
-      deallog << l << " " << u[l].l2_norm() << '\t' << v[l].l2_norm() << '\t'
+      deallog << l << ' ' << u[l].l2_norm() << '\t' << v[l].l2_norm() << '\t'
               << d[l].l2_norm() << std::endl;
       for (unsigned int i = 0; i < d[l].size(); ++i)
         if (d[l](i) != 0)
-          deallog << i << " " << d[l](i) << std::endl;
+          deallog << i << ' ' << d[l](i) << std::endl;
     }
   output_gpl(mg_dof_handler_renumbered, d);
 }

@@ -1,31 +1,33 @@
-//-----------------------------------------------------------
+// ---------------------------------------------------------------------
 //
-//    Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
-//    This file is part of the deal.II library.
+// This file is part of the deal.II library.
 //
-//    The deal.II library is free software; you can use it, redistribute
-//    it, and/or modify it under the terms of the GNU Lesser General
-//    Public License as published by the Free Software Foundation; either
-//    version 2.1 of the License, or (at your option) any later version.
-//    The full text of the license can be found in the file LICENSE.md at
-//    the top level directory of deal.II.
+// The deal.II library is free software; you can use it, redistribute
+// it, and/or modify it under the terms of the GNU Lesser General
+// Public License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+// The full text of the license can be found in the file LICENSE.md at
+// the top level directory of deal.II.
 //
-//---------------------------------------------------------------
+// ---------------------------------------------------------------------
+
 
 #ifndef dealii_sundials_arkode_h
 #define dealii_sundials_arkode_h
 
 #include <deal.II/base/config.h>
 
-#include <deal.II/base/mpi.h>
 
 #ifdef DEAL_II_WITH_SUNDIALS
 
 #  include <deal.II/base/conditional_ostream.h>
 #  include <deal.II/base/exceptions.h>
 #  include <deal.II/base/logstream.h>
+#  include <deal.II/base/mpi_stub.h>
 #  include <deal.II/base/parameter_handler.h>
+
 #  ifdef DEAL_II_WITH_PETSC
 #    include <deal.II/lac/petsc_block_vector.h>
 #    include <deal.II/lac/petsc_vector.h>
@@ -34,9 +36,6 @@
 #  include <deal.II/lac/vector_memory.h>
 
 #  include <arkode/arkode.h>
-#  if DEAL_II_SUNDIALS_VERSION_LT(4, 0, 0)
-#    include <arkode/arkode_impl.h>
-#  endif
 #  include <nvector/nvector_serial.h>
 #  ifdef DEAL_II_WITH_MPI
 #    include <nvector/nvector_parallel.h>
@@ -175,7 +174,7 @@ namespace SUNDIALS
    * \f[
    *  z_i^{m+1} = z_i^m +\delta^{m+1},
    * \f]
-   * where $m$ is the Newton index, and the Newton update $\delta^{m+1}$
+   * where $m$ is the Newton step index, and the Newton update $\delta^{m+1}$
    * requires the solution of the linear Newton system
    * \f[
    *  N(z_i^m) \delta^{m+1} = -G(z_i^m),
@@ -201,10 +200,9 @@ namespace SUNDIALS
    * $f_I(t, y)$ depends linearly on $y$, and if the Newton-based nonlinear
    * solver is chosen, then the system will be solved using only a single
    * Newton iteration. Notice that in order for the Newton solver to be used,
-   * at least the jacobian_times_vector() function (or solve_jacobian_system()
-   * for SUNDIALS version > 4.0.0) should be supplied. If this function is not
-   * supplied, then only the fixed-point iteration will be supported, and the
-   *`implicit_function_is_linear` setting is ignored.
+   * then jacobian_times_vector() should be supplied. If it is not supplied then
+   * only the fixed-point iteration will be supported, and the
+   * `implicit_function_is_linear` setting is ignored.
    *
    * The optimal solver (Newton vs fixed-point) is highly problem-dependent.
    * Since fixed-point solvers do not require the solution of any linear
@@ -237,27 +235,22 @@ namespace SUNDIALS
    *  - explicit_function()
    *
    * If the mass matrix is different from the identity, the user should supply
-   *  - mass_times_vector() (or solve_mass_system() for SUNDIALS version
-   *    < 4.0.0) and, optionally,
-   *  - mass_times_setup() (or setup_mass() for SUNDIALS version < 4.0.0)
+   *  - mass_times_vector() and, optionally,
+   *  - mass_times_setup()
    *
    * If the use of a Newton method is desired, then the user should also supply
-   *  - jacobian_times_vector (or solve_jacobian_system() for SUNDIALS version
-   *    < 4.0.0)
-   *  - optional: jacobian_times_setup() (or setup_jacobian() for SUNDIALS
-   *    version < 4.0.0)
+   * jacobian_times_vector(). jacobian_times_setup() is optional.
    *
    * @note Although SUNDIALS can provide a difference quotient approximation
    *   of the Jacobian, this is currently not supported through this wrapper.
    *
-   * Only for SUNDIALS version > 4.0.0: A SUNDIALS default solver (SPGMR) is
-   * used to solve the linear systems. To use a custom linear solver for the
-   * mass matrix and/or Jacobian, set:
+   * A SUNDIALS default solver (SPGMR) is used to solve the linear systems. To
+   * use a custom linear solver for the mass matrix and/or Jacobian, set:
    *  - solve_mass() and/or
-   *  - solve_jacobian()
+   *  - solve_linearized_system()
    *
-   * Only for SUNDIALS version > 4.0.0: To use a custom preconditioner with
-   * either a default or custom linear solver, set:
+   * To use a custom preconditioner with either a default or custom linear
+   * solver, set:
    * - jacobian_preconditioner_solve() and/or mass_preconditioner_solve()
    * and, optionally,
    * - jacobian_preconditioner_setup() and/or mass_preconditioner_setup()
@@ -294,10 +287,10 @@ namespace SUNDIALS
    * where
    * \f[
    * A \dealcoloneq
-   * \begin{matrix}
+   * \begin{pmatrix}
    * 0 & 1 \\
    * -k^2 &0
-   * \end{matrix}
+   * \end{pmatrix}
    * \f]
    * and $y(0)=(0, k)$.
    *
@@ -385,22 +378,7 @@ namespace SUNDIALS
         const int          anderson_acceleration_subspace        = 3,
         // Error parameters
         const double absolute_tolerance = 1e-6,
-        const double relative_tolerance = 1e-5)
-        : initial_time(initial_time)
-        , final_time(final_time)
-        , initial_step_size(initial_step_size)
-        , minimum_step_size(minimum_step_size)
-        , absolute_tolerance(absolute_tolerance)
-        , relative_tolerance(relative_tolerance)
-        , maximum_order(maximum_order)
-        , output_period(output_period)
-        , maximum_non_linear_iterations(maximum_non_linear_iterations)
-        , implicit_function_is_linear(implicit_function_is_linear)
-        , implicit_function_is_time_independent(
-            implicit_function_is_time_independent)
-        , mass_is_time_independent(mass_is_time_independent)
-        , anderson_acceleration_subspace(anderson_acceleration_subspace)
-      {}
+        const double relative_tolerance = 1e-5);
 
       /**
        * Add all AdditionalData() parameters to the given ParameterHandler
@@ -417,32 +395,7 @@ namespace SUNDIALS
        * using `prm`.
        */
       void
-      add_parameters(ParameterHandler &prm)
-      {
-        prm.add_parameter("Initial time", initial_time);
-        prm.add_parameter("Final time", final_time);
-        prm.add_parameter("Time interval between each output", output_period);
-
-        prm.enter_subsection("Running parameters");
-        prm.add_parameter("Initial step size", initial_step_size);
-        prm.add_parameter("Minimum step size", minimum_step_size);
-        prm.add_parameter("Maximum order of ARK", maximum_order);
-        prm.add_parameter("Maximum number of nonlinear iterations",
-                          maximum_non_linear_iterations);
-        prm.add_parameter("Implicit function is linear",
-                          implicit_function_is_linear);
-        prm.add_parameter("Implicit function is time independent",
-                          implicit_function_is_time_independent);
-        prm.add_parameter("Mass is time independent", mass_is_time_independent);
-        prm.add_parameter("Anderson-acceleration subspace",
-                          anderson_acceleration_subspace);
-        prm.leave_subsection();
-
-        prm.enter_subsection("Error control");
-        prm.add_parameter("Absolute error tolerance", absolute_tolerance);
-        prm.add_parameter("Relative error tolerance", relative_tolerance);
-        prm.leave_subsection();
-      }
+      add_parameters(ParameterHandler &prm);
 
       /**
        * Initial time for the DAE.
@@ -516,18 +469,24 @@ namespace SUNDIALS
     };
 
     /**
-     * Constructor. It is possible to fine tune the SUNDIALS ARKode solver by
-     * passing an AdditionalData() object that sets all of the solver
-     * parameters.
-     *
-     * The MPI communicator is simply ignored in the serial case.
-     *
+     * Constructor, with class parameters set by the AdditionalData object.
      *
      * @param data ARKode configuration data
-     * @param mpi_comm MPI communicator
+     *
+     * @note With SUNDIALS 6 and later this constructor sets up logging
+     * objects to only work on the present processor (i.e., results are only
+     * communicated over MPI_COMM_SELF).
      */
-    ARKode(const AdditionalData &data     = AdditionalData(),
-           const MPI_Comm &      mpi_comm = MPI_COMM_WORLD);
+    ARKode(const AdditionalData &data = AdditionalData());
+
+    /**
+     * Constructor.
+     *
+     * @param data ARKode configuration data
+     * @param mpi_comm MPI Communicator over which logging operations are
+     * computed. Only used in SUNDIALS 6 and newer.
+     */
+    ARKode(const AdditionalData &data, const MPI_Comm &mpi_comm);
 
     /**
      * Destructor.
@@ -612,17 +571,6 @@ namespace SUNDIALS
     get_arkode_memory() const;
 
     /**
-     * A function object that was used to `reinit` the given vector. Setting
-     * this field does no longer have any effect and all auxiliary vectors are
-     * reinit-ed automatically based on the user-supplied vector in solve_ode().
-     *
-     * @deprecated This function is no longer used and can be safely removed in
-     *   user code.
-     */
-    DEAL_II_DEPRECATED
-    std::function<void(VectorType &)> reinit_vector;
-
-    /**
      * A function object that users may supply and that is intended to compute
      * the explicit part of the IVP right hand side. Sets $explicit_f = f_E(t,
      * y)$.
@@ -660,209 +608,6 @@ namespace SUNDIALS
      */
     std::function<int(const double t, const VectorType &y, VectorType &res)>
       implicit_function;
-
-#  if DEAL_II_SUNDIALS_VERSION_LT(4, 0, 0)
-    /**
-     * A function object that users may supply and that is intended to
-     * prepare the linear solver for subsequent calls to
-     * solve_jacobian_system().
-     *
-     * Make sure that after a call to this function, we know how to compute
-     * solutions of systems $A x = b$, where $A$ is some approximation to the
-     * Newton matrix, $M - \gamma \partial f_I/\partial y$. This function is
-     * optional. If the user does not provide it, then solve_jacobian_system()
-     * is assumed to also perform the setup internally.
-     *
-     * The setup_jacobian() function may call a user-supplied function to
-     * compute needed data related to the Jacobian matrix. Alternatively, it may
-     * choose to retrieve and use stored values of this data. In either case,
-     * setup_jacobian() may also preprocess that data as needed for
-     * solve_jacobian_system(), which may involve calling a generic function
-     * (such as for LU factorization).
-     *
-     * This data may be intended either for direct use (in a direct linear
-     * solver) or for use in a preconditioner (in a preconditioned iterative
-     * linear solver). The setup_jacobian() function is not called at every
-     * stage solve (or even every time step), but only as frequently as the
-     * solver determines that it is appropriate to perform the setup task. In
-     * this way, Jacobian-related data generated by setup_jacobian() is
-     * expected to be used over a number of time steps.
-     *
-     * If the user uses a matrix based computation of the Jacobian, then this
-     * is the right place where an assembly routine shoulde be called to
-     * assemble both a matrix and a preconditioner for the Jacobian system.
-     * Subsequent calls (possibly more than one) to solve_jacobian_system() can
-     * assume that this function has been called at least once.
-     *
-     * Notice that no assumption is made by this interface on what the user
-     * should do in this function. ARKode only assumes that after a call to
-     * setup_jacobian() it is possible to call solve_jacobian_system(), to
-     * obtain a solution $x$ to the system $J x = b$. If this function is not
-     * provided, then it is never called.
-     *
-     * Arguments to the function are
-     *
-     * @param[in] t  the current time
-     * @param[in] gamma  the current factor to use in the jacobian computation
-     * @param[in] ypred  is the predicted $y$ vector for the current ARKode
-     * internal step
-     * @param[in] fpred  is the value of the implicit right-hand side at ypred,
-     *        $f_I (t_n, ypred)$.
-     *
-     * @param[in] convfail Input flag used to indicate any problem that
-     * occurred during the solution of the nonlinear equation on the current
-     * time step for which the linear solver is being used. This flag can be
-     * used to help decide whether the Jacobian data kept by a linear solver
-     * needs to be updated or not. Its possible values are:
-     *
-     *   - ARK_NO_FAILURES: this value is passed if either this is the first
-     * call for this step, or the local error test failed on the previous
-     * attempt at this step (but the Newton iteration converged).
-     *
-     *   - ARK_FAIL_BAD_J: this value is passed if (a) the previous Newton
-     *     corrector iteration did not converge and the linear solver's setup
-     *     function indicated that its Jacobian-related data is not current, or
-     * (b) during the previous Newton corrector iteration, the linear solver's
-     *     solve function failed in a recoverable manner and the linear solver's
-     *     setup function indicated that its Jacobian-related data is not
-     * current.
-     *
-     *   - ARK_FAIL_OTHER: this value is passed if during the current internal
-     *     step try, the previous Newton iteration failed to converge even
-     * though the linear solver was using current Jacobian-related data.
-     *
-     * @param[out] j_is_current: a boolean to be filled in by setup_jacobian().
-     * The value should be set to `true` if the Jacobian data is current after
-     * the call, and should be set to `false` if its Jacobian data is not
-     * current. If setup_jacobian() calls for re-evaluation of Jacobian data
-     * (based on convfail and ARKode state data), then it should set
-     * `j_is_current` to `true` unconditionally, otherwise an infinite loop can
-     * result.
-     *
-     * This function should return:
-     * - 0: Success
-     * - >0: Recoverable error (ARKodeReinit will be called if this happens, and
-     *       then last function will be attempted again
-     * - <0: Unrecoverable error the computation will be aborted and an
-     *       assertion will be thrown.
-     */
-    std::function<int(const int         convfail,
-                      const double      t,
-                      const double      gamma,
-                      const VectorType &ypred,
-                      const VectorType &fpred,
-                      bool &            j_is_current)>
-      setup_jacobian;
-
-    /**
-     * A function object that users may supply and that is intended to solve
-     * the Jacobian linear system. This function will be called by ARKode
-     * (possibly several times) after setup_jacobian() has been called at least
-     * once. ARKode tries to do its best to call setup_jacobian() the minimum
-     * amount of times. If convergence can be achieved without updating the
-     * Jacobian, then ARKode does not call setup_jacobian() again. If, on the
-     * contrary, internal ARKode convergence tests fail, then ARKode calls
-     * again setup_jacobian() with updated vectors and coefficients so that
-     * successive calls to solve_jacobian_systems() lead to better convergence
-     * in the Newton process.
-     *
-     * If you do not specify a solve_jacobian_system() function, then a fixed
-     * point iteration is used instead of a Newton method. Notice that this may
-     * not converge, or may converge very slowly.
-     *
-     * The jacobian $J$ should be (an approximation of) the system Jacobian
-     * \f[
-     *   J = M - \gamma \frac{\partial f_I}{\partial y}
-     * \f]
-     * evaluated at `t`, `ycur`. `fcur` is $f_I(t,ycur)$.
-     *
-     * A call to this function should store in `dst` the result of $J^{-1}$
-     * applied to `src`, i.e., `J*dst = src`. It is the users responsibility to
-     * set up proper solvers and preconditioners inside this function.
-     *
-     *
-     * Arguments to the function are
-     *
-     * @param[in] t  the current time
-     * @param[in] gamma  the current factor to use in the jacobian computation
-     * @param[in] ycur  is the current $y$ vector for the current ARKode
-     *   internal step
-     * @param[in] fcur  is the current value of the implicit right-hand side at
-     *   ycur, $f_I (t_n, ypred)$.
-     *
-     *
-     * This function should return:
-     * - 0: Success
-     * - >0: Recoverable error (ARKodeReinit will be called if this happens, and
-     *       then last function will be attempted again
-     * - <0: Unrecoverable error the computation will be aborted and an
-     *       assertion will be thrown.
-     */
-    std::function<int(const double      t,
-                      const double      gamma,
-                      const VectorType &ycur,
-                      const VectorType &fcur,
-                      const VectorType &rhs,
-                      VectorType &      dst)>
-      solve_jacobian_system;
-
-
-    /**
-     * A function object that users may supply and that is intended to set up
-     * the mass matrix. This function is called by ARKode any time a mass
-     * matrix update is required. The user should compute the mass matrix (or
-     * update all the variables that allow the application of the mass matrix).
-     * This function is called by ARKode once, before any call to
-     * solve_mass_system().
-     *
-     * ARKode supports the case where the mass matrix may depend on time, but
-     * not the case where the mass matrix depends on the solution itself.
-     *
-     * If the user does not provide a solve_mass_matrix() function, then the
-     * identity is used. If the setup_mass() function is not provided, then
-     * solve_mass_system() should do all the work by itself.
-     *
-     * If the user uses a matrix based computation of the mass matrix, then
-     * this is the right place where an assembly routine shoulde be called to
-     * assemble both a matrix and a preconditioner. Subsequent calls (possibly
-     * more than one) to solve_mass_system() can assume that this function
-     * has been called at least once.
-     *
-     * Notice that no assumption is made by this interface on what the user
-     * should do in this function. ARKode only assumes that after a call to
-     * setup_mass() it is possible to call solve_mass_system(), to
-     * obtain a solution $x$ to the system $M x = b$.
-     *
-     * This function should return:
-     * - 0: Success
-     * - >0: Recoverable error (ARKodeReinit will be called if this happens, and
-     *       then last function will be attempted again
-     * - <0: Unrecoverable error the computation will be aborted and an
-     *       assertion will be thrown.
-     */
-    std::function<int(const double t)> setup_mass;
-
-    /**
-     * A function object that users may supply and that is intended to solve
-     * the mass matrix linear system. This function will be called by ARKode
-     * (possibly several times) after setup_mass() has been called at least
-     * once. ARKode tries to do its best to call setup_mass() the minimum
-     * amount of times.
-     *
-     * A call to this function should store in `dst` the result of $M^{-1}$
-     * applied to `src`, i.e., `M*dst = src`. It is the users responsibility to
-     * set up proper solvers and preconditioners inside this function.
-     *
-     * This function should return:
-     * - 0: Success
-     * - >0: Recoverable error (ARKodeReinit will be called if this happens, and
-     *       then last function will be attempted again
-     * - <0: Unrecoverable error the computation will be aborted and an
-     *       assertion will be thrown.
-     */
-    std::function<int(const VectorType &rhs, VectorType &dst)>
-      solve_mass_system;
-#  else
 
     /**
      * A function object that users may supply and that is intended to compute
@@ -931,7 +676,7 @@ namespace SUNDIALS
      *
      * Arguments to the function are
      *
-     * @param[in] v  The vector to be mulitplied by the Jacobian
+     * @param[in] v  The vector to be multiplied by the Jacobian
      * @param[out] Jv The vector to be filled with the product J*v
      * @param[in] t  The current time
      * @param[in] y  The current $y$ vector for the current ARKode internal
@@ -955,7 +700,7 @@ namespace SUNDIALS
 
     /**
      * A function object that users may supply and that is intended to set up
-     * all data necessary for the application of jacobian_times_setup(). This
+     * all data necessary for the application of jacobian_times_vector(). This
      * function is called by ARKode any time a Jacobian update is required.
      * The user should compute the Jacobian (or update all the variables that
      * allow the application of Jacobian). This function is guaranteed to
@@ -993,7 +738,7 @@ namespace SUNDIALS
     /**
      * A LinearSolveFunction object that users may supply and that is intended
      * to solve the linearized system $Ax=b$, where $A = M-\gamma J$ is the
-     * Jacobian of the nonlinear residual. The application fo the mass matrix
+     * Jacobian of the nonlinear residual. The application of the mass matrix
      * $M$ and Jacobian $J$ are known through the functions mass_times_vector()
      * and jacobian_times_vector() and $\gamma$ is a factor provided by
      * SUNDIALS. The matrix-vector product $Ax$ is encoded in the supplied
@@ -1027,7 +772,6 @@ namespace SUNDIALS
      * For more details on the function type refer to LinearSolveFunction.
      */
     LinearSolveFunction<VectorType> solve_mass;
-
 
     /**
      * A function object that users may supply to either pass a preconditioner
@@ -1176,12 +920,11 @@ namespace SUNDIALS
      *       assertion will be thrown.
      */
     std::function<int(double t)> mass_preconditioner_setup;
-#  endif
 
     /**
      * A function object that users may supply and that is intended to
      * postprocess the solution. This function is called by ARKode at fixed
-     * time increments (every `output_period` seconds), and it is passed a
+     * time increments (every `output_period` time units), and it is passed a
      * polynomial interpolation of the solution, computed using the current ARK
      * order and the (internally stored) previously computed solution steps.
      *
@@ -1268,8 +1011,6 @@ namespace SUNDIALS
                    dealii::DiscreteTime &time,
                    const bool            do_reset);
 
-#  if DEAL_II_SUNDIALS_VERSION_GTE(4, 0, 0)
-
     /**
      * Set up the (non)linear solver and preconditioners in the ARKODE memory
      * object based on the user-specified functions.
@@ -1287,8 +1028,6 @@ namespace SUNDIALS
      */
     void
     setup_mass_solver(const VectorType &solution);
-
-#  endif
 
     /**
      * This function is executed at construction time to set the
@@ -1308,22 +1047,26 @@ namespace SUNDIALS
      */
     void *arkode_mem;
 
+#  if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
     /**
-     * MPI communicator. SUNDIALS solver runs happily in
-     * parallel. Note that if the library is compiled without MPI
-     * support, MPI_Comm is aliased as int.
+     * A context object associated with the ARKode solver.
      */
-    MPI_Comm communicator;
+    SUNContext arkode_ctx;
+#  endif
+
+    /**
+     * MPI communicator. Only used for SUNDIALS' logging routines - the actual
+     * solve routines will use the communicator provided by the vector class.
+     */
+    MPI_Comm mpi_communicator;
 
     /**
      * The final time in the last call to solve_ode().
      */
     double last_end_time;
 
-#  if DEAL_II_SUNDIALS_VERSION_GTE(4, 0, 0)
     std::unique_ptr<internal::LinearSolverWrapper<VectorType>> linear_solver;
     std::unique_ptr<internal::LinearSolverWrapper<VectorType>> mass_solver;
-#  endif
 
 #  ifdef DEAL_II_WITH_PETSC
 #    ifdef PETSC_USE_COMPLEX
@@ -1348,6 +1091,70 @@ namespace SUNDIALS
                  << "One of the SUNDIALS ARKode internal functions "
                  << " returned a negative error code: " << arg1
                  << ". Please consult SUNDIALS manual.");
+
+
+  template <typename VectorType>
+  ARKode<VectorType>::AdditionalData::AdditionalData(
+    // Initial parameters
+    const double initial_time,
+    const double final_time,
+    const double initial_step_size,
+    const double output_period,
+    // Running parameters
+    const double       minimum_step_size,
+    const unsigned int maximum_order,
+    const unsigned int maximum_non_linear_iterations,
+    const bool         implicit_function_is_linear,
+    const bool         implicit_function_is_time_independent,
+    const bool         mass_is_time_independent,
+    const int          anderson_acceleration_subspace,
+    // Error parameters
+    const double absolute_tolerance,
+    const double relative_tolerance)
+    : initial_time(initial_time)
+    , final_time(final_time)
+    , initial_step_size(initial_step_size)
+    , minimum_step_size(minimum_step_size)
+    , absolute_tolerance(absolute_tolerance)
+    , relative_tolerance(relative_tolerance)
+    , maximum_order(maximum_order)
+    , output_period(output_period)
+    , maximum_non_linear_iterations(maximum_non_linear_iterations)
+    , implicit_function_is_linear(implicit_function_is_linear)
+    , implicit_function_is_time_independent(
+        implicit_function_is_time_independent)
+    , mass_is_time_independent(mass_is_time_independent)
+    , anderson_acceleration_subspace(anderson_acceleration_subspace)
+  {}
+
+
+
+  template <typename VectorType>
+  void
+  ARKode<VectorType>::AdditionalData::add_parameters(ParameterHandler &prm)
+  {
+    prm.add_parameter("Initial time", initial_time);
+    prm.add_parameter("Final time", final_time);
+    prm.add_parameter("Time interval between each output", output_period);
+    prm.enter_subsection("Running parameters");
+    prm.add_parameter("Initial step size", initial_step_size);
+    prm.add_parameter("Minimum step size", minimum_step_size);
+    prm.add_parameter("Maximum order of ARK", maximum_order);
+    prm.add_parameter("Maximum number of nonlinear iterations",
+                      maximum_non_linear_iterations);
+    prm.add_parameter("Implicit function is linear",
+                      implicit_function_is_linear);
+    prm.add_parameter("Implicit function is time independent",
+                      implicit_function_is_time_independent);
+    prm.add_parameter("Mass is time independent", mass_is_time_independent);
+    prm.add_parameter("Anderson-acceleration subspace",
+                      anderson_acceleration_subspace);
+    prm.leave_subsection();
+    prm.enter_subsection("Error control");
+    prm.add_parameter("Absolute error tolerance", absolute_tolerance);
+    prm.add_parameter("Relative error tolerance", relative_tolerance);
+    prm.leave_subsection();
+  }
 
 } // namespace SUNDIALS
 

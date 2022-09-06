@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2018 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -66,11 +66,11 @@ test()
   DoFTools::map_dofs_to_support_points(mapping_collection, dof_handler, hp_map);
 
   // output the elements
-  for (unsigned int i = 0; i < hp_map.size(); i++)
+  for (unsigned int i = 0; i < hp_map.size(); ++i)
     {
       // both maps should contain the same
       Assert(hp_map[i] == map[i], ExcInternalError());
-      deallog << hp_map[i] << " ";
+      deallog << hp_map[i] << ' ';
     }
   deallog << std::endl;
 }

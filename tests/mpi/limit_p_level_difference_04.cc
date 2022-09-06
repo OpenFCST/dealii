@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2021 by the deal.II authors
+// Copyright (C) 2021 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -15,7 +15,7 @@
 
 
 // verify restrictions on level differences imposed by
-// DoFHandler::prepare_coarsening_and_refinement()
+// hp::Refinement::limit_p_level_difference()
 // on h-coarsened grids
 
 
@@ -24,6 +24,8 @@
 #include <deal.II/dofs/dof_handler.h>
 
 #include <deal.II/fe/fe_q.h>
+
+#include <deal.II/grid/filtered_iterator.h>
 
 #include <deal.II/hp/fe_collection.h>
 #include <deal.II/hp/refinement.h>
@@ -85,7 +87,7 @@ test(const unsigned int max_difference)
   bool fe_indices_changed = false;
   tria.signals.post_p4est_refinement.connect(
     [&]() {
-      const internal::parallel::distributed::TemporarilyMatchRefineFlags<dim>
+      const parallel::distributed::TemporarilyMatchRefineFlags<dim>
         refine_modifier(tria);
       fe_indices_changed =
         hp::Refinement::limit_p_level_difference(dofh,
@@ -99,10 +101,10 @@ test(const unsigned int max_difference)
   Assert(fe_indices_changed, ExcInternalError());
 
   deallog << "active FE indices after adaptation:" << std::endl;
-  for (const auto &cell : dofh.active_cell_iterators())
-    if (cell->is_locally_owned())
-      deallog << " " << cell->id().to_string() << " " << cell->active_fe_index()
-              << std::endl;
+  for (const auto &cell :
+       dofh.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+    deallog << ' ' << cell->id().to_string() << ' ' << cell->active_fe_index()
+            << std::endl;
 
   deallog << "OK" << std::endl;
 }

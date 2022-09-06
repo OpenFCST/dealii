@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -15,7 +15,8 @@
 
 
 
-// the same as laplace_operator_01, but tests heterogeneous Laplace operator.
+// the same as laplace_operator_01 (excluding the extra detection tests), but
+// tests heterogeneous Laplace operator.
 
 #include <deal.II/base/function.h>
 #include <deal.II/base/utilities.h>
@@ -71,7 +72,7 @@ public:
     Point<dim>              p;
     for (unsigned int v = 0; v < VectorizedArray<double>::size(); ++v)
       {
-        for (unsigned int d = 0; d < dim; d++)
+        for (unsigned int d = 0; d < dim; ++d)
           p[d] = p_vec[d][v];
         res[v] = value(p);
       }
@@ -155,7 +156,7 @@ test()
     data.tasks_block_size      = 7;
     data.mapping_update_flags =
       update_quadrature_points | update_gradients | update_JxW_values;
-    mf_data->reinit(dof, constraints, quad, data);
+    mf_data->reinit(MappingQ1<dim>{}, dof, constraints, quad, data);
   }
 
   std::shared_ptr<Table<2, VectorizedArray<number>>> coefficient;

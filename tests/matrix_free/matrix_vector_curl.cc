@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2020 by the deal.II authors
+// Copyright (C) 2013 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -255,7 +255,8 @@ test()
   // setup matrix-free structure
   {
     QGauss<1> quad(fe_degree + 1);
-    mf_data.reinit(dof_handler_sca,
+    mf_data.reinit(MappingQ1<dim>{},
+                   dof_handler_sca,
                    constraints,
                    quad,
                    typename MatrixFree<dim>::AdditionalData(

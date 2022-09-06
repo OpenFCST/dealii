@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -98,7 +98,6 @@ FE_Bernstein<dim, spacedim>::get_face_interpolation_matrix(
   FullMatrix<double> &                interpolation_matrix,
   const unsigned int                  face_no) const
 {
-  Assert(dim > 1, ExcImpossibleInDim(1));
   get_subface_interpolation_matrix(source_fe,
                                    numbers::invalid_unsigned_int,
                                    interpolation_matrix,
@@ -145,8 +144,8 @@ FE_Bernstein<dim, spacedim>::get_subface_interpolation_matrix(
       // Rule of thumb for FP accuracy, that can be expected for a given
       // polynomial degree.  This value is used to cut off values close to
       // zero.
-      double eps =
-        2e-13 * std::max(this->degree, source_fe->degree) * (dim - 1);
+      const double eps = 2e-13 * std::max(this->degree, source_fe->degree) *
+                         std::max(dim - 1, 1);
 
       // compute the interpolation matrix by simply taking the value at the
       // support points.
@@ -183,6 +182,7 @@ FE_Bernstein<dim, spacedim>::get_subface_interpolation_matrix(
             }
         }
 
+#ifdef DEBUG
       // make sure that the row sum of each of the matrices is 1 at this
       // point. this must be so since the shape functions sum up to 1
       for (unsigned int j = 0; j < source_fe->n_dofs_per_face(face_no); ++j)
@@ -194,16 +194,15 @@ FE_Bernstein<dim, spacedim>::get_subface_interpolation_matrix(
 
           Assert(std::fabs(sum - 1) < eps, ExcInternalError());
         }
-    }
-  else if (dynamic_cast<const FE_Nothing<dim> *>(&x_source_fe) != nullptr)
-    {
-      // nothing to do here, the FE_Nothing has no degrees of freedom anyway
+#endif
     }
   else
-    AssertThrow(
-      false,
-      (typename FiniteElement<dim,
-                              spacedim>::ExcInterpolationNotImplemented()));
+    {
+      // When the incoming element is not FE_Bernstein we can just delegate to
+      // the base class to create the interpolation matrix.
+      FE_Q_Base<dim, spacedim>::get_subface_interpolation_matrix(
+        x_source_fe, subface, interpolation_matrix, face_no);
+    }
 }
 
 

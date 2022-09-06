@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2018 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -151,12 +151,12 @@ derivatives()
   Triangulation<dim> tria;
   GridGenerator::hyper_cube(tria);
   tria.refine_global(5 - dim);
-  FE_DGQ<dim>          fe(2);
-  DoFHandler<dim>      dof_handler(tria);
-  Vector<double>       solution;
-  MappingQGeneric<dim> mapping(1);
-  QMidpoint<dim>       q_midpoint;
-  FEValues<dim> fe_values(mapping, fe, q_midpoint, update_quadrature_points);
+  FE_DGQ<dim>     fe(2);
+  DoFHandler<dim> dof_handler(tria);
+  Vector<double>  solution;
+  MappingQ<dim>   mapping(1);
+  QMidpoint<dim>  q_midpoint;
+  FEValues<dim>   fe_values(mapping, fe, q_midpoint, update_quadrature_points);
 
   dof_handler.distribute_dofs(fe);
   solution.reinit(dof_handler.n_dofs());

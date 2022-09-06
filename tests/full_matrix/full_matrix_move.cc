@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2019 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -31,16 +31,16 @@ main()
     for (std::size_t j = 0; j < n; ++j)
       A(i, j) = n * i + j;
 
-  deallog << "Size of A:" << std::endl << A.m() << " " << A.n() << std::endl;
+  deallog << "Size of A:" << std::endl << A.m() << ' ' << A.n() << std::endl;
 
   FullMatrix<double> B = std::move(A);
 
-  deallog << "Size of B:" << std::endl << B.m() << " " << B.n() << std::endl;
-  deallog << "Size of A:" << std::endl << A.m() << " " << A.n() << std::endl;
+  deallog << "Size of B:" << std::endl << B.m() << ' ' << B.n() << std::endl;
+  deallog << "Size of A:" << std::endl << A.m() << ' ' << A.n() << std::endl;
 
   A = std::move(B);
-  deallog << "Size of B:" << std::endl << B.m() << " " << B.n() << std::endl;
-  deallog << "Size of A:" << std::endl << A.m() << " " << A.n() << std::endl;
+  deallog << "Size of B:" << std::endl << B.m() << ' ' << B.n() << std::endl;
+  deallog << "Size of A:" << std::endl << A.m() << ' ' << A.n() << std::endl;
 
   return 0;
 }

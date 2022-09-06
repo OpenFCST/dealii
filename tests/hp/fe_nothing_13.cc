@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2018 by the deal.II authors
+// Copyright (C) 2009 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -101,7 +101,7 @@ test()
                                                      dof_handler.begin_active(),
                                                    endc = dof_handler.end();
 
-    for (; cell != endc; cell++)
+    for (; cell != endc; ++cell)
       {
         deallog << cell << ' ' << cell->active_fe_index() << std::endl << "   ";
         std::vector<types::global_dof_index> local_dof_indices(

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2020 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -37,8 +37,9 @@ namespace PETScWrappers
 {
   namespace MPI
   {
-    /*! @addtogroup PETScWrappers
-     *@{
+    /**
+     * @addtogroup PETScWrappers
+     * @{
      */
 
     /**
@@ -251,6 +252,14 @@ namespace PETScWrappers
       locally_owned_range_indices() const;
 
       /**
+       * Return the number of nonzero elements of this matrix. Actually, it
+       * returns the number of entries in the sparsity pattern; if any of the
+       * entries should happen to be zero, it is counted anyway.
+       */
+      std::uint64_t
+      n_nonzero_elements() const;
+
+      /**
        * Return a reference to the MPI communicator object in use with this
        * matrix.
        */
@@ -266,7 +275,7 @@ namespace PETScWrappers
 
 
 
-    /*@}*/
+    /** @} */
 
     // ------------- inline and template functions -----------------
 

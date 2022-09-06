@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2008 - 2020 by the deal.II authors
+ * Copyright (C) 2008 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -815,9 +815,7 @@ namespace Step32
     //
     // - The <code>mapping</code> variable is used to denote a higher-order
     // polynomial mapping. As mentioned in the introduction, we use this
-    // mapping when forming integrals through quadrature for all cells that
-    // are adjacent to either the inner or outer boundaries of our domain
-    // where the boundary is curved.
+    // mapping when forming integrals through quadrature for all cells.
     //
     // - In a bit of naming confusion, you will notice below that some of the
     // variables from namespace TrilinosWrappers are taken from namespace
@@ -1838,9 +1836,9 @@ namespace Step32
     const std::vector<types::global_dof_index> stokes_dofs_per_block =
       DoFTools::count_dofs_per_fe_block(stokes_dof_handler, stokes_sub_blocks);
 
-    const unsigned int n_u = stokes_dofs_per_block[0],
-                       n_p = stokes_dofs_per_block[1],
-                       n_T = temperature_dof_handler.n_dofs();
+    const types::global_dof_index n_u = stokes_dofs_per_block[0],
+                                  n_p = stokes_dofs_per_block[1],
+                                  n_T = temperature_dof_handler.n_dofs();
 
     std::locale s = pcout.get_stream().getloc();
     pcout.get_stream().imbue(std::locale(""));
@@ -1866,16 +1864,16 @@ namespace Step32
       stokes_partitioning.push_back(stokes_index_set.get_view(0, n_u));
       stokes_partitioning.push_back(stokes_index_set.get_view(n_u, n_u + n_p));
 
-      DoFTools::extract_locally_relevant_dofs(stokes_dof_handler,
-                                              stokes_relevant_set);
+      stokes_relevant_set =
+        DoFTools::extract_locally_relevant_dofs(stokes_dof_handler);
       stokes_relevant_partitioning.push_back(
         stokes_relevant_set.get_view(0, n_u));
       stokes_relevant_partitioning.push_back(
         stokes_relevant_set.get_view(n_u, n_u + n_p));
 
       temperature_partitioning = temperature_dof_handler.locally_owned_dofs();
-      DoFTools::extract_locally_relevant_dofs(
-        temperature_dof_handler, temperature_relevant_partitioning);
+      temperature_relevant_partitioning =
+        DoFTools::extract_locally_relevant_dofs(temperature_dof_handler);
     }
 
     // Following this, we can compute constraints for the solution vectors,
@@ -1896,7 +1894,7 @@ namespace Step32
       DoFTools::make_hanging_node_constraints(stokes_dof_handler,
                                               stokes_constraints);
 
-      FEValuesExtractors::Vector velocity_components(0);
+      const FEValuesExtractors::Vector velocity_components(0);
       VectorTools::interpolate_boundary_values(
         stokes_dof_handler,
         0,
@@ -2164,8 +2162,8 @@ namespace Step32
 
     assemble_stokes_preconditioner();
 
-    std::vector<std::vector<bool>> constant_modes;
-    FEValuesExtractors::Vector     velocity_components(0);
+    std::vector<std::vector<bool>>   constant_modes;
+    const FEValuesExtractors::Vector velocity_components(0);
     DoFTools::extract_constant_modes(stokes_dof_handler,
                                      stokes_fe.component_mask(
                                        velocity_components),
@@ -2220,8 +2218,8 @@ namespace Step32
 
     scratch.stokes_fe_values.reinit(cell);
 
-    typename DoFHandler<dim>::active_cell_iterator temperature_cell(
-      &triangulation, cell->level(), cell->index(), &temperature_dof_handler);
+    const typename DoFHandler<dim>::active_cell_iterator temperature_cell =
+      cell->as_dof_handler_iterator(temperature_dof_handler);
     scratch.temperature_fe_values.reinit(temperature_cell);
 
     if (rebuild_stokes_matrix)
@@ -2487,8 +2485,8 @@ namespace Step32
 
     scratch.temperature_fe_values.reinit(cell);
 
-    typename DoFHandler<dim>::active_cell_iterator stokes_cell(
-      &triangulation, cell->level(), cell->index(), &stokes_dof_handler);
+    typename DoFHandler<dim>::active_cell_iterator stokes_cell =
+      cell->as_dof_handler_iterator(stokes_dof_handler);
     scratch.stokes_fe_values.reinit(stokes_cell);
 
     scratch.temperature_fe_values.get_function_values(

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -60,7 +60,8 @@
  * Check the value of the derivative field.
  */
 
-void EvaluateDerivative(DoFHandler<3> &dof_handler, Vector<double> &solution)
+void
+EvaluateDerivative(DoFHandler<3> &dof_handler, Vector<double> &solution)
 {
   // This quadrature rule determines the points, where the
   // derivative will be evaluated.
@@ -542,7 +543,7 @@ main()
   hn_constraints.clear();
   DoFTools::make_hanging_node_constraints(dof_handler, hn_constraints);
   hn_constraints.close();
-  MappingQGeneric<3> map_default(1);
+  MappingQ<3> map_default(1);
   project(map_default,
           dof_handler,
           hn_constraints,

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -354,7 +354,7 @@ namespace GridOutFlags
      * the vertices of the face.
      *
      * This number is only used if the mapping used is not simply the standard
-     * $Q_1$ mapping (i.e., an object of kind MappingQGeneric(1)) that may
+     * $Q_1$ mapping (i.e., an object of kind MappingQ(1)) that may
      * describe edges of cells as curved and that will then be approximated
      * using line segments with a number of intermediate points as described
      * by the current variable.
@@ -655,19 +655,19 @@ namespace GridOutFlags
   struct Svg
   {
     /**
-     *  Height of the plot in SVG units, computed from width if zero. Defaults
-     *  to 1000.
+     * Height of the plot in SVG units, computed from width if zero. Defaults
+     * to 1000.
      */
     unsigned int height;
 
     /**
-     *  The width of the plot. Computed automatically from height if zero
-     *  (default).
+     * The width of the plot. Computed automatically from height if zero
+     * (default).
      */
     unsigned int width;
 
     /**
-     *  Thickness of the lines between cells.
+     * Thickness of the lines between cells.
      */
     unsigned int line_thickness;
     /**
@@ -676,7 +676,7 @@ namespace GridOutFlags
     unsigned int boundary_line_thickness;
 
     /**
-     *  Margin around the plotted area.
+     * Margin around the plotted area.
      */
     bool margin;
 

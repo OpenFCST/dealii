@@ -25,12 +25,11 @@
 
 #include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_nothing.h>
-#include <deal.II/fe/fe_point_evaluation.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_q_iso_q1.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/mapping_fe_field.h>
-#include <deal.II/fe/mapping_q_generic.h>
+#include <deal.II/fe/mapping_q.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_out.h>
@@ -40,6 +39,7 @@
 #include <deal.II/lac/la_parallel_block_vector.h>
 
 #include <deal.II/matrix_free/fe_evaluation.h>
+#include <deal.II/matrix_free/fe_point_evaluation.h>
 
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
@@ -230,11 +230,15 @@ compute_force_vector_sharp_interface(
   const auto fu = [&](const auto &values, const auto &cell_data) {
     AffineConstraints<double> constraints; // TODO: use the right ones
 
-    FEPointEvaluation<1, spacedim> phi_curvature(mapping, dof_handler.get_fe());
+    FEPointEvaluation<1, spacedim>        phi_curvature(mapping,
+                                                 dof_handler.get_fe(),
+                                                 update_values);
     FEPointEvaluation<spacedim, spacedim> phi_normal(mapping,
-                                                     dof_handler_dim.get_fe());
+                                                     dof_handler_dim.get_fe(),
+                                                     update_values);
     FEPointEvaluation<spacedim, spacedim> phi_force(mapping,
-                                                    dof_handler_dim.get_fe());
+                                                    dof_handler_dim.get_fe(),
+                                                    update_values);
 
     std::vector<double>                  buffer;
     std::vector<double>                  buffer_dim;
@@ -278,9 +282,8 @@ compute_force_vector_sharp_interface(
                                      buffer.begin(),
                                      buffer.end());
 
-          phi_curvature.evaluate(cell,
-                                 unit_points,
-                                 make_array_view(buffer),
+          phi_curvature.reinit(cell, unit_points);
+          phi_curvature.evaluate(make_array_view(buffer),
                                  EvaluationFlags::values);
         }
 
@@ -296,13 +299,13 @@ compute_force_vector_sharp_interface(
                                      buffer_dim.begin(),
                                      buffer_dim.end());
 
-          phi_normal.evaluate(cell_dim,
-                              unit_points,
-                              make_array_view(buffer_dim),
+          phi_normal.reinit(cell_dim, unit_points);
+          phi_normal.evaluate(make_array_view(buffer_dim),
                               EvaluationFlags::values);
         }
 
         // perform operation on quadrature points
+        phi_force.reinit(cell_dim, unit_points);
         for (unsigned int q = 0; q < unit_points.size(); ++q)
           phi_force.submit_value(surface_tension * phi_normal.get_value(q) *
                                    phi_curvature.get_value(q) * JxW[q],
@@ -310,10 +313,7 @@ compute_force_vector_sharp_interface(
 
         // integrate_scatter force
         {
-          phi_force.integrate(cell_dim,
-                              unit_points,
-                              buffer_dim,
-                              EvaluationFlags::values);
+          phi_force.integrate(buffer_dim, EvaluationFlags::values);
 
           constraints.distribute_local_to_global(buffer_dim,
                                                  local_dof_indices_dim,
@@ -340,7 +340,10 @@ test()
   const unsigned int n_refinements  = 5;
 
   parallel::shared::Triangulation<dim, spacedim> tria(
-    MPI_COMM_WORLD, Triangulation<dim, spacedim>::none, true);
+    MPI_COMM_WORLD,
+    Triangulation<dim, spacedim>::none,
+    true,
+    parallel::shared::Triangulation<dim, spacedim>::Settings::partition_zoltan);
 #if false
   GridGenerator::hyper_sphere(tria, Point<spacedim>(), 0.5);
 #else
@@ -363,8 +366,7 @@ test()
   Vector<double> euler_vector(dof_handler_dim.n_dofs());
   VectorTools::get_position_vector(dof_handler_dim,
                                    euler_vector,
-                                   MappingQGeneric<dim, spacedim>(
-                                     mapping_degree));
+                                   MappingQ<dim, spacedim>(mapping_degree));
   MappingFEField<dim, spacedim> mapping(dof_handler_dim, euler_vector);
 
 
@@ -377,7 +379,10 @@ test()
   const unsigned int background_fe_degree = 2;
 
   parallel::shared::Triangulation<spacedim> background_tria(
-    MPI_COMM_WORLD, Triangulation<spacedim>::none, true);
+    MPI_COMM_WORLD,
+    Triangulation<spacedim>::none,
+    true,
+    parallel::shared::Triangulation<spacedim>::Settings::partition_zoltan);
 #if false
   GridGenerator::hyper_cube(background_tria, -1.0, +1.0);
 #else
@@ -445,14 +450,14 @@ test()
       DataOutBase::VtkFlags flags;
       // flags.write_higher_order_cells = true;
 
-      DataOut<dim, DoFHandler<dim, spacedim>> data_out;
+      DataOut<dim, spacedim> data_out;
       data_out.set_flags(flags);
       data_out.attach_dof_handler(dof_handler);
 
-      data_out.build_patches(mapping,
-                             fe_degree + 1,
-                             DataOut<dim, DoFHandler<dim, spacedim>>::
-                               CurvedCellRegion::curved_inner_cells);
+      data_out.build_patches(
+        mapping,
+        fe_degree + 1,
+        DataOut<dim, spacedim>::CurvedCellRegion::curved_inner_cells);
       data_out.write_vtu_with_pvtu_record("./",
                                           "data_surface",
                                           0,

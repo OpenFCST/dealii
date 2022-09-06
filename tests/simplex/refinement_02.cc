@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -53,13 +53,13 @@ test(const unsigned int v)
 
   for (const auto &cell : tria.active_cell_iterators())
     {
-      deallog << cell->level() << ":" << cell->index() << "     ";
+      deallog << cell->level() << ':' << cell->index() << "     ";
       for (const auto f : cell->face_indices())
         if (cell->at_boundary(f))
           deallog << "-:- ";
         else
-          deallog << cell->neighbor_level(f) << ":" << cell->neighbor_index(f)
-                  << " ";
+          deallog << cell->neighbor_level(f) << ':' << cell->neighbor_index(f)
+                  << ' ';
       deallog << std::endl;
     }
 

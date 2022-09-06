@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -28,6 +28,14 @@
 
 DEAL_II_NAMESPACE_OPEN
 
+// Forward declarations
+namespace hp
+{
+  template <int dim, int spacedim>
+  class MappingCollection;
+}
+
+
 namespace hp
 {
   /**
@@ -45,7 +53,7 @@ namespace hp
    * cells of a triangulation.
    *
    * This class has not yet been implemented for the use in the codimension
-   * one case (<tt>spacedim != dim </tt>).
+   * one case (<tt>spacedim != dim</tt>).
    *
    * @ingroup hp hpcollection
    */
@@ -116,7 +124,7 @@ namespace hp
      * from class FiniteElement<dim,spacedim>.
      */
     template <class... FETypes>
-    explicit FECollection(const FETypes &... fes);
+    explicit FECollection(const FETypes &...fes);
 
     /**
      * Constructor. Same as above but for any number of elements. Pointers to
@@ -179,6 +187,14 @@ namespace hp
      */
     void
     push_back(const FiniteElement<dim, spacedim> &new_fe);
+
+    /**
+     * @name Querying information about the elements in the collection
+     */
+
+    /**
+     * @{
+     */
 
     /**
      * Return the number of vector components of the finite elements in this
@@ -260,6 +276,28 @@ namespace hp
     unsigned int
     max_dofs_per_cell() const;
 
+    /**
+     * Return a mapping collection that consists of the default linear mappings
+     * matching the reference cells for each hp index. More details may be found
+     * in the documentation for ReferenceCell::get_default_linear_mapping().
+     *
+     * @note This FECollection object must remain in scope for as long as the
+     * reference cell default linear mapping is in use.
+     */
+    const MappingCollection<dim, spacedim> &
+    get_reference_cell_default_linear_mapping() const;
+
+    /**
+     * @}
+     */
+
+    /**
+     * @name Functions to support hp-adaptivity
+     */
+
+    /**
+     * @{
+     */
 
     /**
      * Return whether all elements in this collection implement the hanging
@@ -280,6 +318,46 @@ namespace hp
      */
     bool
     hp_constraints_are_implemented() const;
+
+    /**
+     * This function combines the functionality of the
+     * FiniteElement::hp_vertex_dof_identities() into multi-way comparisons.
+     * Given a set of elements (whose indices are provided as argument), this
+     * function determines identities between degrees of freedom of these
+     * elements at a vertex.
+     *
+     * The function returns a vector of such identities, where each element of
+     * the vector is a set of pairs `(fe_index,dof_index)` that identifies
+     * the `fe_index` (an element of the `fes` argument to this function) of
+     * an element and the `dof_index` indicates the how-manyth degree of freedom
+     * of that element on a vertex participates in this identity. Now,
+     * every `fe_index` can appear only once in these sets (for each identity,
+     * only one degree of freedom of a finite element can be involved --
+     * otherwise we would have identities between different DoFs of the same
+     * element, which would make the element not unisolvent), and as a
+     * consequence the function does not actually return a set of
+     * `(fe_index,dof_index)` pairs for each identity, but instead a `std::map`
+     * from `fe_index` to `dof_index`, which is conceptually of course
+     * equivalent to a `std::set` of pairs, but in practice is easier to query.
+     */
+    std::vector<std::map<unsigned int, unsigned int>>
+    hp_vertex_dof_identities(const std::set<unsigned int> &fes) const;
+
+    /**
+     * Same as hp_vertex_dof_indices(), except that the function treats degrees
+     * of freedom on lines.
+     */
+    std::vector<std::map<unsigned int, unsigned int>>
+    hp_line_dof_identities(const std::set<unsigned int> &fes) const;
+
+    /**
+     * Same as hp_vertex_dof_indices(), except that the function treats degrees
+     * of freedom on quads.
+     */
+    std::vector<std::map<unsigned int, unsigned int>>
+    hp_quad_dof_identities(const std::set<unsigned int> &fes,
+                           const unsigned int            face_no = 0) const;
+
 
     /**
      * Return the indices of finite elements in this FECollection that dominate
@@ -457,6 +535,18 @@ namespace hp
                                const unsigned int            codim = 0) const;
 
     /**
+     * @}
+     */
+
+    /**
+     * @name Describing hierarchical relationships between elements
+     */
+
+    /**
+     * @{
+     */
+
+    /**
      * Set functions determining the hierarchy of finite elements, i.e. a
      * function @p next that returns the index of the finite element following
      * the given one, and a function @p prev returning the preceding one.
@@ -515,7 +605,7 @@ namespace hp
      * By default, the index succeeding @p fe_index will be returned. If @p fe_index
      * already corresponds to the last index, the last index will be returned.
      * A custom hierarchy can be supplied via the member function
-     * set_hierachy().
+     * set_hierarchy().
      */
     unsigned int
     next_in_hierarchy(const unsigned int fe_index) const;
@@ -527,10 +617,22 @@ namespace hp
      * By default, the index preceding @p fe_index will be returned. If @p fe_index
      * already corresponds to the first index, the first index will be returned.
      * A custom hierarchy can be supplied via the member function
-     * set_hierachy().
+     * set_hierarchy().
      */
     unsigned int
     previous_in_hierarchy(const unsigned int fe_index) const;
+
+    /**
+     * @}
+     */
+
+    /**
+     * @name Components and blocks of elements
+     */
+
+    /**
+     * @{
+     */
 
     /**
      * Return a component mask with as many elements as this object has vector
@@ -726,6 +828,10 @@ namespace hp
     block_mask(const ComponentMask &component_mask) const;
 
     /**
+     * @}
+     */
+
+    /**
      * @name Exceptions
      * @{
      */
@@ -742,6 +848,13 @@ namespace hp
      */
 
   private:
+    /**
+     * A linear mapping collection for all reference cell types of each index
+     * of this object.
+     */
+    std::shared_ptr<MappingCollection<dim, spacedim>>
+      reference_cell_default_linear_mapping;
+
     /**
      * %Function returning the index of the finite element following the given
      * one in hierarchy.
@@ -765,7 +878,7 @@ namespace hp
 
   template <int dim, int spacedim>
   template <class... FETypes>
-  FECollection<dim, spacedim>::FECollection(const FETypes &... fes)
+  FECollection<dim, spacedim>::FECollection(const FETypes &...fes)
   {
     static_assert(
       is_base_of_all<FiniteElement<dim, spacedim>, FETypes...>::value,
@@ -804,8 +917,8 @@ namespace hp
 
   template <int dim, int spacedim>
   inline bool
-  FECollection<dim, spacedim>::
-  operator==(const FECollection<dim, spacedim> &fe_collection) const
+  FECollection<dim, spacedim>::operator==(
+    const FECollection<dim, spacedim> &fe_collection) const
   {
     const unsigned int n_elements = this->size();
     if (n_elements != fe_collection.size())
@@ -822,8 +935,8 @@ namespace hp
 
   template <int dim, int spacedim>
   inline bool
-  FECollection<dim, spacedim>::
-  operator!=(const FECollection<dim, spacedim> &fe_collection) const
+  FECollection<dim, spacedim>::operator!=(
+    const FECollection<dim, spacedim> &fe_collection) const
   {
     return !(*this == fe_collection);
   }

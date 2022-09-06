@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2010 - 2020 by the deal.II authors
+// Copyright (C) 2010 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -52,8 +52,7 @@ main()
       volume_mesh.begin_active();
 
     cell->face(0)->set_all_boundary_ids(1);
-    std::set<types::boundary_id> boundary_ids;
-    boundary_ids.insert(0);
+    const std::set<types::boundary_id> boundary_ids = {0};
     GridGenerator::extract_boundary_mesh(volume_mesh,
                                          boundary_mesh,
                                          boundary_ids);
@@ -71,7 +70,7 @@ main()
       for (const unsigned int face : GeometryInfo<dim>::face_indices())
         {
           deallog << "  face = " << face
-                  << "  (neighbor = " << cell->neighbor(face) << ")"
+                  << "  (neighbor = " << cell->neighbor(face) << ')'
                   << std::endl;
 
           if (cell->face(face)->has_children())

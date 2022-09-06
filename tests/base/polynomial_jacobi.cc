@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -32,7 +32,7 @@ main()
     for (int beta = 0; beta < 3; ++beta)
       for (unsigned int degree = 0; degree < 40; ++degree)
         {
-          deallog << "Jacobi_" << degree << "^(" << alpha << "," << beta
+          deallog << "Jacobi_" << degree << "^(" << alpha << ',' << beta
                   << ") at 0.3: "
                   << jacobi_polynomial_value(degree, alpha, beta, 0.3)
                   << std::endl;
@@ -48,7 +48,7 @@ main()
           Assert(roots.size() == 0 || roots.back() < 1., ExcInternalError());
 
           for (unsigned int i = 0; i < roots.size(); ++i)
-            deallog << roots[i] << " ";
+            deallog << roots[i] << ' ';
           deallog << std::endl << std::endl;
         }
 }

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -23,6 +23,8 @@
 #include <deal.II/base/types.h>
 
 #include <deal.II/particles/property_pool.h>
+
+#include <boost/serialization/array.hpp>
 
 #include <cstdint>
 
@@ -105,7 +107,7 @@ namespace Particles
      * specified ID at the specified location. Note that there is no check for
      * duplicate particle IDs so the user must make sure the IDs are unique over
      * all processes. Data is stored in a global PropertyPool object
-     * (corresponding to the global "heap") but can later be transfered to
+     * (corresponding to the global "heap") but can later be transferred to
      * another property pool by calling set_property_pool().
      *
      * @param[in] location Initial location of particle.
@@ -121,7 +123,7 @@ namespace Particles
      * Copy-constructor for Particle. This function creates a particle with
      * exactly the state of the input argument. The copied data is stored in a
      * global PropertyPool object (corresponding to the global "heap") but can
-     * later be transfered to another property pool by calling
+     * later be transferred to another property pool by calling
      * set_property_pool().
      */
     Particle(const Particle<dim, spacedim> &particle);
@@ -129,7 +131,7 @@ namespace Particles
     /**
      * Constructor for Particle. This function creates a particle from a data
      * vector. Data is stored in a global PropertyPool object (corresponding to
-     * the global "heap") but can later be transfered to another property pool
+     * the global "heap") but can later be transferred to another property pool
      * by calling set_property_pool(). This constructor is usually called after
      * serializing a particle by calling the write_data() function.
      *
@@ -227,8 +229,11 @@ namespace Particles
      *   on both the locally owned cells, as well as on ghost cells. The
      *   particles on the latter are *copies* of particles owned on other
      *   processors, and should therefore be treated in the same way as
-     *   ghost entries in @ref GlossGhostedVector "vectors with ghost elements"
-     *   or @ref GlossGhostCell "ghost cells": In both cases, one should
+     *   ghost entries in
+     *   @ref GlossGhostedVector "vectors with ghost elements"
+     *   or
+     *   @ref GlossGhostCell "ghost cells":
+     *   In both cases, one should
      *   treat the ghost elements or cells as `const` objects that shouldn't
      *   be modified even if the objects allow for calls that modify
      *   properties. Rather, properties should only be modified on processors
@@ -255,8 +260,11 @@ namespace Particles
      *   on both the locally owned cells, as well as on ghost cells. The
      *   particles on the latter are *copies* of particles owned on other
      *   processors, and should therefore be treated in the same way as
-     *   ghost entries in @ref GlossGhostedVector "vectors with ghost elements"
-     *   or @ref GlossGhostCell "ghost cells": In both cases, one should
+     *   ghost entries in
+     *   @ref GlossGhostedVector "vectors with ghost elements"
+     *   or
+     *   @ref GlossGhostCell "ghost cells":
+     *   In both cases, one should
      *   treat the ghost elements or cells as `const` objects that shouldn't
      *   be modified even if the objects allow for calls that modify
      *   properties. Rather, properties should only be modified on processors
@@ -274,7 +282,7 @@ namespace Particles
     /**
      * Return the ID number of this particle. The ID of a particle is intended
      * to be a property that is globally unique even in parallel computations
-     * and is transfered along with other properties of a particle if it
+     * and is transferred along with other properties of a particle if it
      * moves from a cell owned by the current processor to a cell owned by
      * a different processor, or if ownership of the cell it is on is
      * transferred to a different processor.
@@ -285,7 +293,7 @@ namespace Particles
     /**
      * Set the ID number of this particle. The ID of a particle is intended
      * to be a property that is globally unique even in parallel computations
-     * and is transfered along with other properties of a particle if it
+     * and is transferred along with other properties of a particle if it
      * moves from a cell owned by the current processor to a cell owned by
      * a different processor, or if ownership of the cell it is on is
      * transferred to a different processor. As a consequence, when setting
@@ -300,8 +308,11 @@ namespace Particles
      *   on both the locally owned cells, as well as on ghost cells. The
      *   particles on the latter are *copies* of particles owned on other
      *   processors, and should therefore be treated in the same way as
-     *   ghost entries in @ref GlossGhostedVector "vectors with ghost elements"
-     *   or @ref GlossGhostCell "ghost cells": In both cases, one should
+     *   ghost entries in
+     *   @ref GlossGhostedVector "vectors with ghost elements"
+     *   or
+     *   @ref GlossGhostCell "ghost cells":
+     *   In both cases, one should
      *   treat the ghost elements or cells as `const` objects that shouldn't
      *   be modified even if the objects allow for calls that modify
      *   properties. Rather, properties should only be modified on processors
@@ -342,8 +353,11 @@ namespace Particles
      *   on both the locally owned cells, as well as on ghost cells. The
      *   particles on the latter are *copies* of particles owned on other
      *   processors, and should therefore be treated in the same way as
-     *   ghost entries in @ref GlossGhostedVector "vectors with ghost elements"
-     *   or @ref GlossGhostCell "ghost cells": In both cases, one should
+     *   ghost entries in
+     *   @ref GlossGhostedVector "vectors with ghost elements"
+     *   or
+     *   @ref GlossGhostCell "ghost cells":
+     *   In both cases, one should
      *   treat the ghost elements or cells as `const` objects that shouldn't
      *   be modified even if the objects allow for calls that modify
      *   properties. Rather, properties should only be modified on processors
@@ -625,7 +639,7 @@ namespace Particles
   inline bool
   Particle<dim, spacedim>::has_properties() const
   {
-    // Particles always have a property pool asssociated with them,
+    // Particles always have a property pool associated with them,
     // but we can access properties only if there is a valid handle.
     // The only way a particle can have no valid handle if it has
     // been moved-from -- but that leaves an object in an invalid

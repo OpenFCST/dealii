@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,6 +19,7 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/mpi_stub.h>
 #include <deal.II/base/smartpointer.h>
 #include <deal.II/base/subscriptor.h>
 #include <deal.II/base/template_constraints.h>
@@ -32,11 +33,6 @@
 #include <set>
 #include <utility>
 #include <vector>
-
-#ifdef DEAL_II_WITH_MPI
-#  include <mpi.h>
-#endif
-
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -69,10 +65,16 @@ namespace parallel
      * about cells owned by other processors with the exception of a single
      * layer of ghost cells around their own part of the domain.
      *
-     * As a consequence of storing the entire mesh on each processor, active
-     * cells need to be flagged for refinement or coarsening consistently on
-     * all processors if you want to adapt them, regardless of being classified
-     * as locally owned, ghost or artificial.
+     * Because every MPI process has a complete copy of the entire mesh
+     * as if it were stored on only this process, it needs to know for
+     * every active cell whether it is flagged for refinement or coarsening
+     * when doing mesh refinement via
+     * Triangulation::execute_coarsening_and_refinement(). In practice,
+     * each process only needs to set this information for its own
+     * "locally owned" cells; upon calling
+     * Triangulation::execute_coarsening_and_refinement(), the
+     * relevant information is then exchanged between processes
+     * internally, via MPI communication.
      *
      * The class is also useful in cases where compute time and memory
      * considerations dictate that the program needs to be run in parallel,
@@ -232,7 +234,7 @@ namespace parallel
       /**
        * Constructor.
        *
-       * The flag @p allow_artificial_cells can be used to enable artifical
+       * The flag @p allow_artificial_cells can be used to enable artificial
        * cells. If enabled, this class will behave similarly
        * to parallel::distributed::Triangulation and
        * parallel::fullydistributed::Triangulation in the sense that there will
@@ -248,9 +250,9 @@ namespace parallel
        * updates lead to communication only with the direct process neighbors in
        * a point-to-point fashion, these degenerate to an operation in which
        * every process communicates with every other process (an "all-to-all"
-       * communication) if no artifical cells are available. If such ghost-value
-       * updates are the bottleneck in your code, you may want to consider
-       * enabling artificial cells.
+       * communication) if no artificial cells are available. If such
+       * ghost-value updates are the bottleneck in your code, you may want to
+       * consider enabling artificial cells.
        */
       Triangulation(
         const MPI_Comm &mpi_communicator,
@@ -351,7 +353,7 @@ namespace parallel
       get_true_level_subdomain_ids_of_cells(const unsigned int level) const;
 
       /**
-       * Return allow_artificial_cells , namely true if artificial cells are
+       * Return allow_artificial_cells, namely true if artificial cells are
        * allowed.
        */
       bool
@@ -500,7 +502,8 @@ namespace internal
        *
        * This class has effect only if artificial cells are allowed. Without
        * artificial cells, the current subdomain IDs already correspond to the
-       * true subdomain IDs. See the @ref GlossArtificialCell "glossary"
+       * true subdomain IDs. See the
+       * @ref GlossArtificialCell "glossary"
        * for more information about artificial cells.
        */
       template <int dim, int spacedim = dim>

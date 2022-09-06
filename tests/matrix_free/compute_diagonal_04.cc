@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -32,7 +32,8 @@ test()
 
   tria.refine_global();
   for (auto &cell : tria.active_cell_iterators())
-    if (cell->active() && cell->is_locally_owned() && cell->center()[0] < 0.0)
+    if (cell->is_active() && cell->is_locally_owned() &&
+        cell->center()[0] < 0.0)
       cell->set_refine_flag();
   tria.execute_coarsening_and_refinement();
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2012 - 2018 by the deal.II authors
+// Copyright (C) 2012 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -26,8 +26,10 @@
 DEAL_II_NAMESPACE_OPEN
 
 
-/*!@addtogroup fe */
-/*@{*/
+/**
+ * @addtogroup fe
+ * @{
+ */
 
 /**
  * Implementation of a scalar Lagrange finite element $Q_p^+$ that yields the
@@ -35,7 +37,7 @@ DEAL_II_NAMESPACE_OPEN
  * each coordinate direction plus some (non-normalized) bubble enrichment space
  * spanned by the additional shape function
  * $\varphi_j(\mathbf x)
- * = 2^{p-1}\left(x_j-frac 12\right)^{p-1}
+ * = 2^{p-1}\left(x_j-\frac 12\right)^{p-1}
  * \left[\prod_{i=0}^{dim-1}(x_i(1-x_i))\right]$.
  * for $j=0,\ldots,dim-1$.  If $p$ is one, then the first factor
  * disappears and one receives the usual bubble function centered
@@ -195,7 +197,7 @@ private:
 
 
 
-/*@}*/
+/** @} */
 
 
 DEAL_II_NAMESPACE_CLOSE

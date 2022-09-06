@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -24,12 +24,12 @@ using namespace dealii;
 void
 test()
 {
-  for (unsigned int i = 1; i < 25; i++)
+  for (unsigned int i = 1; i < 25; ++i)
     {
-      for (unsigned int j = 1; j < 25; j++)
+      for (unsigned int j = 1; j < 25; ++j)
         if (MGTwoLevelTransfer<2, LinearAlgebra::distributed::Vector<double>>::
               fast_polynomial_transfer_supported(i, j))
-          deallog << 1 << " ";
+          deallog << 1 << ' ';
         else
           deallog << "  ";
       deallog << std::endl;

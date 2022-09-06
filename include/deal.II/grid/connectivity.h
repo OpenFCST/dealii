@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -939,7 +939,7 @@ namespace internal
      *
      * @p con_cf connectivity cell-face
      * @p con_cc connectivity cell-cell (for each cell-face it contains the
-     *   the index of the neighboring cell or -1 for boundary face)
+     *   index of the neighboring cell or -1 for boundary face)
      */
     template <typename T>
     void
@@ -962,10 +962,10 @@ namespace internal
       std::vector<std::pair<T, unsigned int>> neighbors(n_faces, {-1, -1});
 
       // loop over all cells
-      for (unsigned int i_0 = 0; i_0 < ptr_cf.size() - 1; i_0++)
+      for (unsigned int i_0 = 0; i_0 < ptr_cf.size() - 1; ++i_0)
         {
           // ... and all its faces
-          for (std::size_t j_0 = ptr_cf[i_0]; j_0 < ptr_cf[i_0 + 1]; j_0++)
+          for (std::size_t j_0 = ptr_cf[i_0]; j_0 < ptr_cf[i_0 + 1]; ++j_0)
             {
               if (neighbors[col_cf[j_0]].first == static_cast<unsigned int>(-1))
                 {
@@ -977,7 +977,7 @@ namespace internal
                 {
                   // face is visited the second time -> now we know the cells
                   // on both sides of the face and we can determine for both
-                  // cells the neigbor
+                  // cells the neighbor
                   col_cc[j_0] = neighbors[col_cf[j_0]].first;
                   col_cc[neighbors[col_cf[j_0]].second] = i_0;
                 }
@@ -1053,7 +1053,7 @@ namespace internal
       static const unsigned int offset = 1;
 
       // loop over all cells
-      for (unsigned int c = 0, counter = 0; c < cell_types_index.size(); c++)
+      for (unsigned int c = 0, counter = 0; c < cell_types_index.size(); ++c)
         {
           const auto &cell_type =
             cell_types[static_cast<types::geometric_entity_type>(
@@ -1065,7 +1065,7 @@ namespace internal
             cell_vertices.data() + cell_ptr[c], cell_ptr[c + 1] - cell_ptr[c]);
 
           // ... loop over all its entities
-          for (unsigned int e = 0; e < cell_type->n_entities(d); e++)
+          for (unsigned int e = 0; e < cell_type->n_entities(d); ++e)
             {
               // ... determine global entity vertices
               const auto &local_entity_vertices =
@@ -1074,7 +1074,7 @@ namespace internal
               std::array<unsigned int, key_length> entity_vertices;
               std::fill(entity_vertices.begin(), entity_vertices.end(), 0);
 
-              for (unsigned int i = 0; i < local_entity_vertices.size(); i++)
+              for (unsigned int i = 0; i < local_entity_vertices.size(); ++i)
                 entity_vertices[i] =
                   cell_vertice[local_entity_vertices[i]] + offset;
 
@@ -1195,7 +1195,7 @@ namespace internal
         {
           const auto &cell_type =
             cell_types[static_cast<types::geometric_entity_type>(c)];
-          for (unsigned int e = 0; e < cell_type->n_entities(d); e++)
+          for (unsigned int e = 0; e < cell_type->n_entities(d); ++e)
             key_length =
               std::max(key_length, cell_type->vertices_of_entity(d, e).size());
         }
@@ -1240,7 +1240,7 @@ namespace internal
      *
      * Furthermore, the type of the quad is determined.
      */
-    void
+    inline void
     build_intersection(
       const std::vector<std::shared_ptr<CellTypeBase>> &cell_types,
       const std::vector<dealii::ReferenceCell> &        cell_types_index,
@@ -1491,6 +1491,23 @@ namespace internal
       // loop over cells and create CRS
       for (const auto &cell : cells)
         {
+#ifdef DEBUG
+          auto vertices_unique = cell.vertices;
+          std::sort(vertices_unique.begin(), vertices_unique.end());
+          vertices_unique.erase(std::unique(vertices_unique.begin(),
+                                            vertices_unique.end()),
+                                vertices_unique.end());
+
+          Assert(vertices_unique.size() == cell.vertices.size(),
+                 ExcMessage(
+                   "The definition of a cell refers to the same vertex several "
+                   "times. This is not possible. A common reason is that "
+                   "CellData::vertices has a size that does not match the "
+                   "size expected from the reference cell. Please resize "
+                   "CellData::vertices or use the appropriate constructor of "
+                   "CellData."));
+#endif
+
           const dealii::ReferenceCell reference_cell =
             dealii::ReferenceCell::n_vertices_to_type(dim,
                                                       cell.vertices.size());

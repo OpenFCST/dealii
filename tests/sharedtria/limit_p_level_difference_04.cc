@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2021 by the deal.II authors
+// Copyright (C) 2021 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -15,7 +15,7 @@
 
 
 // verify restrictions on level differences imposed by
-// DoFHandler::prepare_coarsening_and_refinement()
+// hp::Refinement::limit_p_level_difference()
 // on h-coarsened grids
 
 
@@ -24,6 +24,8 @@
 #include <deal.II/dofs/dof_handler.h>
 
 #include <deal.II/fe/fe_q.h>
+
+#include <deal.II/grid/filtered_iterator.h>
 
 #include <deal.II/hp/fe_collection.h>
 #include <deal.II/hp/refinement.h>
@@ -62,9 +64,11 @@ test(const unsigned int max_difference, const bool allow_artificial_cells)
   // after prepare_coarsening_and_refinement(), the p-levels should propagate
   // through the central cells as if they were already coarsened
 
-  parallel::shared::Triangulation<dim> tria(MPI_COMM_WORLD,
-                                            Triangulation<dim>::none,
-                                            allow_artificial_cells);
+  parallel::shared::Triangulation<dim> tria(
+    MPI_COMM_WORLD,
+    Triangulation<dim>::none,
+    allow_artificial_cells,
+    parallel::shared::Triangulation<dim>::Settings::partition_zoltan);
   TestGrids::hyper_line(tria, 3);
 
   // refine the central cell
@@ -92,18 +96,18 @@ test(const unsigned int max_difference, const bool allow_artificial_cells)
   Assert(fe_indices_changed, ExcInternalError());
 
   deallog << "future FE indices before adaptation:" << std::endl;
-  for (const auto &cell : dofh.active_cell_iterators())
-    if (cell->is_locally_owned())
-      deallog << " " << cell->id().to_string() << " " << cell->future_fe_index()
-              << std::endl;
+  for (const auto &cell :
+       dofh.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+    deallog << ' ' << cell->id().to_string() << ' ' << cell->future_fe_index()
+            << std::endl;
 
   tria.execute_coarsening_and_refinement();
 
   deallog << "active FE indices after adaptation:" << std::endl;
-  for (const auto &cell : dofh.active_cell_iterators())
-    if (cell->is_locally_owned())
-      deallog << " " << cell->id().to_string() << " " << cell->active_fe_index()
-              << std::endl;
+  for (const auto &cell :
+       dofh.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+    deallog << ' ' << cell->id().to_string() << ' ' << cell->active_fe_index()
+            << std::endl;
 
   deallog << "OK" << std::endl;
 }

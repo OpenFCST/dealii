@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -14,32 +14,25 @@
 // ---------------------------------------------------------------------
 
 #ifndef dealii_fe_system_h
-#  define dealii_fe_system_h
+#define dealii_fe_system_h
 
+#include <deal.II/base/config.h>
 
-/*----------------------------   fe_system.h     ---------------------------*/
+#include <deal.II/fe/fe.h>
+#include <deal.II/fe/fe_tools.h>
 
-
-#  include <deal.II/base/config.h>
-
-#  include <deal.II/base/thread_management.h>
-
-#  include <deal.II/fe/fe.h>
-#  include <deal.II/fe/fe_tools.h>
-
-#  include <memory>
-#  include <type_traits>
-#  include <utility>
-#  include <vector>
-
+#include <memory>
+#include <type_traits>
+#include <utility>
+#include <vector>
 
 DEAL_II_NAMESPACE_OPEN
 
 // Forward declaration
-#  ifndef DOXYGEN
+#ifndef DOXYGEN
 template <int dim, int spacedim>
 class FE_Enriched;
-#  endif
+#endif
 
 /**
  * This class provides an interface to group several elements together into
@@ -498,7 +491,7 @@ public:
   FESystem(const std::vector<const FiniteElement<dim, spacedim> *> &fes,
            const std::vector<unsigned int> &multiplicities);
 
-#  if !defined(__INTEL_COMPILER) || __INTEL_COMPILER >= 1900
+#if !defined(__INTEL_COMPILER) || __INTEL_COMPILER >= 1900
   /**
    * Constructor taking an arbitrary number of parameters of type
    * <code>std::pair<std::unique_ptr<FiniteElement<dim, spacedim>>, unsigned
@@ -543,13 +536,13 @@ public:
    */
   template <
     class... FEPairs,
-    typename = typename enable_if_all<
+    typename = enable_if_all_t<
       (std::is_same<typename std::decay<FEPairs>::type,
                     std::pair<std::unique_ptr<FiniteElement<dim, spacedim>>,
                               unsigned int>>::value ||
        std::is_base_of<FiniteElement<dim, spacedim>,
-                       typename std::decay<FEPairs>::type>::value)...>::type>
-  FESystem(FEPairs &&... fe_pairs);
+                       typename std::decay<FEPairs>::type>::value)...>>
+  FESystem(FEPairs &&...fe_pairs);
 
   /**
    * Same as above allowing the following syntax:
@@ -567,7 +560,7 @@ public:
     const std::initializer_list<
       std::pair<std::unique_ptr<FiniteElement<dim, spacedim>>, unsigned int>>
       &fe_systems);
-#  endif
+#endif
 
   /**
    * Copy constructor. This constructor is deleted, i.e., copying
@@ -810,9 +803,9 @@ public:
    * here.
    *
    * The matrix @p P is the concatenation or the sum of the cell matrices @p
-   * P_i, depending on the #restriction_is_additive_flags. This distinguishes
-   * interpolation (concatenation) and projection with respect to scalar
-   * products (summation).
+   * P_i, depending on the value of FiniteElement::restriction_is_additive().
+   * This distinguishes interpolation (concatenation) and projection with
+   * respect to scalar products (summation).
    *
    * Row and column indices are related to coarse grid and fine grid spaces,
    * respectively, consistent with the definition of the associated operator.
@@ -1024,7 +1017,7 @@ public:
   compare_for_domination(const FiniteElement<dim, spacedim> &fe_other,
                          const unsigned int codim = 0) const override final;
 
-  //@}
+  /** @} */
 
   /**
    * Implementation of the
@@ -1055,6 +1048,39 @@ public:
    */
   virtual std::size_t
   memory_consumption() const override;
+
+  /**
+   * Computing values on a cell requires copying values between the
+   * FEValuesImplementation::FiniteElementRelatedData objects owned by the
+   * present object and its subelements. The indexing for this is fairly
+   * complicated since each shape function in the nonprimitive base element may
+   * have a different number of nonzero components (e.g., a Taylor-Hood pair
+   * base element): we also need offsets into both the base element and present
+   * element's arrays. To this end, we will create a table with all the
+   * necessary information for each shape function in the nonprimitive base
+   * element.
+   */
+  struct BaseOffsets
+  {
+    /**
+     * Number of nonzero components for the current base element shape function.
+     */
+    unsigned int n_nonzero_components;
+
+    /**
+     * Index into the base element's
+     * FEValuesImplementation::FiniteElementRelatedData arrays for the current
+     * base element shape function.
+     */
+    unsigned int in_index;
+
+    /**
+     * Index into the present element's
+     * FEValuesImplementation::FiniteElementRelatedData arrays for the current
+     * base element shape function.
+     */
+    unsigned int out_index;
+  };
 
 protected:
   virtual std::unique_ptr<
@@ -1147,14 +1173,14 @@ protected:
    * <tt>sub_no!=invalid_face_no</tt>; and calls @p fill_fe_subface_values if
    * <tt>face_no!=invalid_face_no</tt> and <tt>sub_no!=invalid_face_no</tt>.
    */
-  template <int dim_1>
+  template <class Q_or_QC>
   void
   compute_fill(
     const Mapping<dim, spacedim> &                              mapping,
     const typename Triangulation<dim, spacedim>::cell_iterator &cell,
     const unsigned int                                          face_no,
     const unsigned int                                          sub_no,
-    const hp::QCollection<dim_1> &                              quadrature,
+    const Q_or_QC &                                             quadrature,
     const CellSimilarity::Similarity                            cell_similarity,
     const typename Mapping<dim, spacedim>::InternalDataBase &mapping_internal,
     const typename FiniteElement<dim, spacedim>::InternalDataBase &fe_data,
@@ -1168,6 +1194,22 @@ private:
    * Value to indicate that a given face or subface number is invalid.
    */
   static const unsigned int invalid_face_number = numbers::invalid_unsigned_int;
+
+  /**
+   * Lookup tables for indexing primitive elements.
+   *
+   * These tables store, for each primitive base element, the array indices into
+   * which we will write values. One can think of these indices as a combination
+   * of the system index and the number of nonzero components per shape
+   * function. This data is needed to copy values from base element value
+   * reinitialization to the present element's value reinitialization.
+   */
+  std::vector<Table<2, unsigned int>> primitive_offset_tables;
+
+  /**
+   * Lookup tables for indexing nonprimitive elements.
+   */
+  std::vector<std::vector<BaseOffsets>> nonprimitive_offset_tables;
 
   /**
    * Pointers to underlying finite element objects.
@@ -1302,7 +1344,7 @@ private:
 
 //------------------------variadic template constructor------------------------
 
-#  ifndef DOXYGEN
+#ifndef DOXYGEN
 namespace internal
 {
   namespace FESystemImplementation
@@ -1351,14 +1393,14 @@ namespace internal
 
 
 
-#    if !defined(__INTEL_COMPILER) || __INTEL_COMPILER >= 1900
+#  if !defined(__INTEL_COMPILER) || __INTEL_COMPILER >= 1900
 // We are just forwarding/delegating to the constructor taking a
 // std::initializer_list. If we decide to remove the deprecated constructors, we
 // might just use the variadic constructor with a suitable static_assert instead
 // of the std::enable_if.
 template <int dim, int spacedim>
 template <class... FEPairs, typename>
-FESystem<dim, spacedim>::FESystem(FEPairs &&... fe_pairs)
+FESystem<dim, spacedim>::FESystem(FEPairs &&...fe_pairs)
   : FESystem<dim, spacedim>(
       {internal::FESystemImplementation::promote_to_fe_pair<dim, spacedim>(
         std::forward<FEPairs>(fe_pairs))...})
@@ -1396,11 +1438,9 @@ FESystem<dim, spacedim>::FESystem(
 
   initialize(fes, multiplicities);
 }
-#    endif
-
-#  endif // DOXYGEN
+#  endif
+#endif // DOXYGEN
 
 DEAL_II_NAMESPACE_CLOSE
 
 #endif
-/*----------------------------  fe_system.h  ---------------------------*/

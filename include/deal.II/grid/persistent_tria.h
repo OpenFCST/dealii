@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -111,8 +111,8 @@ public:
   /**
    * Make the dimension available in function templates.
    */
-  static const unsigned int dimension      = dim;
-  static const unsigned int spacedimension = spacedim;
+  static constexpr unsigned int dimension      = dim;
+  static const unsigned int     spacedimension = spacedim;
 
   /**
    * Build up the triangulation from the coarse grid in future. Copy smoothing
@@ -217,7 +217,7 @@ public:
    * Throw an error, since this function is not useful in the context of this
    * class.
    */
-  DEAL_II_DEPRECATED_EARLY
+  DEAL_II_DEPRECATED
   virtual void
   create_triangulation_compatibility(
     const std::vector<Point<spacedim>> &vertices,

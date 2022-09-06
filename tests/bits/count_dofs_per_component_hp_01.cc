@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -56,7 +56,7 @@ test()
   const std::vector<types::global_dof_index> dofs_per_component =
     DoFTools::count_dofs_per_fe_component(dof_handler);
 
-  for (unsigned int i = 0; i < 3; i++)
+  for (unsigned int i = 0; i < 3; ++i)
     {
       deallog << "DoFs in the " << i
               << ". component: " << dofs_per_component.at(i) << std::endl;

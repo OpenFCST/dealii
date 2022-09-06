@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2021 by the deal.II authors
+// Copyright (C) 2021 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,10 +19,49 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/ndarray.h>
 #include <deal.II/base/polynomials_barycentric.h>
 #include <deal.II/base/scalar_polynomials_base.h>
 
 DEAL_II_NAMESPACE_OPEN
+
+
+namespace internal
+{
+  /**
+   * Decompose the shape-function index of a linear wedge into an index
+   * to access the right shape function within the triangle and and within
+   * the line.
+   */
+  static const constexpr dealii::ndarray<unsigned int, 6, 2> wedge_table_1{
+    {{{0, 0}}, {{1, 0}}, {{2, 0}}, {{0, 1}}, {{1, 1}}, {{2, 1}}}};
+
+  /**
+   * Decompose the shape-function index of a quadratic wedge into an index
+   * to access the right shape function within the triangle and and within
+   * the line.
+   */
+  static const constexpr dealii::ndarray<unsigned int, 18, 2> wedge_table_2{
+    {{{0, 0}},
+     {{1, 0}},
+     {{2, 0}},
+     {{0, 1}},
+     {{1, 1}},
+     {{2, 1}},
+     {{3, 0}},
+     {{4, 0}},
+     {{5, 0}},
+     {{3, 1}},
+     {{4, 1}},
+     {{5, 1}},
+     {{0, 2}},
+     {{1, 2}},
+     {{2, 2}},
+     {{3, 2}},
+     {{4, 2}},
+     {{5, 2}}}};
+} // namespace internal
+
 
 /**
  * Polynomials defined on wedge entities. This class is basis of
@@ -40,7 +79,7 @@ public:
   /**
    * Make the dimension available to the outside.
    */
-  static const unsigned int dimension = dim;
+  static constexpr unsigned int dimension = dim;
 
   /*
    * Constructor taking the polynomial @p degree as input.
@@ -154,7 +193,7 @@ ScalarLagrangePolynomialWedge<dim>::compute_derivative(
   AssertDimension(order, 1);
   const auto grad = compute_grad(i, p);
 
-  for (unsigned int i = 0; i < dim; i++)
+  for (unsigned int i = 0; i < dim; ++i)
     der[i] = grad[i];
 
   return der;

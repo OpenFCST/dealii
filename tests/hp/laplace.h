@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -188,7 +188,7 @@ protected:
 
 
 
-// implementatoin
+// implementation
 template <int dim>
 Laplace<dim>::Laplace(const Function<dim> &force_function,
                       const Function<dim> &exact_solution,
@@ -335,11 +335,11 @@ Laplace<dim>::assemble()
 
         const unsigned int n_q_points =
           hp_fe_values.get_present_fe_values().n_quadrature_points;
-        for (unsigned int q_index = 0; q_index < n_q_points; q_index++)
+        for (unsigned int q_index = 0; q_index < n_q_points; ++q_index)
           {
-            for (unsigned int i = 0; i < dofs_per_cell; i++)
+            for (unsigned int i = 0; i < dofs_per_cell; ++i)
               {
-                for (unsigned int j = i; j < dofs_per_cell; j++)
+                for (unsigned int j = i; j < dofs_per_cell; ++j)
                   {
                     cell_matrix(i, j) += (fe_values.shape_grad(i, q_index) *
                                           fe_values.shape_grad(j, q_index)) *
@@ -353,8 +353,8 @@ Laplace<dim>::assemble()
           }
 
         // exploit symmetry
-        for (unsigned int i = 0; i < dofs_per_cell; i++)
-          for (unsigned int j = i; j < dofs_per_cell; j++)
+        for (unsigned int i = 0; i < dofs_per_cell; ++i)
+          for (unsigned int j = i; j < dofs_per_cell; ++j)
             cell_matrix(j, i) = cell_matrix(i, j);
 
 
@@ -443,8 +443,9 @@ Laplace<dim>::refine_grid(const unsigned int cycle)
     }
 
   // 3.4. Solution Transfer
-  SolutionTransfer<dim, TrilinosWrappers::MPI::Vector, DoFHandler<dim>>
-    soltrans(dof_handler);
+  SolutionTransfer<dim, TrilinosWrappers::MPI::Vector> soltrans(dof_handler);
+
+
 
   // copy current functions
   TrilinosWrappers::MPI::Vector solution_coarse;
@@ -638,7 +639,7 @@ Laplace<dim>::run()
   setup_geometry();
   setup_system();
 
-  for (unsigned int cycle = 0; cycle <= n_cycles; cycle++)
+  for (unsigned int cycle = 0; cycle <= n_cycles; ++cycle)
     {
       pcout << std::endl << "Cycle " << cycle << std::endl;
 

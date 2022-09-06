@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2018 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -28,7 +28,7 @@ main()
 
   for (unsigned int n = 2; n < 20; ++n)
     {
-      deallog << "QGaussLobatto(" << n << ")" << std::endl;
+      deallog << "QGaussLobatto(" << n << ')' << std::endl;
 
       QGaussLobatto<1> q(n);
       for (unsigned int i = 0; i < q.size(); ++i)

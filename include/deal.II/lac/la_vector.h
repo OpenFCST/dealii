@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2020 by the deal.II authors
+// Copyright (C) 2015 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -62,8 +62,9 @@ DEAL_II_NAMESPACE_OPEN
  */
 namespace LinearAlgebra
 {
-  /*! @addtogroup Vectors
-   *@{
+  /**
+   * @addtogroup Vectors
+   * @{
    */
 
   /**
@@ -214,7 +215,8 @@ namespace LinearAlgebra
     /**
      * Return the scalar product of two vectors.
      */
-    virtual Number operator*(const VectorSpaceVector<Number> &V) const override;
+    virtual Number
+    operator*(const VectorSpaceVector<Number> &V) const override;
 
     /**
      * This function is not implemented and will throw an exception.
@@ -420,7 +422,7 @@ namespace LinearAlgebra
     friend class Vector;
   };
 
-  /*@}*/
+  /** @} */
   /*--------------------------- Inline functions ----------------------------*/
 
   template <typename Number>
@@ -485,7 +487,7 @@ namespace LinearAlgebra
   {
     size_type current_size = this->size();
     ar &static_cast<Subscriptor &>(*this);
-    ar & this->stored_elements;
+    ar &this->stored_elements;
     // If necessary, resize the vector during a read operation
     if (this->size() != current_size)
       this->reinit(this->size());

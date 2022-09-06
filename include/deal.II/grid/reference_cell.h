@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -21,9 +21,12 @@
 #include <deal.II/base/array_view.h>
 #include <deal.II/base/geometry_info.h>
 #include <deal.II/base/ndarray.h>
+#include <deal.II/base/point.h>
 #include <deal.II/base/tensor.h>
 #include <deal.II/base/utilities.h>
 
+#include <iosfwd>
+#include <string>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -65,10 +68,19 @@ namespace internal
 
 
 /**
- * A type that describes the kinds of reference cells that can be used.
- * This includes quadrilaterals and hexahedra (i.e., "hypercubes"),
- * triangles and tetrahedra (simplices), and the pyramids and wedges
- * necessary when using mixed 3d meshes.
+ * A type that describes the kinds of reference cells that can be
+ * used.  This includes quadrilaterals and hexahedra (i.e.,
+ * "hypercubes"), triangles and tetrahedra (simplices), and the
+ * pyramids and wedges necessary when using mixed 3d meshes. This
+ * class then describes geometric, topological, and other kinds of
+ * information about these kinds of reference cells. This includes how
+ * many vertices or faces a certain kind of reference cell has
+ * (topological information), where these vertices lie, what the
+ * cell's volume or center of mass is (geometric information), and how
+ * to output these cells in various output formats or what appropriate
+ * quadrature rules are. The documentation of this class is separated
+ * into a number of sections to group the many member functions into
+ * different categories such as those mentioned above.
  *
  * Objects of this type should not be created in user code, and as a
  * consequence the class does not have a user-accessible constructor
@@ -80,7 +92,8 @@ namespace internal
  * objects, and comparing against those special objects.
  *
  * The purposes and intents of this class are described in the
- * @ref GlossReferenceCell "reference cell" glossary entry.
+ * @ref GlossReferenceCell "reference cell"
+ * glossary entry.
  *
  * @ingroup grid geomprimitives aniso
  */
@@ -163,13 +176,13 @@ public:
   /**
    * Return a default mapping of degree @p degree matching the current
    * reference cell. If this reference cell is a hypercube, then the returned
-   * mapping is a MappingQGeneric; otherwise, it is an object of type
+   * mapping is a MappingQ; otherwise, it is an object of type
    * MappingFE initialized with FE_SimplexP (if the reference cell is a
    * triangle or tetrahedron), with FE_PyramidP (if the reference
    * cell is a pyramid), or with FE_WedgeP (if the reference cell is
    * a wedge).
    */
-  template <int dim, int spacedim>
+  template <int dim, int spacedim = dim>
   std::unique_ptr<Mapping<dim, spacedim>>
   get_default_mapping(const unsigned int degree) const;
 
@@ -184,7 +197,7 @@ public:
    * understood as $d$-linear (i.e., bilinear or trilinear) for some of the
    * coordinate directions.
    */
-  template <int dim, int spacedim>
+  template <int dim, int spacedim = dim>
   const Mapping<dim, spacedim> &
   get_default_linear_mapping() const;
 
@@ -201,10 +214,30 @@ public:
   get_gauss_type_quadrature(const unsigned n_points_1D) const;
 
   /**
-   * Return a quadrature rule with the support points of the given reference
-   * cell.
+   * Return a quadrature object that has a single quadrature point at the
+   * barycenter of the cell with quadrature weight equal to the volume of the
+   * reference cell. This quadrature formula is exact for integrals of constant
+   * and linear integrands.
    *
-   * @note The weights of the quadrature object are left unfilled.
+   * The object returned by this function generalizes what the QMidpoint class
+   * represents to other reference cells.
+   */
+  template <int dim>
+  Quadrature<dim>
+  get_midpoint_quadrature() const;
+
+  /**
+   * Return a quadrature rule whose quadrature points are the vertices of the
+   * given reference cell. For 1d line segments, this corresponds to the
+   * quadrature points of the trapezoidal rule, which by taking tensor products
+   * easily generalizes also to other hypercube elements (see also QTrapezoid).
+   * For all reference cell shapes, the quadrature points are ordered
+   * in the same order as the vertices of the reference cell.
+   *
+   * @note The weights of the quadrature object are left unfilled and
+   *   consequently the object cannot usefully be used for actually
+   *   computing integrals. This is in contrast to, for example, the QTrapezoid
+   *   class that correctly sets quadrature weights.
    */
   template <int dim>
   const Quadrature<dim> &
@@ -233,6 +266,17 @@ public:
    */
   std_cxx20::ranges::iota_view<unsigned int, unsigned int>
   vertex_indices() const;
+
+  /**
+   * Return the location of the `v`th vertex of the reference
+   * cell that corresponds to the current object.
+   *
+   * Because the ReferenceCell class does not have a `dim` argument,
+   * it has to be explicitly specified in the call to this function.
+   */
+  template <int dim>
+  Point<dim>
+  vertex(const unsigned int v) const;
 
   /**
    * Return the number of lines that make up the reference
@@ -265,6 +309,27 @@ public:
   face_indices() const;
 
   /**
+   * Return the number of cells one would get by isotropically
+   * refining the current cell. Here, "isotropic refinement"
+   * means that we subdivide in each "direction" of a cell.
+   * For example, a square would be refined into four children
+   * by introducing new vertices along each edge and a new
+   * vertex in the cell center. For triangles, one would introduce
+   * new vertices at the center of each edge, and connect them to
+   * obtain four children. Similar constructions can be done for
+   * the other reference cell types.
+   */
+  unsigned int
+  n_isotropic_children() const;
+
+  /**
+   * Return an object that can be thought of as an array containing all
+   * indices from zero to n_isotropic_children().
+   */
+  std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+  isotropic_child_indices() const;
+
+  /**
    * Return the reference-cell type of face @p face_no of the current
    * object. For example, if the current object is
    * ReferenceCells::Tetrahedron, then `face_no` must be between
@@ -294,24 +359,24 @@ public:
    *
    * For example, in 2D the layout of a quadrilateral cell is as follows:
    * @verbatim
-   * .      3
-   * .   2-->--3
-   * .   |     |
-   * . 0 ^     ^ 1
-   * .   |     |
-   * .   0-->--1
-   * .      2
+   *      3
+   *   2-->--3
+   *   |     |
+   * 0 ^     ^ 1
+   *   |     |
+   *   0-->--1
+   *      2
    * @endverbatim
    * Vertices and faces are indicated with their numbers, faces also with
    * their directions.
    *
    * Now, when refined, the layout is like this:
    * @verbatim
-   * *--*--*
-   * | 2|3 |
-   * *--*--*
-   * | 0|1 |
-   * *--*--*
+   * *---*---*
+   * | 2 | 3 |
+   * *---*---*
+   * | 0 | 1 |
+   * *---*---*
    * @endverbatim
    *
    * Thus, the child cells on face 0 are (ordered in the direction of the
@@ -319,10 +384,20 @@ public:
    *
    * For three spatial dimensions, the exact order of the children is laid
    * down in the general documentation of this class.
+   *
+   * The <tt>face_orientation</tt> argument is meant exclusively for
+   * quadrilaterals and hexahedra at the moment. It determines how this function
+   * handles faces oriented in the standard and non-standard orientation. It
+   * represents a bit-code for the overall <tt>face_orientation</tt>,
+   * <tt>face_flip</tt> and <tt>face_rotation</tt> and defaults to the standard
+   * orientation. The concept of face orientations is explained in this
+   * @ref GlossFaceOrientation "glossary"
+   * entry.
    */
   unsigned int
-  child_cell_on_face(const unsigned int face_n,
-                     const unsigned int subface_n) const;
+  child_cell_on_face(const unsigned int  face,
+                     const unsigned int  subface,
+                     const unsigned char face_orientation = 1) const;
 
   /**
    * For a given vertex in a cell, return a pair of a face index and a
@@ -393,7 +468,7 @@ public:
   bool
   standard_vs_true_line_orientation(const unsigned int  line,
                                     const unsigned char face_orientation,
-                                    const unsigned char line_orientation) const;
+                                    const bool          line_orientation) const;
 
   /**
    * @}
@@ -404,6 +479,61 @@ public:
    * @name Querying the number of building blocks of a reference cell
    * @{
    */
+
+  /**
+   * Return the $d$-dimensional volume of the reference cell that corresponds
+   * to the current object, where $d$ is the dimension of the space it lives
+   * in. For example, since the quadrilateral reference cell is $[0,1]^2$,
+   * its volume is one, whereas the volume of the reference triangle is
+   * 0.5 because it occupies the area $\{0 \le x,y \le 1, x+y\le 1\}$.
+   *
+   * For ReferenceCells::Vertex, the reference cell is a zero-dimensional
+   * point in a zero-dimensional space. As a consequence, one cannot
+   * meaningfully define a volume for it. The function returns one for
+   * this case, because this makes it possible to define useful quadrature
+   * rules based on the center of a reference cell and its volume.
+   */
+  double
+  volume() const;
+
+  /**
+   * Return the barycenter (i.e., the center of mass) of the reference
+   * cell that corresponds to the current object. The function is not
+   * called `center()` because one can define the center of an object
+   * in a number of different ways whereas the barycenter of a
+   * reference cell $K$ is unambiguously defined as
+   * @f[
+   *   \mathbf x_K = \frac{1}{V} \int_K \mathbf x \; dx
+   * @f]
+   * where $V$ is the volume of the reference cell (see also the volume()
+   * function).
+   */
+  template <int dim>
+  Point<dim>
+  barycenter() const;
+
+  /**
+   * Return true if the given point is inside the reference cell of the present
+   * space dimension up to some tolerance. This function accepts an additional
+   * parameter (which defaults to zero) which specifies by how much the point
+   * position may actually be outside the true reference cell. This is useful
+   * because in practice we may often not be able to compute the coordinates of
+   * a point in reference coordinates exactly, but only up to numerical
+   * roundoff. For example, strictly speaking one would expect that for points
+   * on the boundary of the reference cell, the function would return `true` if
+   * the tolerance was zero. But in practice, this may or may not actually be
+   * true; for example, the point $(1/3, 2/3)$ is on the boundary of the
+   * reference triangle because $1/3+2/3 \le 1$, but since neither of its
+   * coordinates are exactly representable in floating point arithmetic, the
+   * floating point representations of $1/3$ and $2/3$ may or may not add up to
+   * anything that is less than or equal to one.
+   *
+   * The tolerance parameter may be less than zero, indicating that the point
+   * should be safely inside the cell.
+   */
+  template <int dim>
+  bool
+  contains_point(const Point<dim> &p, const double tolerance = 0) const;
 
   /*
    * Return $i$-th unit tangential vector of a face of the reference cell.
@@ -495,6 +625,12 @@ public:
   vtk_lagrange_type() const;
 
   /**
+   * Return the GMSH element type code that corresponds to the reference cell.
+   */
+  unsigned int
+  gmsh_element_type() const;
+
+  /**
    * @}
    */
 
@@ -559,9 +695,35 @@ private:
    * called by anyone, but at least hidden in an internal namespace.
    */
   friend DEAL_II_CONSTEXPR ReferenceCell
-                           internal::ReferenceCell::make_reference_cell_from_int(const std::uint8_t);
+  internal::ReferenceCell::make_reference_cell_from_int(const std::uint8_t);
+
+  friend std::ostream &
+  operator<<(std::ostream &out, const ReferenceCell &reference_cell);
+
+  friend std::istream &
+  operator>>(std::istream &in, ReferenceCell &reference_cell);
 };
 
+
+/**
+ * Output operator that writes the @p reference_cell object to the stream
+ * in a text format in which the object is represented by an integer. The
+ * details of which integer value represents each kind of reference cell
+ * is unimportant and consequently not specified. If you want a string
+ * representation of what a ReferenceCell is, use ReferenceCell::to_string().
+ */
+std::ostream &
+operator<<(std::ostream &out, const ReferenceCell &reference_cell);
+
+/**
+ * Input operator that reads the @p reference_cell object from the stream
+ * in a text format in which the object is represented by an integer. Which
+ * specific integer value represents which reference cell is unspecified,
+ * but the function uses the same translation as the corresponding
+ * output `operator<<`.
+ */
+std::istream &
+operator>>(std::istream &in, ReferenceCell &reference_cell);
 
 
 inline constexpr ReferenceCell::ReferenceCell(const std::uint8_t kind)
@@ -598,7 +760,7 @@ namespace internal
   namespace ReferenceCell
   {
     inline DEAL_II_CONSTEXPR dealii::ReferenceCell
-                             make_reference_cell_from_int(const std::uint8_t kind)
+    make_reference_cell_from_int(const std::uint8_t kind)
     {
       // Make sure these are the only indices from which objects can be
       // created.
@@ -646,7 +808,7 @@ namespace ReferenceCells
   /**
    * Return the correct simplex reference cell type for the given dimension
    * `dim`. Depending on the template argument `dim`, this function returns a
-   * reference to either Vertex, Triangle, or Tetrahedron.
+   * reference to either Vertex, Line, Triangle, or Tetrahedron.
    */
   template <int dim>
   constexpr const ReferenceCell &
@@ -788,6 +950,16 @@ ReferenceCell::get_dimension() const
 
 
 
+template <int dim>
+Quadrature<dim>
+ReferenceCell::get_midpoint_quadrature() const
+{
+  return Quadrature<dim>(std::vector<Point<dim>>({barycenter<dim>()}),
+                         std::vector<double>({volume()}));
+}
+
+
+
 inline unsigned int
 ReferenceCell::n_vertices() const
 {
@@ -840,6 +1012,102 @@ ReferenceCell::n_lines() const
 
 
 
+template <int dim>
+Point<dim>
+ReferenceCell::vertex(const unsigned int v) const
+{
+  AssertDimension(dim, get_dimension());
+  AssertIndexRange(v, n_vertices());
+
+  if ((dim == 0) && (*this == ReferenceCells::Vertex))
+    {
+      return Point<dim>(0);
+    }
+  else if ((dim == 1) && (*this == ReferenceCells::Line))
+    {
+      static const Point<dim> vertices[2] = {
+        Point<dim>(),              // the origin
+        Point<dim>::unit_vector(0) // unit point along x-axis
+      };
+      return vertices[v];
+    }
+  else if ((dim == 2) && (*this == ReferenceCells::Quadrilateral))
+    {
+      static const Point<dim> vertices[4] = {
+        // First the two points on the x-axis
+        Point<dim>(),
+        Point<dim>::unit_vector(0),
+        // Then these two points shifted in the y-direction
+        Point<dim>() + Point<dim>::unit_vector(1),
+        Point<dim>::unit_vector(0) + Point<dim>::unit_vector(1)};
+      return vertices[v];
+    }
+  else if ((dim == 3) && (*this == ReferenceCells::Hexahedron))
+    {
+      static const Point<dim> vertices[8] = {
+        // First the two points on the x-axis
+        Point<dim>(),
+        Point<dim>::unit_vector(0),
+        // Then these two points shifted in the y-direction
+        Point<dim>() + Point<dim>::unit_vector(1),
+        Point<dim>::unit_vector(0) + Point<dim>::unit_vector(1),
+        // And now all four points shifted in the z-direction
+        Point<dim>() + Point<dim>::unit_vector(2),
+        Point<dim>::unit_vector(0) + Point<dim>::unit_vector(2),
+        Point<dim>() + Point<dim>::unit_vector(1) + Point<dim>::unit_vector(2),
+        Point<dim>::unit_vector(0) + Point<dim>::unit_vector(1) +
+          Point<dim>::unit_vector(2)};
+      return vertices[v];
+    }
+  else if ((dim == 2) && (*this == ReferenceCells::Triangle))
+    {
+      static const Point<dim> vertices[3] = {
+        Point<dim>(),               // the origin
+        Point<dim>::unit_vector(0), // unit point along x-axis
+        Point<dim>::unit_vector(1)  // unit point along y-axis
+      };
+      return vertices[v];
+    }
+  else if ((dim == 3) && (*this == ReferenceCells::Tetrahedron))
+    {
+      static const Point<dim> vertices[4] = {
+        Point<dim>(),               // the origin
+        Point<dim>::unit_vector(0), // unit point along x-axis
+        Point<dim>::unit_vector(1), // unit point along y-axis
+        Point<dim>::unit_vector(2)  // unit point along z-axis
+      };
+      return vertices[v];
+    }
+  else if ((dim == 3) && (*this == ReferenceCells::Pyramid))
+    {
+      static const Point<dim> vertices[5] = {Point<dim>{-1.0, -1.0, 0.0},
+                                             Point<dim>{+1.0, -1.0, 0.0},
+                                             Point<dim>{-1.0, +1.0, 0.0},
+                                             Point<dim>{+1.0, +1.0, 0.0},
+                                             Point<dim>{+0.0, +0.0, 1.0}};
+      return vertices[v];
+    }
+  else if ((dim == 3) && (*this == ReferenceCells::Wedge))
+    {
+      static const Point<dim> vertices[6] = {
+        // First the three points on the triangular base of the wedge:
+        Point<dim>(),
+        Point<dim>::unit_vector(0),
+        Point<dim>::unit_vector(1),
+        // And now everything shifted in the z-direction again
+        Point<dim>() + Point<dim>::unit_vector(2),
+        Point<dim>::unit_vector(0) + Point<dim>::unit_vector(2),
+        Point<dim>::unit_vector(1) + Point<dim>::unit_vector(2)};
+      return vertices[v];
+    }
+  else
+    {
+      Assert(false, ExcNotImplemented());
+      return Point<dim>();
+    }
+}
+
+
 inline unsigned int
 ReferenceCell::n_faces() const
 {
@@ -867,6 +1135,53 @@ ReferenceCell::n_faces() const
 
 
 inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+ReferenceCell::face_indices() const
+{
+  return {0U, n_faces()};
+}
+
+
+
+inline unsigned int
+ReferenceCell::n_isotropic_children() const
+{
+  if (*this == ReferenceCells::Vertex)
+    return 0;
+  else if (*this == ReferenceCells::Line)
+    return 2;
+  else if (*this == ReferenceCells::Triangle)
+    return 4;
+  else if (*this == ReferenceCells::Quadrilateral)
+    return 4;
+  else if (*this == ReferenceCells::Tetrahedron)
+    return 8;
+  else if (*this == ReferenceCells::Pyramid)
+    {
+      // We haven't yet decided how to refine pyramids. Update
+      // this when we have
+      Assert(false, ExcNotImplemented());
+      return numbers::invalid_unsigned_int;
+    }
+  else if (*this == ReferenceCells::Wedge)
+    return 8;
+  else if (*this == ReferenceCells::Hexahedron)
+    return 8;
+
+  Assert(false, ExcNotImplemented());
+  return numbers::invalid_unsigned_int;
+}
+
+
+
+inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
+ReferenceCell::isotropic_child_indices() const
+{
+  return {0U, n_isotropic_children()};
+}
+
+
+
+inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
 ReferenceCell::vertex_indices() const
 {
   return {0U, n_vertices()};
@@ -878,14 +1193,6 @@ inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
 ReferenceCell::line_indices() const
 {
   return {0U, n_lines()};
-}
-
-
-
-inline std_cxx20::ranges::iota_view<unsigned int, unsigned int>
-ReferenceCell::face_indices() const
-{
-  return {0U, n_faces()};
 }
 
 
@@ -929,10 +1236,13 @@ ReferenceCell::face_reference_cell(const unsigned int face_no) const
 
 
 inline unsigned int
-ReferenceCell::child_cell_on_face(const unsigned int face,
-                                  const unsigned int subface) const
+ReferenceCell::child_cell_on_face(
+  const unsigned int  face,
+  const unsigned int  subface,
+  const unsigned char face_orientation_raw) const
 {
   AssertIndexRange(face, n_faces());
+  AssertIndexRange(subface, face_reference_cell(face).n_isotropic_children());
 
   if (*this == ReferenceCells::Vertex)
     {
@@ -951,7 +1261,17 @@ ReferenceCell::child_cell_on_face(const unsigned int face,
     }
   else if (*this == ReferenceCells::Quadrilateral)
     {
-      Assert(false, ExcNotImplemented());
+      const bool face_orientation = Utilities::get_bit(face_orientation_raw, 0);
+      const bool face_flip        = Utilities::get_bit(face_orientation_raw, 2);
+      const bool face_rotation    = Utilities::get_bit(face_orientation_raw, 1);
+
+      return GeometryInfo<2>::child_cell_on_face(
+        RefinementCase<2>(RefinementPossibilities<2>::isotropic_refinement),
+        face,
+        subface,
+        face_orientation,
+        face_flip,
+        face_rotation);
     }
   else if (*this == ReferenceCells::Tetrahedron)
     {
@@ -967,7 +1287,17 @@ ReferenceCell::child_cell_on_face(const unsigned int face,
     }
   else if (*this == ReferenceCells::Hexahedron)
     {
-      Assert(false, ExcNotImplemented());
+      const bool face_orientation = Utilities::get_bit(face_orientation_raw, 0);
+      const bool face_flip        = Utilities::get_bit(face_orientation_raw, 2);
+      const bool face_rotation    = Utilities::get_bit(face_orientation_raw, 1);
+
+      return GeometryInfo<3>::child_cell_on_face(
+        RefinementCase<3>(RefinementPossibilities<3>::isotropic_refinement),
+        face,
+        subface,
+        face_orientation,
+        face_flip,
+        face_rotation);
     }
 
   Assert(false, ExcNotImplemented());
@@ -981,6 +1311,9 @@ ReferenceCell::standard_vertex_to_face_and_vertex_index(
   const unsigned int vertex) const
 {
   AssertIndexRange(vertex, n_vertices());
+  // Work around a GCC warning at higher optimization levels by making all of
+  // these tables the same size
+  constexpr unsigned int X = numbers::invalid_unsigned_int;
 
   if (*this == ReferenceCells::Vertex)
     {
@@ -992,8 +1325,8 @@ ReferenceCell::standard_vertex_to_face_and_vertex_index(
     }
   else if (*this == ReferenceCells::Triangle)
     {
-      static const ndarray<unsigned int, 3, 2> table = {
-        {{{0, 0}}, {{0, 1}}, {{1, 1}}}};
+      static const ndarray<unsigned int, 6, 2> table = {
+        {{{0, 0}}, {{0, 1}}, {{1, 1}}, {{X, X}}, {{X, X}}, {{X, X}}}};
 
       return table[vertex];
     }
@@ -1003,15 +1336,15 @@ ReferenceCell::standard_vertex_to_face_and_vertex_index(
     }
   else if (*this == ReferenceCells::Tetrahedron)
     {
-      static const ndarray<unsigned int, 4, 2> table = {
-        {{{0, 0}}, {{0, 1}}, {{0, 2}}, {{1, 2}}}};
+      static const ndarray<unsigned int, 6, 2> table = {
+        {{{0, 0}}, {{0, 1}}, {{0, 2}}, {{1, 2}}, {{X, X}}, {{X, X}}}};
 
       return table[vertex];
     }
   else if (*this == ReferenceCells::Pyramid)
     {
-      static const ndarray<unsigned int, 5, 2> table = {
-        {{{0, 0}}, {{0, 1}}, {{0, 2}}, {{0, 3}}, {{1, 2}}}};
+      static const ndarray<unsigned int, 6, 2> table = {
+        {{{0, 0}}, {{0, 1}}, {{0, 2}}, {{0, 3}}, {{1, 2}}, {{X, X}}}};
 
       return table[vertex];
     }
@@ -1039,21 +1372,10 @@ ReferenceCell::standard_line_to_face_and_line_index(
 {
   AssertIndexRange(line, n_lines());
 
-  if (*this == ReferenceCells::Vertex)
+  // start with most common cases
+  if (*this == ReferenceCells::Hexahedron)
     {
-      Assert(false, ExcNotImplemented());
-    }
-  else if (*this == ReferenceCells::Line)
-    {
-      Assert(false, ExcNotImplemented());
-    }
-  else if (*this == ReferenceCells::Triangle)
-    {
-      Assert(false, ExcNotImplemented());
-    }
-  else if (*this == ReferenceCells::Quadrilateral)
-    {
-      Assert(false, ExcNotImplemented());
+      return GeometryInfo<3>::standard_hex_line_to_quad_line_index(line);
     }
   else if (*this == ReferenceCells::Tetrahedron)
     {
@@ -1089,9 +1411,21 @@ ReferenceCell::standard_line_to_face_and_line_index(
 
       return table[line];
     }
-  else if (*this == ReferenceCells::Hexahedron)
+  else if (*this == ReferenceCells::Vertex)
     {
-      return GeometryInfo<3>::standard_hex_line_to_quad_line_index(line);
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Line)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Triangle)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Quadrilateral)
+    {
+      Assert(false, ExcNotImplemented());
     }
 
   Assert(false, ExcNotImplemented());
@@ -1107,6 +1441,8 @@ ReferenceCell::face_to_cell_lines(const unsigned int  face,
 {
   AssertIndexRange(face, n_faces());
   AssertIndexRange(line, face_reference_cell(face).n_lines());
+
+  static constexpr unsigned int X = numbers::invalid_unsigned_int;
 
   if (*this == ReferenceCells::Vertex)
     {
@@ -1144,11 +1480,25 @@ ReferenceCell::face_to_cell_lines(const unsigned int  face,
     }
   else if (*this == ReferenceCells::Pyramid)
     {
-      Assert(false, ExcNotImplemented());
+      static const ndarray<unsigned int, 5, 4> table = {{{{0, 1, 2, 3}},
+                                                         {{0, 6, 4, X}},
+                                                         {{1, 5, 7, X}},
+                                                         {{2, 4, 5, X}},
+                                                         {{3, 7, 6, 2}}}};
+
+      return table[face]
+                  [standard_to_real_face_line(line, face, face_orientation)];
     }
   else if (*this == ReferenceCells::Wedge)
     {
-      Assert(false, ExcNotImplemented());
+      static const ndarray<unsigned int, 5, 4> table = {{{{0, 2, 1, X}},
+                                                         {{3, 4, 5, X}},
+                                                         {{6, 7, 0, 3}},
+                                                         {{7, 8, 1, 4}},
+                                                         {{8, 6, 5, 2}}}};
+
+      return table[face]
+                  [standard_to_real_face_line(line, face, face_orientation)];
     }
   else if (*this == ReferenceCells::Hexahedron)
     {
@@ -1192,7 +1542,7 @@ ReferenceCell::face_to_cell_vertices(const unsigned int  face,
       static const ndarray<unsigned int, 3, 2> table = {
         {{{0, 1}}, {{1, 2}}, {{2, 0}}}};
 
-      return table[face][face_orientation ? vertex : (1 - vertex)];
+      return table[face][face_orientation != 0u ? vertex : (1 - vertex)];
     }
   else if (*this == ReferenceCells::Quadrilateral)
     {
@@ -1260,24 +1610,24 @@ ReferenceCell::standard_to_real_face_vertex(
   AssertIndexRange(face, n_faces());
   AssertIndexRange(vertex, face_reference_cell(face).n_vertices());
 
-  if (*this == ReferenceCells::Vertex)
-    {
-      Assert(false, ExcNotImplemented());
-    }
-  else if (*this == ReferenceCells::Line)
-    {
-      Assert(false, ExcNotImplemented());
-    }
-  else if (*this == ReferenceCells::Triangle)
+  if (*this == ReferenceCells::Quadrilateral ||
+      *this == ReferenceCells::Triangle)
     {
       static const ndarray<unsigned int, 2, 2> table = {{{{1, 0}}, {{0, 1}}}};
 
       return table[face_orientation][vertex];
     }
-  else if (*this == ReferenceCells::Quadrilateral)
+  else if (*this == ReferenceCells::Hexahedron)
     {
-      return GeometryInfo<2>::standard_to_real_line_vertex(vertex,
-                                                           face_orientation);
+      static const ndarray<unsigned int, 8, 4> table = {{{{0, 2, 1, 3}},
+                                                         {{0, 1, 2, 3}},
+                                                         {{2, 3, 0, 1}},
+                                                         {{2, 0, 3, 1}},
+                                                         {{3, 1, 2, 0}},
+                                                         {{3, 2, 1, 0}},
+                                                         {{1, 0, 3, 2}},
+                                                         {{1, 3, 0, 2}}}};
+      return table[face_orientation][vertex];
     }
   else if (*this == ReferenceCells::Tetrahedron)
     {
@@ -1334,13 +1684,13 @@ ReferenceCell::standard_to_real_face_vertex(
           return table[face_orientation][vertex];
         }
     }
-  else if (*this == ReferenceCells::Hexahedron)
+  else if (*this == ReferenceCells::Vertex)
     {
-      return GeometryInfo<3>::standard_to_real_face_vertex(
-        vertex,
-        Utilities::get_bit(face_orientation, 0),
-        Utilities::get_bit(face_orientation, 2),
-        Utilities::get_bit(face_orientation, 1));
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Line)
+    {
+      Assert(false, ExcNotImplemented());
     }
 
   Assert(false, ExcNotImplemented());
@@ -1358,21 +1708,18 @@ ReferenceCell::standard_to_real_face_line(
   AssertIndexRange(face, n_faces());
   AssertIndexRange(line, face_reference_cell(face).n_lines());
 
-  if (*this == ReferenceCells::Vertex)
+  // start with the most common cases
+  if (*this == ReferenceCells::Hexahedron)
     {
-      Assert(false, ExcNotImplemented());
-    }
-  else if (*this == ReferenceCells::Line)
-    {
-      Assert(false, ExcNotImplemented());
-    }
-  else if (*this == ReferenceCells::Triangle)
-    {
-      Assert(false, ExcNotImplemented());
-    }
-  else if (*this == ReferenceCells::Quadrilateral)
-    {
-      Assert(false, ExcNotImplemented());
+      static const ndarray<unsigned int, 8, 4> table = {{{{2, 3, 0, 1}},
+                                                         {{0, 1, 2, 3}},
+                                                         {{0, 1, 3, 2}},
+                                                         {{3, 2, 0, 1}},
+                                                         {{3, 2, 1, 0}},
+                                                         {{1, 0, 3, 2}},
+                                                         {{1, 0, 2, 3}},
+                                                         {{2, 3, 1, 0}}}};
+      return table[face_orientation][line];
     }
   else if (*this == ReferenceCells::Tetrahedron)
     {
@@ -1429,13 +1776,21 @@ ReferenceCell::standard_to_real_face_line(
           return table[face_orientation][line];
         }
     }
-  else if (*this == ReferenceCells::Hexahedron)
+  else if (*this == ReferenceCells::Vertex)
     {
-      return GeometryInfo<3>::standard_to_real_face_line(
-        line,
-        Utilities::get_bit(face_orientation, 0),
-        Utilities::get_bit(face_orientation, 2),
-        Utilities::get_bit(face_orientation, 1));
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Line)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Triangle)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Quadrilateral)
+    {
+      Assert(false, ExcNotImplemented());
     }
 
   Assert(false, ExcNotImplemented());
@@ -1655,6 +2010,124 @@ ReferenceCell::d_linear_shape_function_gradient(const Point<dim> & xi,
 }
 
 
+
+inline double
+ReferenceCell::volume() const
+{
+  if (*this == ReferenceCells::Vertex)
+    return 0;
+  else if (*this == ReferenceCells::Line)
+    return 1;
+  else if (*this == ReferenceCells::Triangle)
+    return 1. / 2.;
+  else if (*this == ReferenceCells::Quadrilateral)
+    return 1;
+  else if (*this == ReferenceCells::Tetrahedron)
+    return 1. / 6.;
+  else if (*this == ReferenceCells::Wedge)
+    return 1. / 2.;
+  else if (*this == ReferenceCells::Pyramid)
+    return 4. / 3.;
+  else if (*this == ReferenceCells::Hexahedron)
+    return 1;
+
+  Assert(false, ExcNotImplemented());
+  return 0.0;
+}
+
+
+
+template <int dim>
+inline Point<dim>
+ReferenceCell::barycenter() const
+{
+  AssertDimension(dim, get_dimension());
+
+  if (*this == ReferenceCells::Vertex)
+    return Point<dim>();
+  else if (*this == ReferenceCells::Line)
+    return Point<dim>(1. / 2.);
+  else if (*this == ReferenceCells::Triangle)
+    return Point<dim>(1. / 3., 1. / 3.);
+  else if (*this == ReferenceCells::Quadrilateral)
+    return Point<dim>(1. / 2., 1. / 2.);
+  else if (*this == ReferenceCells::Tetrahedron)
+    return Point<dim>(1. / 4., 1. / 4., 1. / 4.);
+  else if (*this == ReferenceCells::Wedge)
+    return Point<dim>(1. / 3, 1. / 3, 1. / 2.);
+  else if (*this == ReferenceCells::Pyramid)
+    return Point<dim>(0, 0, 1. / 4.);
+  else if (*this == ReferenceCells::Hexahedron)
+    return Point<dim>(1. / 2., 1. / 2., 1. / 2.);
+
+  Assert(false, ExcNotImplemented());
+  return Point<dim>();
+}
+
+
+
+template <int dim>
+inline bool
+ReferenceCell::contains_point(const Point<dim> &p, const double tolerance) const
+{
+  AssertDimension(dim, get_dimension());
+
+  if (*this == ReferenceCells::Vertex)
+    {
+      // Vertices are special cases in that they do not actually
+      // have coordinates. Error out if this function is called
+      // with a vertex:
+      Assert(false,
+             ExcMessage("Vertices are zero-dimensional objects and "
+                        "as a consequence have no coordinates. You "
+                        "cannot meaningfully ask whether a point is "
+                        "inside a vertex (within a certain tolerance) "
+                        "without coordinate values."));
+      return false;
+    }
+  else if (*this == ReferenceCells::get_hypercube<dim>())
+    {
+      for (unsigned int d = 0; d < dim; ++d)
+        if ((p[d] < -tolerance) || (p[d] > 1 + tolerance))
+          return false;
+      return true;
+    }
+  else if (*this == ReferenceCells::get_simplex<dim>())
+    {
+      // First make sure that we are in the first quadrant or octant
+      for (unsigned int d = 0; d < dim; ++d)
+        if (p[d] < -tolerance)
+          return false;
+
+      // Now we also need to make sure that we are below the diagonal line
+      // or plane that delineates the simplex. This diagonal is given by
+      // sum(p[d])<=1, and a diagonal a distance eps away is given by
+      // sum(p[d])<=1+eps*sqrt(d). (For example, the point at (1,1) is a
+      // distance of 1/sqrt(2) away from the diagonal. That is, its
+      // sum satisfies
+      //   sum(p[d]) = 2 <= 1 + (1/sqrt(2)) * sqrt(2)
+      // in other words, it satisfies the predicate with eps=1/sqrt(2).)
+      double sum = 0;
+      for (unsigned int d = 0; d < dim; ++d)
+        sum += p[d];
+      return (sum <= 1 + tolerance * std::sqrt(1. * dim));
+    }
+  else if (*this == ReferenceCells::Wedge)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+  else if (*this == ReferenceCells::Pyramid)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+
+  Assert(false, ExcNotImplemented());
+
+  return false;
+}
+
+
+
 template <int dim>
 inline Tensor<1, dim>
 ReferenceCell::unit_tangential_vectors(const unsigned int face_no,
@@ -1766,30 +2239,15 @@ inline bool
 ReferenceCell::standard_vs_true_line_orientation(
   const unsigned int  line,
   const unsigned char face_orientation_raw,
-  const unsigned char line_orientation) const
+  const bool          line_orientation) const
 {
   if (*this == ReferenceCells::Hexahedron)
     {
-      static const bool bool_table[2][2][2][2] = {
-        {{{true, false},    // lines 0/1, face_orientation=false,
-                            // face_flip=false, face_rotation=false and true
-          {false, true}},   // lines 0/1, face_orientation=false,
-                            // face_flip=true, face_rotation=false and true
-         {{true, true},     // lines 0/1, face_orientation=true,
-                            // face_flip=false, face_rotation=false and true
-          {false, false}}}, // lines 0/1, face_orientation=true,
-                            // face_flip=true, face_rotation=false and true
+      static constexpr dealii::ndarray<bool, 2, 8> bool_table{
+        {{{true, true, false, true, false, false, true, false}},
+         {{true, true, true, false, false, false, false, true}}}};
 
-        {{{true, true}, // lines 2/3 ...
-          {false, false}},
-         {{true, false}, {false, true}}}};
-
-      const bool face_orientation = Utilities::get_bit(face_orientation_raw, 0);
-      const bool face_flip        = Utilities::get_bit(face_orientation_raw, 2);
-      const bool face_rotation    = Utilities::get_bit(face_orientation_raw, 1);
-
-      return (static_cast<bool>(line_orientation) ==
-              bool_table[line / 2][face_orientation][face_flip][face_rotation]);
+      return (line_orientation == bool_table[line / 2][face_orientation_raw]);
     }
   else
     // TODO: This might actually be wrong for some of the other
@@ -1827,7 +2285,7 @@ namespace internal
     virtual void
     print_info(std::ostream &out) const override
     {
-      out << "[";
+      out << '[';
 
       const unsigned int n_vertices = entity_type.n_vertices();
 
@@ -1835,7 +2293,7 @@ namespace internal
         {
           out << vertices_0[i];
           if (i + 1 != n_vertices)
-            out << ",";
+            out << ',';
         }
 
       out << "] is not a permutation of [";
@@ -1844,7 +2302,7 @@ namespace internal
         {
           out << vertices_1[i];
           if (i + 1 != n_vertices)
-            out << ",";
+            out << ',';
         }
 
       out << "]." << std::endl;

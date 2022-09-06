@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2018 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -54,7 +54,7 @@ test()
       deallog << line.index;
       for (auto entry : line.entries)
         {
-          deallog << " (" << entry.first << "," << entry.second << ")";
+          deallog << " (" << entry.first << ',' << entry.second << ')';
         }
       deallog << " - " << line.inhomogeneity << std::endl;
     }

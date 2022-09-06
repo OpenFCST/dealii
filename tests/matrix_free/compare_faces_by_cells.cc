@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -15,7 +15,7 @@
 
 
 
-// compares the computation of the diagonal using a face integration
+// compares the computation of the diagonal using the face integration
 // facilities with the alternative reinit(cell_index, face_number) approach
 
 #include <deal.II/base/function.h>
@@ -29,7 +29,7 @@
 
 #include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_values.h>
-#include <deal.II/fe/mapping_q_generic.h>
+#include <deal.II/fe/mapping_q.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria.h>
@@ -82,8 +82,8 @@ public:
   compute_diagonal_by_face(
     LinearAlgebra::distributed::Vector<number> &result) const
   {
-    int dummy;
-    result = 0;
+    int dummy = 0;
+    result    = 0;
     data.loop(&LaplaceOperator::local_diagonal_dummy,
               &LaplaceOperator::local_diagonal_face,
               &LaplaceOperator::local_diagonal_boundary,
@@ -96,7 +96,7 @@ public:
   compute_diagonal_by_cell(
     LinearAlgebra::distributed::Vector<number> &result) const
   {
-    int dummy;
+    int dummy = 0;
     result.zero_out_ghost_values();
     data.cell_loop(&LaplaceOperator::local_diagonal_by_cell,
                    this,
@@ -131,7 +131,7 @@ private:
     FEFaceEvaluation<dim, fe_degree, n_q_points_1d, 1, number> phi_outer(data,
                                                                          false);
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         phi.reinit(face);
         phi_outer.reinit(face);
@@ -223,7 +223,7 @@ private:
   {
     FEFaceEvaluation<dim, fe_degree, n_q_points_1d, 1, number> phi(data);
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         phi.reinit(face);
 
@@ -282,7 +282,7 @@ private:
               (number)(std::max(1, fe_degree) * (fe_degree + 1.0)) * 2.;
 
             std::array<types::boundary_id, VectorizedArray<number>::size()>
-                                    boundary_ids = data.get_faces_by_cells_boundary_id(cell, face);
+              boundary_ids = data.get_faces_by_cells_boundary_id(cell, face);
             VectorizedArray<number> factor_boundary;
             for (unsigned int v = 0; v < VectorizedArray<number>::size(); ++v)
               // interior face
@@ -342,7 +342,7 @@ test()
   dof.distribute_mg_dofs();
   deallog << "Number of DoFs: " << dof.n_dofs() << std::endl;
 
-  MappingQGeneric<dim>                                   mapping(fe_degree + 1);
+  MappingQ<dim>                                          mapping(fe_degree + 1);
   LaplaceOperator<dim, fe_degree, n_q_points_1d, number> fine_matrix;
   fine_matrix.initialize(mapping, dof);
 

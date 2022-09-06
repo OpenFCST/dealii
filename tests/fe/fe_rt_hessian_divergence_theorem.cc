@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -84,7 +84,7 @@ test(const Triangulation<dim> &tr,
 
       deallog << "Cell nodes:" << std::endl;
       for (const unsigned int i : GeometryInfo<dim>::vertex_indices())
-        deallog << i << ": (" << cell->vertex(i) << ")" << std::endl;
+        deallog << i << ": (" << cell->vertex(i) << ')' << std::endl;
 
       bool cell_ok = true;
 

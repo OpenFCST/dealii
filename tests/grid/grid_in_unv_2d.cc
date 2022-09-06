@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2002 - 2018 by the deal.II authors
+// Copyright (C) 2002 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -53,6 +53,8 @@ filename_resolution()
   check_file<2>(std::string(SOURCE_DIR "/grid_in_unv_2d/test1427"),
                 GridIn<2>::unv);
   check_file<2>(std::string(SOURCE_DIR "/grid_in_unv_2d/test46"),
+                GridIn<2>::unv);
+  check_file<2>(std::string(SOURCE_DIR "/grid_in_unv_2d/salome_square"),
                 GridIn<2>::unv);
 }
 

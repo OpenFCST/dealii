@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,6 +18,7 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/mutex.h>
 #include <deal.II/base/polynomials_barycentric.h>
 
 #include <deal.II/fe/fe_poly.h>
@@ -25,11 +26,11 @@
 DEAL_II_NAMESPACE_OPEN
 
 /**
- * Base class of FE_SimplexP and FE_SimplexDGP.
+ * Base class of FE_SimplexP, FE_SimplexDGP, and FE_SimplexP_Bubbles.
  *
  * @note Only implemented for 2D and 3D.
  *
- * @ingroup simplex
+ * @relates simplex
  */
 template <int dim, int spacedim = dim>
 class FE_SimplexPoly : public dealii::FE_Poly<dim, spacedim>
@@ -38,9 +39,12 @@ public:
   /**
    * Constructor.
    */
-  FE_SimplexPoly(const unsigned int                                degree,
-                 const std::vector<unsigned int> &                 dpo_vector,
-                 const typename FiniteElementData<dim>::Conformity conformity);
+  FE_SimplexPoly(
+    const BarycentricPolynomials<dim>              polynomials,
+    const FiniteElementData<dim> &                 fe_data,
+    const std::vector<Point<dim>> &                unit_support_points,
+    const std::vector<std::vector<Point<dim - 1>>> unit_face_support_points,
+    const FullMatrix<double> &                     interface_constraints);
 
   /**
    * Return a list of constant modes of the element. For this element, the
@@ -103,6 +107,10 @@ public:
     const std::vector<Vector<double>> &support_point_values,
     std::vector<double> &              nodal_values) const override;
 
+protected:
+  /**
+   * Mutex used to guard computation of some internal lookup tables.
+   */
   mutable Threads::Mutex mutex;
 };
 
@@ -113,7 +121,7 @@ public:
  * the finite element space of continuous, piecewise polynomials of
  * degree $k$.
  *
- * @ingroup simplex
+ * @relates simplex
  */
 template <int dim, int spacedim = dim>
 class FE_SimplexP : public FE_SimplexPoly<dim, spacedim>
@@ -168,7 +176,7 @@ public:
  * element space of discontinuous, piecewise polynomials of degree
  * $k$.
  *
- * @ingroup simplex
+ * @relates simplex
  */
 template <int dim, int spacedim = dim>
 class FE_SimplexDGP : public FE_SimplexPoly<dim, spacedim>

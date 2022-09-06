@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -39,8 +39,6 @@ class Vector;
 namespace hp
 {
   template <int dim, int spacedim>
-  class DoFHandler;
-  template <int dim, int spacedim>
   class MappingCollection;
 } // namespace hp
 
@@ -49,7 +47,7 @@ namespace VectorTools
   /**
    * @name Evaluation of functions and errors
    */
-  //@{
+  /** @{ */
 
   /**
    * Evaluate a possibly vector-valued finite element function defined by the
@@ -303,7 +301,7 @@ namespace VectorTools
                  const VectorType &                          fe_function,
                  const Point<spacedim, double> &             point);
 
-  //@}
+  /** @} */
 } // namespace VectorTools
 
 DEAL_II_NAMESPACE_CLOSE

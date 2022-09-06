@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -177,8 +177,8 @@ public:
 
   /**
    * @name Data storage and access
+   * @{
    */
-  //@{
 
   /**
    * Store internally a copy of the given object. The copied object is
@@ -246,7 +246,7 @@ public:
   Type &
   get_or_add_object_with_name(const std::string &name,
                               Arg &              argument,
-                              Args &... arguments);
+                              Args &...arguments);
 
   /**
    * Return a reference to the object with given name. If the object does
@@ -273,7 +273,7 @@ public:
   Type &
   get_or_add_object_with_name(const std::string &name,
                               Arg &&             argument,
-                              Args &&... arguments);
+                              Args &&...arguments);
 
   /**
    * Return a reference to the object with given name. If the object does
@@ -327,7 +327,7 @@ public:
   void
   remove_object_with_name(const std::string &name);
 
-  //@}
+  /** @} */
 
   /**
    * An entry with this name does not exist in the internal boost::any map.
@@ -351,7 +351,7 @@ public:
                  const char *,
                  const char *,
                  << "The stored type for entry with name \"" << arg1 << "\" is "
-                 << arg2 << " but you requested type " << arg3 << ".");
+                 << arg2 << " but you requested type " << arg3 << '.');
 
 private:
   /**
@@ -492,7 +492,7 @@ template <typename Type, typename Arg, typename... Args>
 Type &
 GeneralDataStorage::get_or_add_object_with_name(const std::string &name,
                                                 Arg &              argument,
-                                                Args &... arguments)
+                                                Args &...arguments)
 {
   if (!stores_object_with_name(name))
     add_unique_copy(name, Type(argument, arguments...));
@@ -519,7 +519,7 @@ template <typename Type, typename Arg, typename... Args>
 Type &
 GeneralDataStorage::get_or_add_object_with_name(const std::string &name,
                                                 Arg &&             argument,
-                                                Args &&... arguments)
+                                                Args &&...arguments)
 {
   if (!stores_object_with_name(name))
     add_unique_copy(name,

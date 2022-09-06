@@ -1,6 +1,6 @@
 //-----------------------------------------------------------
 //
-//    Copyright (C) 2017 - 2018 by the deal.II authors
+//    Copyright (C) 2017 - 2022 by the deal.II authors
 //
 //    This file is part of the deal.II library.
 //
@@ -50,12 +50,9 @@
  * y[1](t) = k cos(k t)
  */
 int
-main(int argc, char **argv)
+main()
 {
   initlog();
-
-  Utilities::MPI::MPI_InitFinalize mpi_initialization(
-    argc, argv, numbers::invalid_unsigned_int);
 
   using VectorType = Vector<double>;
 
@@ -64,7 +61,7 @@ main(int argc, char **argv)
   data.add_parameters(prm);
 
   // Use the same parameters of test 1.
-  std::ifstream ifile(SOURCE_DIR "/arkode_01.prm");
+  std::ifstream ifile(SOURCE_DIR "/arkode_01_in.prm");
   prm.parse_input(ifile);
 
   SUNDIALS::ARKode<VectorType> ode(data);
@@ -84,7 +81,7 @@ main(int argc, char **argv)
     // limit the output to every 10th step and increase the precision to make
     // the test more robust
     if (step_number % 10 == 0)
-      deallog << t << " " << std::setprecision(7) << sol[0] << " " << sol[1]
+      deallog << t << ' ' << std::setprecision(7) << sol[0] << ' ' << sol[1]
               << std::endl;
     return 0;
   };

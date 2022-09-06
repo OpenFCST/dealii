@@ -1,6 +1,6 @@
 ## ---------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2020 by the deal.II authors
+## Copyright (C) 2012 - 2021 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
@@ -19,13 +19,14 @@ SET(_unity_include_src
   grid_refinement.cc
   cell_weights.cc
   cell_data_transfer.cc
-  error_predictor.cc
   fully_distributed_tria.cc
+  repartitioning_policy_tools.cc
   solution_transfer.cc
   tria.cc
   tria_base.cc
   shared_tria.cc
   p4est_wrappers.cc
+  field_transfer.cc
   )
 
 SET(_separate_src
@@ -44,8 +45,9 @@ SET(_inst
   grid_refinement.inst.in
   cell_weights.inst.in
   cell_data_transfer.inst.in
-  error_predictor.inst.in
+  field_transfer.inst.in
   fully_distributed_tria.inst.in
+  repartitioning_policy_tools.inst.in
   solution_transfer.inst.in
   tria.inst.in
   shared_tria.inst.in

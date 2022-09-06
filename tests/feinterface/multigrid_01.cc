@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -46,7 +46,7 @@ inspect_fiv(FEInterfaceValues<dim> &fiv)
 
   deallog << "interface_dof_indices: ";
   for (auto i : indices)
-    deallog << i << " ";
+    deallog << i << ' ';
   deallog << "\n";
 
 
@@ -66,7 +66,8 @@ inspect_fiv(FEInterfaceValues<dim> &fiv)
   deallog << std::endl;
 }
 
-void make_2_cells(Triangulation<2> &tria)
+void
+make_2_cells(Triangulation<2> &tria)
 {
   const unsigned int        dim         = 2;
   std::vector<unsigned int> repetitions = {2, 1};
@@ -76,7 +77,8 @@ void make_2_cells(Triangulation<2> &tria)
   GridGenerator::subdivided_hyper_rectangle(tria, repetitions, p1, p2);
 }
 
-void make_2_cells(Triangulation<3> &tria)
+void
+make_2_cells(Triangulation<3> &tria)
 {
   const unsigned int        dim         = 3;
   std::vector<unsigned int> repetitions = {2, 1, 1};
@@ -144,7 +146,7 @@ test()
             mycell->get_mg_dof_indices(indices);
             deallog << "cell " << c << ": ";
             for (auto i : indices)
-              deallog << i << " ";
+              deallog << i << ' ';
             deallog << "\n";
             ++mycell;
           }
@@ -181,7 +183,7 @@ test()
             mycell->get_mg_dof_indices(indices);
             deallog << "cell " << c << ": ";
             for (auto i : indices)
-              deallog << i << " ";
+              deallog << i << ' ';
             deallog << "\n";
             mycell = cell->neighbor(f);
           }

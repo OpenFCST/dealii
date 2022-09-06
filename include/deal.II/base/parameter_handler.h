@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -1344,7 +1344,7 @@ public:
   /**
    * Same as above, but an overload where the second argument is a character
    * pointer. This is necessary, since otherwise the call to
-   * <tt>set("abc","def")</code> will be mapped to the function taking one
+   * <code>set("abc","def")</code> will be mapped to the function taking one
    * string and a bool as arguments, which is certainly not what is most often
    * intended.
    *
@@ -1609,7 +1609,7 @@ public:
    */
   DeclException1(ExcEntryAlreadyExists,
                  std::string,
-                 << "The following entry already exists: " << arg1 << ".");
+                 << "The following entry already exists: " << arg1 << '.');
   /**
    * Exception
    */
@@ -1700,16 +1700,6 @@ public:
                    "ParameterHandler description.");
 
   /**
-   * Exception for when an entry in an XML parameter file does not match the
-   * provided pattern. The arguments are, in order, the entry value, entry
-   * name, and a description of the pattern.
-   *
-   * @deprecated Use ExcValueDoesNotMatchPattern instead of ExcInvalidEntryForPatternXML.
-   */
-  using ExcInvalidEntryForPatternXML DEAL_II_DEPRECATED =
-    ExcValueDoesNotMatchPattern;
-
-  /**
    * Exception for when the file given in an include statement cannot be
    * open. The arguments are, in order, the line number of the include
    * statement, current parameter file name, and the name of the file intended
@@ -1726,7 +1716,7 @@ public:
        "file to include <"
     << arg3 << "> cannot be opened.");
 
-  //@}
+  /** @} */
 
 private:
   /**

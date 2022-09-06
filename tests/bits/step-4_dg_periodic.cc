@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2020 by the deal.II authors
+// Copyright (C) 2015 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -187,7 +187,7 @@ Step4<dim>::setup_system()
   solution.reinit(dof_handler.n_dofs());
   system_rhs.reinit(dof_handler.n_dofs());
 
-  MappingQGeneric<dim>                mapping(1);
+  MappingQ<dim>                       mapping(1);
   MeshWorker::IntegrationInfoBox<dim> info_box;
   UpdateFlags update_flags = update_values | update_gradients;
   info_box.add_update_flags_all(update_flags);
@@ -254,7 +254,7 @@ void
 Step4<2>::check_periodicity(const unsigned int cycle) const
 {
   unsigned int n_points = 4;
-  for (unsigned int i = 0; i < cycle; i++)
+  for (unsigned int i = 0; i < cycle; ++i)
     n_points *= 2;
 
   // don't test exactly at the support points, since point_value is not stable
@@ -263,7 +263,7 @@ Step4<2>::check_periodicity(const unsigned int cycle) const
 
   bool all_passed = true;
 
-  for (unsigned int i = 1; i < n_points; i++)
+  for (unsigned int i = 1; i < n_points; ++i)
     {
       Vector<double> value1(1);
       Vector<double> value2(1);

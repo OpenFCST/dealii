@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2006 - 2020 by the deal.II authors
+ * Copyright (C) 2006 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -559,8 +559,7 @@ namespace Step25
     const std::string filename =
       "solution-" + Utilities::int_to_string(timestep_number, 3) + ".vtu";
     DataOutBase::VtkFlags vtk_flags;
-    vtk_flags.compression_level =
-      DataOutBase::VtkFlags::ZlibCompressionLevel::best_speed;
+    vtk_flags.compression_level = DataOutBase::CompressionLevel::best_speed;
     data_out.set_flags(vtk_flags);
     std::ofstream output(filename);
     data_out.write_vtu(output);
@@ -614,7 +613,7 @@ namespace Step25
 
         std::cout << std::endl
                   << "Time step #" << timestep_number << "; "
-                  << "advancing to t = " << time << "." << std::endl;
+                  << "advancing to t = " << time << '.' << std::endl;
 
         // At the beginning of each time step we must solve the nonlinear
         // equation in the split formulation via Newton's method ---

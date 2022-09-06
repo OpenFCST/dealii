@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -88,9 +88,9 @@ namespace Step23
 
     Triangulation<dim> triangulation;
 #ifdef HEX
-    MappingQGeneric<dim, dim> mapping;
-    FE_Q<dim>                 fe;
-    QGauss<dim>               quadrature;
+    MappingQ<dim, dim> mapping;
+    FE_Q<dim>          fe;
+    QGauss<dim>        quadrature;
 #else
     MappingFE<dim, dim> mapping;
     FE_SimplexP<dim>    fe;
@@ -312,8 +312,7 @@ namespace Step23
     const std::string filename =
       "solution-" + Utilities::int_to_string(timestep_number, 3) + ".vtu";
     DataOutBase::VtkFlags vtk_flags;
-    vtk_flags.compression_level =
-      DataOutBase::VtkFlags::ZlibCompressionLevel::best_speed;
+    vtk_flags.compression_level = DataOutBase::CompressionLevel::best_speed;
     data_out.set_flags(vtk_flags);
     std::ofstream output(filename);
     data_out.write_vtu(output);

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2020 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -101,7 +101,7 @@ main()
 
   {
     triangulation.set_all_manifold_ids(3);
-    const auto center_cell  = ++triangulation.begin_active();
+    const auto center_cell  = std::next(triangulation.begin_active());
     const auto lower_radial = center_cell->face(2);
     const auto upper_radial = center_cell->face(3);
     lower_radial->set_manifold_id(1);
@@ -138,7 +138,7 @@ main()
    *   -0.1271 -0.0177875 -> 0.253794 -0.0323121
    *   -0.1271 -0.015564 -> 0.251301 -0.0309146
    *
-   * The following is a simplified version that fails with a sligthly
+   * The following is a simplified version that fails with a slightly
    * different error message.
    */
 

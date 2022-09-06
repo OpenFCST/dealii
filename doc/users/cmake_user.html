@@ -5,7 +5,7 @@
     <title>User CMake configuration - deal.II</title>
     <link href="../screen.css" rel="StyleSheet">
     <meta name="author" content="the deal.II authors <authors @ dealii.org>">
-    <meta name="copyright" content="Copyright (C) 2012 - 2020 by the deal.II authors">
+    <meta name="copyright" content="Copyright (C) 2012 - 2022 by the deal.II authors">
     <meta name="keywords" content="deal.II">
   </head>
 
@@ -63,9 +63,9 @@
   version):
 
 <pre class="cmake">
-CMAKE_MINIMUM_REQUIRED(VERSION 3.1.0)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.3.0)
 
-FIND_PACKAGE(deal.II 9.3.0 REQUIRED
+FIND_PACKAGE(deal.II 9.4.0 REQUIRED
   HINTS ${DEAL_II_DIR} ../ ../../ $ENV{DEAL_II_DIR}
   )
 DEAL_II_INITIALIZE_CACHED_VARIABLES()
@@ -271,8 +271,8 @@ mycode/include/*.h
 In this case the top level <code>CMakeLists.txt</code> file may be:
 <pre class="cmake">
 # top level CMakeLists.txt
-CMAKE_MINIMUM_REQUIRED(VERSION 3.1.0)
-FIND_PACKAGE(deal.II 9.3.0 REQUIRED)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.3.0)
+FIND_PACKAGE(deal.II 9.4.0 REQUIRED)
 
 DEAL_II_INITIALIZE_CACHED_VARIABLES()
 PROJECT(myproject)
@@ -503,14 +503,14 @@ The <code>DEAL_II_INITIALIZE_CACHED_VARIABLES</code> macro is responsible
 for setting up cached variables and has to invoked before the
 <code>PROJECT</code> call:
 <pre class="cmake">
-FIND_PACKAGE(deal.II 9.3.0 REQUIRED)
+FIND_PACKAGE(deal.II 9.4.0 REQUIRED)
 
 DEAL_II_INITIALIZE_CACHED_VARIABLES()
 
 PROJECT(myproject)
 </pre>
 The macro will set an uninitialized <code>CMAKE_BUILD_TYPE</code> variable
-to the the build type of deal.II, i.e. <code>DEAL_II_BUILD_TYPE</code>. If
+to the build type of deal.II, i.e. <code>DEAL_II_BUILD_TYPE</code>. If
 <code>CMAKE_BUILD_TYPE</code> is specified it will automatically be reset
 if the given value is unsupported by the deal.II installation (i.e., if it
 is not equal to <code>Debug</code>, <code>Release</code>, or
@@ -647,7 +647,7 @@ INSTALL(DIRECTORY run DESTINATION share/mycode/run)
 </p>
 
 <pre class="cmake">
-FIND_PACKAGE(deal.II 9.3.0 REQUIRED
+FIND_PACKAGE(deal.II 9.4.0 REQUIRED
   HINTS
     ${DEAL_II_DIR} ../ ../../ $ENV{DEAL_II_DIR}
     # You can specify additional hints for search paths here, e.g.
@@ -663,7 +663,7 @@ SET(TARGET_SRC
   # You can specify additional files here!
 )
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.1.0)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.3.0)
 DEAL_II_INITIALIZE_CACHED_VARIABLES()
 PROJECT(${TARGET} CXX)
 DEAL_II_INVOKE_AUTOPILOT()
@@ -877,7 +877,6 @@ DEAL_II_WITH_OPENCASCADE
 DEAL_II_WITH_P4EST
 DEAL_II_WITH_PETSC
 DEAL_II_WITH_SCALAPACK
-DEAL_II_WITH_SIMPLEX_SUPPORT
 DEAL_II_WITH_SLEPC
 DEAL_II_WITH_SUNDIALS
 DEAL_II_WITH_SYMENGINE

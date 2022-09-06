@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -36,8 +36,6 @@ class Triangulation;
 namespace hp
 {
   template <int dim, int spacedim>
-  class DoFHandler;
-  template <int dim, int spacedim>
   class MappingCollection;
   template <int dim>
   class QCollection;
@@ -49,7 +47,7 @@ namespace VectorTools
   /**
    * @name Evaluation of functions and errors
    */
-  //@{
+  /** @{ */
 
   /**
    * Compute the cellwise error of the finite element solution.  Integrate the
@@ -153,7 +151,7 @@ namespace VectorTools
 
   /**
    * Call the integrate_difference() function, see above, with
-   * <tt>mapping=MappingQGeneric@<dim@>(1)</tt>.
+   * <tt>mapping=MappingQ@<dim@>(1)</tt>.
    */
   template <int dim, class InVector, class OutVector, int spacedim>
   void
@@ -185,7 +183,7 @@ namespace VectorTools
 
   /**
    * Call the integrate_difference() function, see above, with
-   * <tt>mapping=MappingQGeneric@<dim@>(1)</tt>.
+   * <tt>mapping=MappingQ@<dim@>(1)</tt>.
    */
   template <int dim, class InVector, class OutVector, int spacedim>
   void
@@ -198,87 +196,6 @@ namespace VectorTools
     const NormType &                                         norm,
     const Function<spacedim, double> *                       weight   = nullptr,
     const double                                             exponent = 2.);
-
-  /**
-   * Compute the cellwise error of the finite element solution.  Integrate the
-   * difference between a reference function which is given as a continuous
-   * function object, and a finite element function. The result of this
-   * function is the vector @p difference that contains one value per active
-   * cell $K$ of the triangulation. Each of the values of this vector $d$
-   * equals
-   * @f{align*}{
-   * d_K = \| u-u_h \|_X
-   * @f}
-   * where $X$ denotes the norm chosen and $u$ represents the exact solution.
-   *
-   * @deprecated Use integrate_difference(const Mapping<dim, spacedim> &, const DoFHandler<dim, spacedim> &, const InVector &, const Function<spacedim, typename InVector::value_type> &, OutVector &, const Quadrature<dim> &, const NormType &, const Function<spacedim, double> *, const double) instead.
-   */
-  template <int dim, class InVector, class OutVector, int spacedim>
-  DEAL_II_DEPRECATED typename std::enable_if<
-    !std::is_same<typename InVector::value_type, double>::value>::type
-  integrate_difference(const Mapping<dim, spacedim> &    mapping,
-                       const DoFHandler<dim, spacedim> & dof,
-                       const InVector &                  fe_function,
-                       const Function<spacedim, double> &exact_solution,
-                       OutVector &                       difference,
-                       const Quadrature<dim> &           q,
-                       const NormType &                  norm,
-                       const Function<spacedim, double> *weight   = nullptr,
-                       const double                      exponent = 2.);
-
-  /**
-   * Call the integrate_difference() function, see above, with
-   * <tt>mapping=MappingQGeneric@<dim@>(1)</tt>.
-   *
-   * @deprecated Use integrate_difference(const DoFHandler<dim, spacedim> &, const InVector &, const Function<spacedim, typename InVector::value_type> &exact_solution, OutVector &, const Quadrature<dim> &, const NormType &, const Function<spacedim, double> *, const double) instead.
-   */
-  template <int dim, class InVector, class OutVector, int spacedim>
-  DEAL_II_DEPRECATED typename std::enable_if<
-    !std::is_same<typename InVector::value_type, double>::value>::type
-  integrate_difference(const DoFHandler<dim, spacedim> & dof,
-                       const InVector &                  fe_function,
-                       const Function<spacedim, double> &exact_solution,
-                       OutVector &                       difference,
-                       const Quadrature<dim> &           q,
-                       const NormType &                  norm,
-                       const Function<spacedim, double> *weight   = nullptr,
-                       const double                      exponent = 2.);
-
-  /**
-   * Same as above for hp.
-   *
-   * @deprecated Use integrate_difference(const hp::MappingCollection<dim, spacedim> &, const DoFHandler<dim, spacedim> &, const InVector &, const Function<spacedim, typename InVector::value_type> &, OutVector &, const hp::QCollection<dim> &, const NormType &, const Function<spacedim, double> *, const double) instead.
-   */
-  template <int dim, class InVector, class OutVector, int spacedim>
-  DEAL_II_DEPRECATED typename std::enable_if<
-    !std::is_same<typename InVector::value_type, double>::value>::type
-  integrate_difference(const hp::MappingCollection<dim, spacedim> &mapping,
-                       const DoFHandler<dim, spacedim> &           dof,
-                       const InVector &                            fe_function,
-                       const Function<spacedim, double> &exact_solution,
-                       OutVector &                       difference,
-                       const hp::QCollection<dim> &      q,
-                       const NormType &                  norm,
-                       const Function<spacedim, double> *weight   = nullptr,
-                       const double                      exponent = 2.);
-
-  /**
-   * Call the integrate_difference() function, see above, with
-   * <tt>mapping=MappingQGeneric@<dim@>(1)</tt>.
-   *
-   * @deprecated Use integrate_difference(const DoFHandler<dim, spacedim> &, const InVector &, const Function<spacedim, typename InVector::value_type> &, OutVector &, const hp::QCollection<dim> &, const NormType &, const Function<spacedim, double> *, const double) instead.
-   */
-  template <int dim, class InVector, class OutVector, int spacedim>
-  DEAL_II_DEPRECATED typename std::enable_if<
-    !std::is_same<typename InVector::value_type, double>::value>::type
-  integrate_difference(const DoFHandler<dim, spacedim> & dof,
-                       const InVector &                  fe_function,
-                       const Function<spacedim, double> &exact_solution,
-                       OutVector &                       difference,
-                       const hp::QCollection<dim> &      q,
-                       const NormType &                  norm,
-                       const Function<spacedim, double> *weight   = nullptr,
-                       const double                      exponent = 2.);
 
   /**
    * Take a Vector @p cellwise_error of errors on each cell with
@@ -312,7 +229,7 @@ namespace VectorTools
                        const NormType &                    norm,
                        const double                        exponent = 2.);
 
-  //@}
+  /** @} */
 } // namespace VectorTools
 
 DEAL_II_NAMESPACE_CLOSE

@@ -1,6 +1,6 @@
 ## ---------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2018 by the deal.II authors
+## Copyright (C) 2012 - 2022 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
@@ -139,8 +139,8 @@ SET(DEAL_II_LIST_SUFFIXES
   )
 
 SET(DEAL_II_STRING_SUFFIXES
-  CXX_FLAGS CXX_FLAGS_RELEASE CXX_FLAGS_DEBUG
-  LINKER_FLAGS LINKER_FLAGS_RELEASE LINKER_FLAGS_DEBUG
+  EXECUTABLE CXX_FLAGS CXX_FLAGS_RELEASE CXX_FLAGS_DEBUG LINKER_FLAGS
+  LINKER_FLAGS_RELEASE LINKER_FLAGS_DEBUG
   )
 
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -20,6 +20,7 @@
 
 #include <deal.II/base/cuda_size.h>
 #include <deal.II/base/memory_consumption.h>
+#include <deal.II/base/mpi_compute_index_owner_internal.h>
 #include <deal.II/base/table.h>
 #include <deal.II/base/thread_local_storage.h>
 
@@ -64,8 +65,8 @@ DEAL_II_NAMESPACE_OPEN
 
 template <typename number>
 bool
-AffineConstraints<number>::ConstraintLine::
-operator<(const ConstraintLine &a) const
+AffineConstraints<number>::ConstraintLine::operator<(
+  const ConstraintLine &a) const
 {
   return index < a.index;
 }
@@ -74,8 +75,8 @@ operator<(const ConstraintLine &a) const
 
 template <typename number>
 bool
-AffineConstraints<number>::ConstraintLine::
-operator==(const ConstraintLine &a) const
+AffineConstraints<number>::ConstraintLine::operator==(
+  const ConstraintLine &a) const
 {
   return index == a.index;
 }
@@ -148,7 +149,7 @@ AffineConstraints<number>::is_consistent_in_parallel(
         }
     }
 
-  std::map<unsigned int, std::vector<ConstraintLine>> received =
+  const std::map<unsigned int, std::vector<ConstraintLine>> received =
     Utilities::MPI::some_to_some(mpi_communicator, to_send);
 
   unsigned int inconsistent = 0;
@@ -187,6 +188,363 @@ AffineConstraints<number>::is_consistent_in_parallel(
   if (verbose && total > 0 && myid == 0)
     std::cout << total << " inconsistent lines discovered!" << std::endl;
   return total == 0;
+}
+
+
+namespace internal
+{
+  template <typename number>
+  std::vector<
+    std::tuple<types::global_dof_index,
+               number,
+               std::vector<std::pair<types::global_dof_index, number>>>>
+  compute_locally_relevant_constraints(
+    const dealii::AffineConstraints<number> &constraints_in,
+    const IndexSet &                         locally_owned_dofs,
+    const IndexSet &                         locally_relevant_dofs,
+    const MPI_Comm                           mpi_communicator)
+  {
+    using ConstraintType =
+      std::tuple<types::global_dof_index,
+                 number,
+                 std::vector<std::pair<types::global_dof_index, number>>>;
+
+    // The result vector filled step by step.
+    std::vector<ConstraintType> locally_relevant_constraints;
+
+#ifndef DEAL_II_WITH_MPI
+    AssertThrow(false, ExcNotImplemented()); // one should not come here
+    (void)constraints_in;
+    (void)locally_owned_dofs;
+    (void)locally_relevant_dofs;
+    (void)mpi_communicator;
+#else
+
+    const unsigned int my_rank =
+      Utilities::MPI::this_mpi_process(mpi_communicator);
+
+    // helper function
+    const auto sort_constraints = [&]() {
+      std::sort(locally_relevant_constraints.begin(),
+                locally_relevant_constraints.end(),
+                [](const auto &a, const auto &b) {
+                  return std::get<0>(a) < std::get<0>(b);
+                });
+
+      locally_relevant_constraints.erase(
+        std::unique(locally_relevant_constraints.begin(),
+                    locally_relevant_constraints.end(),
+                    [](const auto &a, const auto &b) {
+                      return std::get<0>(a) == std::get<0>(b);
+                    }),
+        locally_relevant_constraints.end());
+    };
+
+    // 0) collect constrained indices of the current object
+    IndexSet constrained_indices(locally_owned_dofs.size());
+
+    std::vector<types::global_dof_index> constrained_indices_temp;
+    for (const auto &line : constraints_in.get_lines())
+      constrained_indices_temp.push_back(line.index);
+
+    constrained_indices.add_indices(constrained_indices_temp.begin(),
+                                    constrained_indices_temp.end());
+
+    // step 1: identify owners of constraints
+    std::vector<unsigned int> constrained_indices_owners(
+      constrained_indices.n_elements());
+    Utilities::MPI::internal::ComputeIndexOwner::ConsensusAlgorithmsPayload
+      constrained_indices_process(locally_owned_dofs,
+                                  constrained_indices,
+                                  mpi_communicator,
+                                  constrained_indices_owners,
+                                  true);
+
+    Utilities::MPI::ConsensusAlgorithms::Selector<
+      std::vector<std::pair<types::global_dof_index, types::global_dof_index>>,
+      std::vector<unsigned int>>(constrained_indices_process, mpi_communicator)
+      .run();
+
+    // step 2: collect all locally owned constraints
+    const auto constrained_indices_by_ranks =
+      constrained_indices_process.get_requesters();
+
+    {
+      const unsigned int tag = Utilities::MPI::internal::Tags::
+        affine_constraints_make_consistent_in_parallel_0;
+
+      // ... collect data and sort according to owner
+      std::map<unsigned int, std::vector<ConstraintType>> send_data_temp;
+
+      for (unsigned int i = 0; i < constrained_indices_owners.size(); ++i)
+        {
+          ConstraintType entry;
+
+          const types::global_dof_index index =
+            constrained_indices.nth_index_in_set(i);
+
+          std::get<0>(entry) = index;
+
+          if (constraints_in.is_inhomogeneously_constrained(index))
+            std::get<1>(entry) = constraints_in.get_inhomogeneity(index);
+
+          const auto constraints = constraints_in.get_constraint_entries(index);
+
+          if (constraints)
+            for (const auto &i : *constraints)
+              std::get<2>(entry).push_back(i);
+
+          if (constrained_indices_owners[i] == my_rank)
+            locally_relevant_constraints.push_back(entry);
+          else
+            send_data_temp[constrained_indices_owners[i]].push_back(entry);
+        }
+
+      std::map<unsigned int, std::vector<char>> send_data;
+
+      for (const auto &i : send_data_temp)
+        send_data[i.first] = Utilities::pack(i.second, false);
+
+      std::vector<MPI_Request> requests;
+      requests.reserve(send_data.size());
+
+      // ... send data
+      for (const auto &i : send_data)
+        {
+          if (i.first == my_rank)
+            continue;
+
+          requests.push_back({});
+
+          const int ierr = MPI_Isend(i.second.data(),
+                                     i.second.size(),
+                                     MPI_CHAR,
+                                     i.first,
+                                     tag,
+                                     mpi_communicator,
+                                     &requests.back());
+          AssertThrowMPI(ierr);
+        }
+
+      // ... receive data
+      unsigned int n_rec_ranks = 0;
+
+      for (const auto &i : constrained_indices_by_ranks)
+        if (i.first != my_rank)
+          n_rec_ranks++;
+
+      for (unsigned int i = 0; i < n_rec_ranks; ++i)
+        {
+          MPI_Status status;
+          int ierr = MPI_Probe(MPI_ANY_SOURCE, tag, mpi_communicator, &status);
+          AssertThrowMPI(ierr);
+
+          int message_length;
+          ierr = MPI_Get_count(&status, MPI_CHAR, &message_length);
+          AssertThrowMPI(ierr);
+
+          std::vector<char> buffer(message_length);
+
+          ierr = MPI_Recv(buffer.data(),
+                          buffer.size(),
+                          MPI_CHAR,
+                          status.MPI_SOURCE,
+                          tag,
+                          mpi_communicator,
+                          MPI_STATUS_IGNORE);
+          AssertThrowMPI(ierr);
+
+          const auto data =
+            Utilities::unpack<std::vector<ConstraintType>>(buffer, false);
+
+          for (const auto &i : data)
+            locally_relevant_constraints.push_back(i);
+        }
+
+      const int ierr =
+        MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
+      AssertThrowMPI(ierr);
+
+      sort_constraints();
+    }
+
+    // step 3: communicate constraints so that each process know how the
+    // locally locally relevant dofs are constrained
+    {
+      const unsigned int tag = Utilities::MPI::internal::Tags::
+        affine_constraints_make_consistent_in_parallel_1;
+
+      // ... determine owners of locally relevant dofs
+      IndexSet locally_relevant_dofs_non_local = locally_relevant_dofs;
+      locally_relevant_dofs_non_local.subtract_set(locally_owned_dofs);
+
+      std::vector<unsigned int> locally_relevant_dofs_owners(
+        locally_relevant_dofs_non_local.n_elements());
+      Utilities::MPI::internal::ComputeIndexOwner::ConsensusAlgorithmsPayload
+        locally_relevant_dofs_process(locally_owned_dofs,
+                                      locally_relevant_dofs_non_local,
+                                      mpi_communicator,
+                                      locally_relevant_dofs_owners,
+                                      true);
+
+      Utilities::MPI::ConsensusAlgorithms::Selector<
+        std::vector<
+          std::pair<types::global_dof_index, types::global_dof_index>>,
+        std::vector<unsigned int>>(locally_relevant_dofs_process,
+                                   mpi_communicator)
+        .run();
+
+      const auto locally_relevant_dofs_by_ranks =
+        locally_relevant_dofs_process.get_requesters();
+
+      std::map<unsigned int, std::vector<char>> send_data;
+
+      std::vector<MPI_Request> requests;
+      requests.reserve(send_data.size());
+
+      // ... send data
+      for (const auto &rank_and_indices : locally_relevant_dofs_by_ranks)
+        {
+          Assert(rank_and_indices.first != my_rank, ExcInternalError());
+
+          std::vector<ConstraintType> data;
+
+          for (const auto index : rank_and_indices.second)
+            {
+              // note: at this stage locally_relevant_constraints still
+              // contains only locally owned constraints
+              const auto prt =
+                std::find_if(locally_relevant_constraints.begin(),
+                             locally_relevant_constraints.end(),
+                             [index](const auto &a) {
+                               return std::get<0>(a) == index;
+                             });
+              if (prt != locally_relevant_constraints.end())
+                data.push_back(*prt);
+            }
+
+          send_data[rank_and_indices.first] = Utilities::pack(data, false);
+
+          requests.push_back({});
+
+          const int ierr = MPI_Isend(send_data[rank_and_indices.first].data(),
+                                     send_data[rank_and_indices.first].size(),
+                                     MPI_CHAR,
+                                     rank_and_indices.first,
+                                     tag,
+                                     mpi_communicator,
+                                     &requests.back());
+          AssertThrowMPI(ierr);
+        }
+
+      // ... receive data
+      const unsigned int n_rec_ranks = [&]() {
+        // count number of ranks from where data will be received from
+        // by looping locally_relevant_dofs_owners and identifying unique
+        // rank (ignoring the current rank)
+
+        std::set<unsigned int> rec_ranks;
+
+        for (const unsigned int rank : locally_relevant_dofs_owners)
+          if (rank != my_rank)
+            rec_ranks.insert(rank);
+
+        return rec_ranks.size();
+      }();
+
+      for (unsigned int counter = 0; counter < n_rec_ranks; ++counter)
+        {
+          MPI_Status status;
+          int ierr = MPI_Probe(MPI_ANY_SOURCE, tag, mpi_communicator, &status);
+          AssertThrowMPI(ierr);
+
+          int message_length;
+          ierr = MPI_Get_count(&status, MPI_CHAR, &message_length);
+          AssertThrowMPI(ierr);
+
+          std::vector<char> buffer(message_length);
+
+          ierr = MPI_Recv(buffer.data(),
+                          buffer.size(),
+                          MPI_CHAR,
+                          status.MPI_SOURCE,
+                          tag,
+                          mpi_communicator,
+                          MPI_STATUS_IGNORE);
+          AssertThrowMPI(ierr);
+
+          const auto received_locally_relevant_constrain =
+            Utilities::unpack<std::vector<ConstraintType>>(buffer, false);
+
+          for (const auto &locally_relevant_constrain :
+               received_locally_relevant_constrain)
+            locally_relevant_constraints.push_back(locally_relevant_constrain);
+        }
+
+      const int ierr =
+        MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
+      AssertThrowMPI(ierr);
+
+      sort_constraints();
+    }
+
+#endif
+
+    return locally_relevant_constraints;
+  }
+} // namespace internal
+
+
+
+template <typename number>
+void
+AffineConstraints<number>::make_consistent_in_parallel(
+  const IndexSet &locally_owned_dofs,
+  const IndexSet &locally_relevant_dofs,
+  const MPI_Comm  mpi_communicator)
+{
+  if (Utilities::MPI::job_supports_mpi() == false ||
+      Utilities::MPI::n_mpi_processes(mpi_communicator) == 1)
+    return; // nothing to do, since serial
+
+  Assert(sorted == false, ExcMatrixIsClosed());
+
+  // 1) get all locally relevant constraints ("temporal constraint matrix")
+  const auto temporal_constraint_matrix =
+    internal::compute_locally_relevant_constraints(*this,
+                                                   locally_owned_dofs,
+                                                   locally_relevant_dofs,
+                                                   mpi_communicator);
+
+  // 2) clear the content of this constraint matrix
+  lines.clear();
+  lines_cache.clear();
+
+  // 3) refill this constraint matrix
+  for (const auto &line : temporal_constraint_matrix)
+    {
+      const types::global_dof_index index = std::get<0>(line);
+
+      // ... line
+      this->add_line(index);
+
+      // ... inhomogeneity
+      if (std::get<1>(line) != number())
+        this->set_inhomogeneity(index, std::get<1>(line));
+
+      // ... entries
+      if (std::get<2>(line).size() > 0)
+        for (const auto &j : std::get<2>(line))
+          this->add_entry(index, j.first, j.second);
+    }
+
+#ifdef DEBUG
+  Assert(this->is_consistent_in_parallel(
+           Utilities::MPI::all_gather(mpi_communicator, locally_owned_dofs),
+           locally_relevant_dofs,
+           mpi_communicator),
+         ExcInternalError());
+#endif
 }
 
 
@@ -583,6 +941,23 @@ AffineConstraints<number>::close()
 
 
 template <typename number>
+bool
+AffineConstraints<number>::is_closed() const
+{
+  return sorted || (n_constraints() == 0);
+}
+
+
+
+template <typename number>
+bool
+AffineConstraints<number>::is_closed(const MPI_Comm &comm) const
+{
+  return Utilities::MPI::min(static_cast<unsigned int>(is_closed()), comm) == 1;
+}
+
+
+template <typename number>
 void
 AffineConstraints<number>::merge(
   const AffineConstraints<number> &other_constraints,
@@ -885,12 +1260,12 @@ AffineConstraints<number>::print(std::ostream &out) const
       if (line.entries.size() > 0)
         {
           for (const std::pair<size_type, number> &entry : line.entries)
-            out << "    " << line.index << " " << entry.first << ":  "
-                << entry.second << "\n";
+            out << "    " << line.index << ' ' << entry.first << ":  "
+                << entry.second << '\n';
 
           // print out inhomogeneity.
           if (line.inhomogeneity != number(0.))
-            out << "    " << line.index << ": " << line.inhomogeneity << "\n";
+            out << "    " << line.index << ": " << line.inhomogeneity << '\n';
         }
       else
         // but also output something if the constraint simply reads
@@ -898,13 +1273,13 @@ AffineConstraints<number>::print(std::ostream &out) const
         // combination of other dofs
         {
           if (line.inhomogeneity != number(0.))
-            out << "    " << line.index << " = " << line.inhomogeneity << "\n";
+            out << "    " << line.index << " = " << line.inhomogeneity << '\n';
           else
             out << "    " << line.index << " = 0\n";
         }
     }
 
-  AssertThrow(out, ExcIO());
+  AssertThrow(out.fail() == false, ExcIO());
 }
 
 
@@ -920,11 +1295,11 @@ AffineConstraints<number>::write_dot(std::ostream &out) const
       if (lines[i].entries.size() > 0)
         for (size_type j = 0; j < lines[i].entries.size(); ++j)
           out << "  " << lines[i].index << "->" << lines[i].entries[j].first
-              << "; // weight: " << lines[i].entries[j].second << "\n";
+              << "; // weight: " << lines[i].entries[j].second << '\n';
       else
-        out << "  " << lines[i].index << "\n";
+        out << "  " << lines[i].index << '\n';
     }
-  out << "}" << std::endl;
+  out << '}' << std::endl;
 }
 
 
@@ -2687,7 +3062,7 @@ namespace internal
       step = length / 2;
       while (step > 0)
         {
-          for (i = step; i < length; i++)
+          for (i = step; i < length; ++i)
             {
               istep = step;
               j     = i;
@@ -2761,7 +3136,8 @@ namespace internal
       /**
        * Dereferencing operator.
        */
-      ScratchData<number> &operator*()
+      ScratchData<number> &
+      operator*()
       {
         return *my_scratch_data;
       }
@@ -2769,7 +3145,8 @@ namespace internal
       /**
        * Dereferencing operator.
        */
-      ScratchData<number> *operator->()
+      ScratchData<number> *
+      operator->()
       {
         return my_scratch_data;
       }
@@ -2888,7 +3265,7 @@ namespace internal
       else
         col_val = 0;
 
-      // account for indirect contributions by constraints in row, going trough
+      // account for indirect contributions by constraints in row, going through
       // the direct and indirect references in the given column.
       for (size_type q = 0; q < global_rows.size(i); ++q)
         {
@@ -3270,7 +3647,7 @@ namespace internal
                 average_diagonal = static_cast<number>(1.);
             }
 
-          for (size_type i = 0; i < global_rows.n_constraints(); i++)
+          for (size_type i = 0; i < global_rows.n_constraints(); ++i)
             {
               const size_type local_row  = global_rows.constraint_origin(i);
               const size_type global_row = local_dof_indices[local_row];
@@ -3325,7 +3702,7 @@ namespace internal
       // that have been left out above
       if (global_rows.n_constraints() > 0)
         {
-          for (size_type i = 0; i < global_rows.n_constraints(); i++)
+          for (size_type i = 0; i < global_rows.n_constraints(); ++i)
             {
               const size_type local_row  = global_rows.constraint_origin(i);
               const size_type global_row = local_dof_indices[local_row];
@@ -3941,11 +4318,11 @@ AffineConstraints<number>::add_entries_local_to_global(
       // need to add the whole row and column structure in case we keep
       // constrained entries. Unfortunately, we can't use the nice matrix
       // structure we use elsewhere, so manually add those indices one by one.
-      for (size_type i = 0; i < n_local_dofs; i++)
+      for (size_type i = 0; i < n_local_dofs; ++i)
         if (is_constrained(local_dof_indices[i]))
           {
             if (keep_constrained_entries == true)
-              for (size_type j = 0; j < n_local_dofs; j++)
+              for (size_type j = 0; j < n_local_dofs; ++j)
                 {
                   sparsity_pattern.add(local_dof_indices[i],
                                        local_dof_indices[j]);
@@ -3998,11 +4375,12 @@ template <typename number>
 template <typename SparsityPatternType>
 void
 AffineConstraints<number>::add_entries_local_to_global(
-  const std::vector<size_type> &row_indices,
-  const std::vector<size_type> &col_indices,
-  SparsityPatternType &         sparsity_pattern,
-  const bool                    keep_constrained_entries,
-  const Table<2, bool> &        dof_mask) const
+  const std::vector<size_type> &   row_indices,
+  const AffineConstraints<number> &col_constraints,
+  const std::vector<size_type> &   col_indices,
+  SparsityPatternType &            sparsity_pattern,
+  const bool                       keep_constrained_entries,
+  const Table<2, bool> &           dof_mask) const
 {
   const size_type n_local_rows = row_indices.size();
   const size_type n_local_cols = col_indices.size();
@@ -4016,7 +4394,7 @@ AffineConstraints<number>::add_entries_local_to_global(
           for (const size_type col_index : col_indices)
             sparsity_pattern.add(row_index, col_index);
       for (const size_type col_index : col_indices)
-        if (is_constrained(col_index))
+        if (col_constraints.is_constrained(col_index))
           for (const size_type row_index : row_indices)
             sparsity_pattern.add(row_index, col_index);
     }
@@ -4032,7 +4410,7 @@ AffineConstraints<number>::add_entries_local_to_global(
       std::vector<size_type> actual_row_indices(n_local_rows);
       std::vector<size_type> actual_col_indices(n_local_cols);
       make_sorted_row_list(row_indices, actual_row_indices);
-      make_sorted_row_list(col_indices, actual_col_indices);
+      col_constraints.make_sorted_row_list(col_indices, actual_col_indices);
       const size_type n_actual_rows = actual_row_indices.size();
 
       // now add the indices we collected above to the sparsity pattern. Very
@@ -4047,6 +4425,27 @@ AffineConstraints<number>::add_entries_local_to_global(
 
   // TODO: implement this
   Assert(false, ExcNotImplemented());
+}
+
+
+
+template <typename number>
+template <typename SparsityPatternType>
+void
+AffineConstraints<number>::add_entries_local_to_global(
+  const std::vector<size_type> &row_indices,
+  const std::vector<size_type> &col_indices,
+  SparsityPatternType &         sparsity_pattern,
+  const bool                    keep_constrained_entries,
+  const Table<2, bool> &        dof_mask) const
+{
+  // Call the function with the same name that takes a column constraint as well
+  add_entries_local_to_global(row_indices,
+                              *this,
+                              col_indices,
+                              sparsity_pattern,
+                              keep_constrained_entries,
+                              dof_mask);
 }
 
 
@@ -4118,11 +4517,11 @@ AffineConstraints<number>::add_entries_local_to_global(
             }
         }
 
-      for (size_type i = 0; i < n_local_dofs; i++)
+      for (size_type i = 0; i < n_local_dofs; ++i)
         if (is_constrained(local_dof_indices[i]))
           {
             if (keep_constrained_entries == true)
-              for (size_type j = 0; j < n_local_dofs; j++)
+              for (size_type j = 0; j < n_local_dofs; ++j)
                 {
                   sparsity_pattern.add(local_dof_indices[i],
                                        local_dof_indices[j]);

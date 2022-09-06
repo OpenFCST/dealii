@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2018 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,8 +25,10 @@
 DEAL_II_NAMESPACE_OPEN
 
 
-/*!@addtogroup fe */
-/*@{*/
+/**
+ * @addtogroup fe
+ * @{
+ */
 
 /**
  * Implementation of a scalar Bernstein finite element @p that we call
@@ -110,8 +112,8 @@ public:
    * the neighboring element.  The size of the matrix is then
    * <tt>source.dofs_per_face</tt> times <tt>this->dofs_per_face</tt>. The
    * FE_Bernstein element family only provides interpolation matrices for
-   * elements of the same type and FE_Nothing. For all other elements, an
-   * exception of type
+   * elements of the same type, for elements that have support points, and
+   * FE_Nothing. For all other elements, an exception of type
    * FiniteElement<dim,spacedim>::ExcInterpolationNotImplemented is thrown.
    */
   virtual void
@@ -124,8 +126,8 @@ public:
    * the neighboring element.  The size of the matrix is then
    * <tt>source.dofs_per_face</tt> times <tt>this->dofs_per_face</tt>. The
    * FE_Bernstein element family only provides interpolation matrices for
-   * elements of the same type and FE_Nothing. For all other elements, an
-   * exception of type
+   * elements of the same type, for elements that have support points, and
+   * FE_Nothing. For all other elements, an exception of type
    * FiniteElement<dim,spacedim>::ExcInterpolationNotImplemented is thrown.
    */
   virtual void
@@ -215,7 +217,7 @@ protected:
 
 
 
-/*@}*/
+/** @} */
 
 DEAL_II_NAMESPACE_CLOSE
 

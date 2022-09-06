@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -197,7 +197,7 @@ private:
     FEFaceEvaluation<dim, -1, 0, 1, number> fe_eval(data, true);
     FEFaceEvaluation<dim, -1, 0, 1, number> fe_eval_neighbor(data, false);
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval_neighbor.reinit(face);
@@ -244,7 +244,7 @@ private:
     const std::pair<unsigned int, unsigned int> &     face_range) const
   {
     FEFaceEvaluation<dim, -1, 0, 1, number> fe_eval(data, true);
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval.read_dof_values(src);
@@ -273,7 +273,7 @@ private:
   compute_inverse_diagonal()
   {
     data.initialize_dof_vector(inverse_diagonal_entries);
-    unsigned int dummy;
+    unsigned int dummy = 0;
     data.loop(&LaplaceOperator::local_diagonal_cell,
               &LaplaceOperator::local_diagonal_face,
               &LaplaceOperator::local_diagonal_boundary,
@@ -333,7 +333,7 @@ private:
     AlignedVector<VectorizedArray<number>>  local_diagonal_vector(
       phi.dofs_per_cell);
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         phi.reinit(face);
         phi_outer.reinit(face);
@@ -421,7 +421,7 @@ private:
     AlignedVector<VectorizedArray<number>>  local_diagonal_vector(
       phi.dofs_per_cell);
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         phi.reinit(face);
 

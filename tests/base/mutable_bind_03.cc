@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -32,7 +32,7 @@ example_function(const Point<2> &p, const double &d, const unsigned int i = 3)
 int
 main()
 {
-  initlog(1);
+  initlog(true);
 
   const Point<2> p(1, 2);
 

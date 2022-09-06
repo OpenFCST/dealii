@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -67,7 +67,7 @@ regression_slope(const std::vector<double> &x, const std::vector<double> &y)
 
   double sum_1 = 0.0, sum_x = 0.0, sum_x2 = 0.0, sum_y = 0.0, sum_xy = 0.0;
 
-  for (unsigned int i = 0; i < x.size(); i++)
+  for (unsigned int i = 0; i < x.size(); ++i)
     {
       sum_1 += 1.0;
       sum_x += x[i];
@@ -213,7 +213,7 @@ test(const FiniteElement<dim> &fe)
       std::vector<double> log_refinements;
       std::vector<double> log_l2_errors;
 
-      MappingQ<dim> mapping(mapping_p, true);
+      MappingQ<dim> mapping(mapping_p);
       for (unsigned int refinement_n = 1; refinement_n < 4; ++refinement_n)
         {
           triangulation.refine_global(1);

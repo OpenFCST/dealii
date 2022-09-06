@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -35,8 +35,6 @@
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/tria_iterator.h>
-
-#include <deal.II/hp/dof_handler.h>
 
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/lac/block_vector.h>
@@ -352,7 +350,7 @@ namespace FETools
   namespace internal
   {
     template <int dim, int spacedim, class InVector>
-    typename std::enable_if<is_serial_vector<InVector>::value>::type
+    std::enable_if_t<is_serial_vector<InVector>::value>
     back_interpolate(
       const DoFHandler<dim, spacedim> &                       dof1,
       const AffineConstraints<typename InVector::value_type> &constraints1,
@@ -738,7 +736,7 @@ namespace FETools
       interpolation_difference(dof1, u1, dof2.get_fe(), u1_difference);
     else
       {
-        internal::interpolation_difference(
+        internal::interpolation_difference<dim, InVector, OutVector, spacedim>(
           dof1, constraints1, u1, dof2, constraints2, u1_difference);
       }
   }

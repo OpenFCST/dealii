@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -967,21 +967,21 @@ main()
   {
     degree = 1;
     FESystem<dim> fe(FE_Q<dim>(degree + 1), dim, FE_Q<dim>(degree), 1);
-    deallog << fe.get_name() << ":" << std::endl;
+    deallog << fe.get_name() << ':' << std::endl;
     StokesProblem<2> flow_problem(degree, fe);
     flow_problem.run();
   }
   {
     degree = 1;
     FESystem<2> fe(FE_Q<dim>(degree + 1), dim, FE_Q_DG0<dim>(degree), 1);
-    deallog << fe.get_name() << ":" << std::endl;
+    deallog << fe.get_name() << ':' << std::endl;
     StokesProblem<2> flow_problem(degree, fe);
     flow_problem.run();
   }
   {
     degree = 2;
     FESystem<2> fe(FE_Q<dim>(degree + 1), dim, FE_Q_DG0<dim>(degree), 1);
-    deallog << fe.get_name() << ":" << std::endl;
+    deallog << fe.get_name() << ':' << std::endl;
     StokesProblem<2> flow_problem(degree, fe);
     flow_problem.run();
   }

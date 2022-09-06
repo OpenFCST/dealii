@@ -1,6 +1,6 @@
 ﻿// ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -39,7 +39,7 @@ validate(const Triangulation<dim> &tria, const DoFHandler<dim> &dh)
 {
   deallog << "ncells: " << tria.n_global_active_cells() << " fe_indices:";
   for (const auto &cell : dh.active_cell_iterators())
-    deallog << " " << cell->active_fe_index();
+    deallog << ' ' << cell->active_fe_index();
   deallog << std::endl;
 }
 

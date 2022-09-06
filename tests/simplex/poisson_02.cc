@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -439,18 +439,19 @@ DGHeat<dim>::assemble_system()
             for (unsigned int j = 0; j < n_dofs; ++j)
               {
                 copy_data_face.cell_matrix(i, j) +=
-                  -normals[qpoint] * fe_iv.average_gradient(i, qpoint) *
-                  fe_iv.jump(j, qpoint) * JxW[qpoint];
+                  -normals[qpoint] *
+                  fe_iv.average_of_shape_gradients(i, qpoint) *
+                  fe_iv.jump_in_shape_values(j, qpoint) * JxW[qpoint];
 
                 copy_data_face.cell_matrix(i, j) +=
-                  -fe_iv.jump(i, qpoint) // \phi_i
-                  * fe_iv.average_gradient(j, qpoint) *
+                  -fe_iv.jump_in_shape_values(i, qpoint) // \phi_i
+                  * fe_iv.average_of_shape_gradients(j, qpoint) *
                   normals[qpoint] // n*\nabla \phi_j
                   * JxW[qpoint];  // dx
 
                 copy_data_face.cell_matrix(i, j) +=
-                  beta * 1. / h * fe_iv.jump(i, qpoint) *
-                  fe_iv.jump(j, qpoint) * JxW[qpoint];
+                  beta * 1. / h * fe_iv.jump_in_shape_values(i, qpoint) *
+                  fe_iv.jump_in_shape_values(j, qpoint) * JxW[qpoint];
               }
           }
       }
@@ -519,7 +520,7 @@ DGHeat<dim>::output_results(unsigned int it) const
 
   std::string fname = dimension + Utilities::int_to_string(it) + ".vtk";
 
-  deallog << "  Writing solution to <" << fname << ">" << std::endl;
+  deallog << "  Writing solution to <" << fname << '>' << std::endl;
 
   std::ofstream output(fname.c_str());
 
@@ -563,7 +564,7 @@ DGHeat<dim>::calculateL2Error()
 
       cell->get_dof_indices(local_dof_indices);
 
-      for (unsigned int q = 0; q < n_q_points; q++)
+      for (unsigned int q = 0; q < n_q_points; ++q)
         {
           const double u_exact =
             dim == 2 ? -std::sin(M_PI * fe_values.quadrature_point(q)[0]) *
@@ -576,7 +577,7 @@ DGHeat<dim>::calculateL2Error()
 
           // Find the values of x and u_h (the finite element solution) at the
           // quadrature points
-          for (unsigned int i = 0; i < dofs_per_cell; i++)
+          for (unsigned int i = 0; i < dofs_per_cell; ++i)
             {
               u_sim +=
                 fe_values.shape_value(i, q) * solution[local_dof_indices[i]];

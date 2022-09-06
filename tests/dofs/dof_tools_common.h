@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -77,7 +77,8 @@ set_boundary_ids(Triangulation<dim> &tria)
 }
 
 
-void set_boundary_ids(Triangulation<1> &)
+void
+set_boundary_ids(Triangulation<1> &)
 {}
 
 

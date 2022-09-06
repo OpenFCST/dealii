@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2014 - 2018 by the deal.II authors
+// Copyright (C) 2014 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -82,7 +82,7 @@ main()
       v           = std::get<3>(ref);
 
       deallog << "Origin: " << points[i] << ", on unit circle: " << pp
-              << ", with local coordinates (u, v): (" << u << ", " << v << ")"
+              << ", with local coordinates (u, v): (" << u << ", " << v << ')'
               << std::endl;
     }
   return 0;

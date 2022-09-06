@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2007 - 2018 by the deal.II authors
+// Copyright (C) 2007 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -48,14 +48,14 @@ check()
     {
       deallog << coeffs[i];
       for (unsigned int d = 0; d < dim; ++d)
-        deallog << " x" << d << "^" << exponents[i][d];
+        deallog << " x" << d << '^' << exponents[i][d];
       if (i < n_mon - 1)
         deallog << " + ";
     }
   deallog << std::endl;
   deallog << "Point: ";
   for (unsigned int d = 0; d < dim; ++d)
-    deallog << p[d] << " ";
+    deallog << p[d] << ' ';
   deallog << std::endl;
 
   deallog << "Value: " << poly.value(p) << std::endl;

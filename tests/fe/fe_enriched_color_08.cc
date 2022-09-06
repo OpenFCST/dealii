@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2019 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -132,16 +132,16 @@ plot_shape_function(DoFHandler<dim> &dof_handler, unsigned int patches = 5)
         << std::endl;
       GridOut grid_out;
       grid_out.write_gnuplot(dof_handler.get_triangulation(), f);
-      f << "e" << std::endl;
+      f << 'e' << std::endl;
 
       DoFTools::write_gnuplot_dof_support_point_info(f, support_points);
 
-      f << "e" << std::endl;
+      f << 'e' << std::endl;
 
       deallog << "...finished printing support points" << std::endl;
     }
 
-  DataOut<dim, DoFHandler<dim>> data_out;
+  DataOut<dim> data_out;
   data_out.attach_dof_handler(dof_handler);
 
   // get material ids:
@@ -152,7 +152,7 @@ plot_shape_function(DoFHandler<dim> &dof_handler, unsigned int patches = 5)
     }
   data_out.add_data_vector(fe_index, "fe_index");
 
-  for (unsigned int i = 0; i < shape_functions.size(); i++)
+  for (unsigned int i = 0; i < shape_functions.size(); ++i)
     data_out.add_data_vector(shape_functions[i], names[i]);
 
   data_out.build_patches(patches);

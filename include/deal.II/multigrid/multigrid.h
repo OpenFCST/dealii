@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -43,8 +43,10 @@ and using the 'signals' keyword. You can either #include the Qt headers (or any 
 *after* the deal.II headers or you can define the 'QT_NO_KEYWORDS' macro and use the 'Q_SIGNALS' macro."
 #endif
 
-/*!@addtogroup mg */
-/*@{*/
+/**
+ * @addtogroup mg
+ * @{
+ */
 
 namespace mg
 {
@@ -118,11 +120,25 @@ namespace mg
     /**
      * This signal is triggered before (@p before is true) and after (@p before
      * is false) the call to a post-smoothing step via MGPostSmoother::apply()
-     * on
-     * @p level.
+     * on @p level.
      */
     boost::signals2::signal<void(const bool before, const unsigned int level)>
       post_smoother_step;
+
+    /**
+     * This signal is triggered before (@p before is true) and after (@p before
+     * is false) the computation of the residual vector on @p level, including
+     * the result of edge_out and edge_down.
+     */
+    boost::signals2::signal<void(const bool before, const unsigned int level)>
+      residual_step;
+
+    /**
+     * This signal is triggered before (@p before is true) and after (@p before
+     * is false) the execution of edge_in and edge_up.
+     */
+    boost::signals2::signal<void(const bool before, const unsigned int level)>
+      edge_prolongation;
   };
 } // namespace mg
 
@@ -142,11 +158,6 @@ namespace mg
  * vector. This is a nontrivial operation, usually initiated automatically by
  * the class PreconditionMG and performed by the classes derived from
  * MGTransferBase.
- *
- * @note The interface of this class is still very clumsy. In particular, you
- * will have to set up quite a few auxiliary objects before you can use it.
- * Unfortunately, it seems that this can be avoided only be restricting the
- * flexibility of this class in an unacceptable way.
  */
 template <typename VectorType>
 class Multigrid : public Subscriptor
@@ -229,6 +240,15 @@ public:
                     const MGMatrixBase<VectorType> &edge_in);
 
   /**
+   * Similar to the function above: however, only @p edge_in is set. This
+   * is useful if the matrix attached to this class ignores the edge
+   * constraints during vmult(), which is only used during the computation
+   * of the residual.
+   */
+  void
+  set_edge_in_matrix(const MGMatrixBase<VectorType> &edge_in);
+
+  /**
    * Set additional matrices to correct residual computation at refinement
    * edges. These matrices originate from discontinuous Galerkin methods (see
    * FE_DGQ etc.), where they correspond to the edge fluxes at the refinement
@@ -288,10 +308,17 @@ public:
   void set_cycle(Cycle);
 
   /**
-   * Connect a function to mg::Signals::coarse_solve.
+   * Connect a function to mg::Signals::pre_smoother_step.
    */
   boost::signals2::connection
-  connect_coarse_solve(
+  connect_pre_smoother_step(
+    const std::function<void(const bool, const unsigned int)> &slot);
+
+  /**
+   * Connect a function to mg::Signals::residual_step.
+   */
+  boost::signals2::connection
+  connect_residual_step(
     const std::function<void(const bool, const unsigned int)> &slot);
 
   /**
@@ -302,6 +329,13 @@ public:
     const std::function<void(const bool, const unsigned int)> &slot);
 
   /**
+   * Connect a function to mg::Signals::coarse_solve.
+   */
+  boost::signals2::connection
+  connect_coarse_solve(
+    const std::function<void(const bool, const unsigned int)> &slot);
+
+  /**
    * Connect a function to mg::Signals::prolongation.
    */
   boost::signals2::connection
@@ -309,10 +343,10 @@ public:
     const std::function<void(const bool, const unsigned int)> &slot);
 
   /**
-   * Connect a function to mg::Signals::pre_smoother_step.
+   * Connect a function to mg::Signals::edge_prolongation.
    */
   boost::signals2::connection
-  connect_pre_smoother_step(
+  connect_edge_prolongation(
     const std::function<void(const bool, const unsigned int)> &slot);
 
   /**
@@ -546,7 +580,7 @@ public:
   /**
    * Return the MPI communicator object in use with this preconditioner.
    */
-  const MPI_Comm &
+  MPI_Comm
   get_mpi_communicator() const;
 
   /**
@@ -560,6 +594,18 @@ public:
    */
   boost::signals2::connection
   connect_transfer_to_global(const std::function<void(bool)> &slot);
+
+  /**
+   * Return the Multigrid object passed to the constructor.
+   */
+  Multigrid<VectorType> &
+  get_multigrid();
+
+  /**
+   * Return the Multigrid object passed to the constructor.
+   */
+  const Multigrid<VectorType> &
+  get_multigrid() const;
 
 private:
   /**
@@ -599,7 +645,7 @@ private:
   mg::Signals signals;
 };
 
-/*@}*/
+/** @} */
 
 #ifndef DOXYGEN
 /* --------------------------- inline functions --------------------- */
@@ -662,7 +708,7 @@ namespace internal
               typename VectorType,
               class TRANSFER,
               typename OtherVectorType>
-    typename std::enable_if<TRANSFER::supports_dof_handler_vector>::type
+    std::enable_if_t<TRANSFER::supports_dof_handler_vector>
     vmult(
       const std::vector<const dealii::DoFHandler<dim> *> &dof_handler_vector,
       dealii::Multigrid<VectorType> &                     multigrid,
@@ -723,7 +769,7 @@ namespace internal
               typename VectorType,
               class TRANSFER,
               typename OtherVectorType>
-    typename std::enable_if<TRANSFER::supports_dof_handler_vector>::type
+    std::enable_if_t<TRANSFER::supports_dof_handler_vector>
     vmult_add(
       const std::vector<const dealii::DoFHandler<dim> *> &dof_handler_vector,
       dealii::Multigrid<VectorType> &                     multigrid,
@@ -863,7 +909,7 @@ PreconditionMG<dim, VectorType, TRANSFER>::locally_owned_domain_indices(
 
 
 template <int dim, typename VectorType, class TRANSFER>
-const MPI_Comm &
+MPI_Comm
 PreconditionMG<dim, VectorType, TRANSFER>::get_mpi_communicator() const
 {
   // currently parallel GMG works with parallel triangulations only,
@@ -933,6 +979,22 @@ PreconditionMG<dim, VectorType, TRANSFER>::Tvmult_add(
   const OtherVectorType &) const
 {
   Assert(false, ExcNotImplemented());
+}
+
+
+template <int dim, typename VectorType, class TRANSFER>
+Multigrid<VectorType> &
+PreconditionMG<dim, VectorType, TRANSFER>::get_multigrid()
+{
+  return *this->multigrid;
+}
+
+
+template <int dim, typename VectorType, class TRANSFER>
+const Multigrid<VectorType> &
+PreconditionMG<dim, VectorType, TRANSFER>::get_multigrid() const
+{
+  return *this->multigrid;
 }
 
 #endif // DOXYGEN

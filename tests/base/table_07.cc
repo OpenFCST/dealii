@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2018 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -53,6 +53,9 @@ main()
 
   dealii::Table<2, T> table2;
   table2 = std::move(table); // should not create new objects
+
+  table.clear();
+  Assert(table.empty() == true, ExcInternalError());
 
   deallog << "OK" << std::endl;
 }

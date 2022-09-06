@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2011 - 2019 by the deal.II authors
+ * Copyright (C) 2011 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -82,7 +82,7 @@ namespace Step41
     void setup_system();
     void assemble_system();
     void
-         assemble_mass_matrix_diagonal(TrilinosWrappers::SparseMatrix &mass_matrix);
+    assemble_mass_matrix_diagonal(TrilinosWrappers::SparseMatrix &mass_matrix);
     void update_solution_and_constraints();
     void solve();
     void output_results(const unsigned int iteration) const;
@@ -246,7 +246,7 @@ namespace Step41
     mass_matrix.reinit(dsp);
     assemble_mass_matrix_diagonal(mass_matrix);
     diagonal_of_mass_matrix.reinit(solution_index_set);
-    for (unsigned int j = 0; j < solution.size(); j++)
+    for (unsigned int j = 0; j < solution.size(); ++j)
       diagonal_of_mass_matrix(j) = mass_matrix.diag_element(j);
   }
 

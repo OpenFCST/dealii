@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2006 - 2018 by the deal.II authors
+// Copyright (C) 2006 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -54,7 +54,7 @@ main()
       for (types::global_dof_index c = 0; c < rlen; ++c)
         {
           types::global_dof_index column = csp.column_number(row, c);
-          deallog << row << "," << column << std::endl;
+          deallog << row << ',' << column << std::endl;
         }
     }
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -73,7 +73,7 @@ namespace
 
 
 template <int dim, int spacedim>
-FE_Pyramid<dim, spacedim>::FE_Pyramid(
+FE_PyramidPoly<dim, spacedim>::FE_PyramidPoly(
   const unsigned int                                degree,
   const internal::GenericDoFsPerObject &            dpos,
   const typename FiniteElementData<dim>::Conformity conformity)
@@ -95,14 +95,47 @@ FE_Pyramid<dim, spacedim>::FE_Pyramid(
 {
   AssertDimension(dim, 3);
 
-
   if (degree == 1)
     {
-      this->unit_support_points.emplace_back(-1.0, -1.0, 0.0);
-      this->unit_support_points.emplace_back(+1.0, -1.0, 0.0);
-      this->unit_support_points.emplace_back(-1.0, +1.0, 0.0);
-      this->unit_support_points.emplace_back(+1.0, +1.0, 0.0);
-      this->unit_support_points.emplace_back(+0.0, +0.0, 1.0);
+      for (const auto i : this->reference_cell().vertex_indices())
+        this->unit_support_points.emplace_back(
+          this->reference_cell().template vertex<dim>(i));
+
+      this->unit_face_support_points.resize(this->reference_cell().n_faces());
+
+      for (const auto f : this->reference_cell().face_indices())
+        {
+          const auto face_reference_cell =
+            this->reference_cell().face_reference_cell(f);
+
+          for (const auto i : face_reference_cell.vertex_indices())
+            this->unit_face_support_points[f].emplace_back(
+              face_reference_cell.template vertex<dim - 1>(i));
+        }
+    }
+  else
+    Assert(false, ExcNotImplemented());
+}
+
+
+
+template <int dim, int spacedim>
+void
+FE_PyramidPoly<dim, spacedim>::
+  convert_generalized_support_point_values_to_dof_values(
+    const std::vector<Vector<double>> &support_point_values,
+    std::vector<double> &              nodal_values) const
+{
+  AssertDimension(support_point_values.size(),
+                  this->get_unit_support_points().size());
+  AssertDimension(support_point_values.size(), nodal_values.size());
+  AssertDimension(this->dofs_per_cell, nodal_values.size());
+
+  for (unsigned int i = 0; i < this->dofs_per_cell; ++i)
+    {
+      AssertDimension(support_point_values[i].size(), 1);
+
+      nodal_values[i] = support_point_values[i](0);
     }
 }
 
@@ -110,9 +143,9 @@ FE_Pyramid<dim, spacedim>::FE_Pyramid(
 
 template <int dim, int spacedim>
 FE_PyramidP<dim, spacedim>::FE_PyramidP(const unsigned int degree)
-  : FE_Pyramid<dim, spacedim>(degree,
-                              get_dpo_vector_fe_pyramid_p(degree),
-                              FiniteElementData<dim>::H1)
+  : FE_PyramidPoly<dim, spacedim>(degree,
+                                  get_dpo_vector_fe_pyramid_p(degree),
+                                  FiniteElementData<dim>::H1)
 {}
 
 
@@ -279,9 +312,9 @@ FE_PyramidP<dim, spacedim>::hp_quad_dof_identities(
 
 template <int dim, int spacedim>
 FE_PyramidDGP<dim, spacedim>::FE_PyramidDGP(const unsigned int degree)
-  : FE_Pyramid<dim, spacedim>(degree,
-                              get_dpo_vector_fe_pyramid_dgp(degree),
-                              FiniteElementData<dim>::L2)
+  : FE_PyramidPoly<dim, spacedim>(degree,
+                                  get_dpo_vector_fe_pyramid_dgp(degree),
+                                  FiniteElementData<dim>::L2)
 {}
 
 

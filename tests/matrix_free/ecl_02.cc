@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -21,6 +21,7 @@
 #include <deal.II/fe/mapping_q.h>
 
 #include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/grid_tools.h>
 
 #include <deal.II/matrix_free/fe_evaluation.h>
 #include <deal.II/matrix_free/matrix_free.h>
@@ -101,10 +102,10 @@ test(const unsigned int n_refinements = 1)
     phi_p(matrix_free, false);
 
 
-  for (unsigned int i = 0; i < src.size() / 2; i++)
+  for (unsigned int i = 0; i < src.size() / 2; ++i)
     src[i] = 1;
 
-  for (unsigned int i = src.size() / 2; i < src.size(); i++)
+  for (unsigned int i = src.size() / 2; i < src.size(); ++i)
     src[i] = 2;
 
   dst = 0.0;
@@ -124,24 +125,24 @@ test(const unsigned int n_refinements = 1)
 
               phi_m.read_dof_values(src);
 
-              for (unsigned int i = 0; i < phi_m.static_dofs_per_component; i++)
+              for (const auto i : phi_m.dof_indices())
                 deallog << static_cast<int>(phi_m.begin_dof_values()[i][0])
-                        << " ";
+                        << ' ';
               deallog << std::endl;
               phi_m.gather_evaluate(src, EvaluationFlags::values);
-              for (unsigned int i = 0; i < phi_m.static_n_q_points; i++)
-                deallog << static_cast<int>(phi_m.begin_values()[i][0]) << " ";
+              for (const auto q : phi_p.quadrature_point_indices())
+                deallog << static_cast<int>(phi_m.begin_values()[q][0]) << " ";
               deallog << std::endl;
 
               phi_p.read_dof_values(src);
-              for (unsigned int i = 0; i < phi_p.static_dofs_per_component; i++)
+              for (const auto i : phi_p.dof_indices())
                 deallog << static_cast<int>(phi_p.begin_dof_values()[i][0])
-                        << " ";
+                        << ' ';
               deallog << std::endl;
 
               phi_p.gather_evaluate(src, EvaluationFlags::values);
-              for (unsigned int i = 0; i < phi_p.static_n_q_points; i++)
-                deallog << static_cast<int>(phi_p.begin_values()[i][0]) << " ";
+              for (const auto q : phi_p.quadrature_point_indices())
+                deallog << static_cast<int>(phi_p.begin_values()[q][0]) << " ";
               deallog << std::endl << std::endl;
             }
         }

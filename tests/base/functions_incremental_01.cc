@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -76,12 +76,12 @@ check()
       func.set_time(el.first);
       func.vector_value(point, v1);
       v1.print(deallog.get_file_stream());
-      deallog << "-" << std::endl;
+      deallog << '-' << std::endl;
 
       func.set_time(el.first - el.second);
       func.vector_value(point, v2);
       v2.print(deallog.get_file_stream());
-      deallog << "=" << std::endl;
+      deallog << '=' << std::endl;
 
       inc.set_time(el.first);
       inc.set_decrement(el.second);

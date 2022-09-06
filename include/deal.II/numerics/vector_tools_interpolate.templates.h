@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -20,6 +20,7 @@
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_system.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/intergrid_map.h>
 
@@ -228,8 +229,7 @@ namespace VectorTools
                "zero or equal to the number of components in the finite "
                "element."));
 
-      Assert(vec.size() == dof_handler.n_dofs(),
-             ExcDimensionMismatch(vec.size(), dof_handler.n_dofs()));
+      AssertDimension(vec.size(), dof_handler.n_dofs());
 
       Assert(component_mask.n_selected_components(
                dof_handler.get_fe_collection().n_components()) > 0,
@@ -310,7 +310,7 @@ namespace VectorTools
 
       // An FEValues object to evaluate (generalized) support point
       // locations as well as Jacobians and their inverses.
-      // the latter are only needed for Hcurl or Hdiv conforming elements,
+      // The latter are only needed for Hcurl or Hdiv conforming elements,
       // but we'll just always include them.
       hp::FEValues<dim, spacedim> fe_values(mapping_collection,
                                             fe,
@@ -361,10 +361,7 @@ namespace VectorTools
           dof_values.resize(n_dofs);
 
           // Get all function values:
-          Assert(
-            n_components == function(cell)->n_components,
-            ExcDimensionMismatch(dof_handler.get_fe_collection().n_components(),
-                                 function(cell)->n_components));
+          AssertDimension(n_components, function(cell)->n_components);
           function(cell)->vector_value_list(generalized_support_points,
                                             function_values);
 
@@ -485,17 +482,15 @@ namespace VectorTools
     VectorType &                                               vec,
     const ComponentMask &                                      component_mask)
   {
-    Assert(dof_handler.get_fe_collection().n_components() ==
-             function.n_components,
-           ExcDimensionMismatch(dof_handler.get_fe_collection().n_components(),
-                                function.n_components));
+    AssertDimension(dof_handler.get_fe_collection().n_components(),
+                    function.n_components);
 
     // Create a small lambda capture wrapping function and call the
     // internal implementation
-    const auto function_map = [&function](
-      const typename DoFHandler<dim, spacedim>::active_cell_iterator &)
-      -> const Function<spacedim, typename VectorType::value_type> *
-    {
+    const auto function_map =
+      [&function](
+        const typename DoFHandler<dim, spacedim>::active_cell_iterator &)
+      -> const Function<spacedim, typename VectorType::value_type> * {
       return &function;
     };
 
@@ -531,6 +526,8 @@ namespace VectorTools
     VectorType &                                               vec,
     const ComponentMask &                                      component_mask)
   {
+    AssertDimension(dof.get_fe_collection().n_components(),
+                    function.n_components);
     interpolate(get_default_linear_mapping(dof.get_triangulation()),
                 dof,
                 function,
@@ -679,22 +676,21 @@ namespace VectorTools
         Assert(fe.is_primitive(),
                ExcMessage("FE is not Primitive! This won't work."));
 
-        for (const auto &cell : dh.active_cell_iterators())
-          if (cell->is_locally_owned())
-            {
-              fe_v.reinit(cell);
-              cell->get_dof_indices(dofs);
-              const std::vector<Point<spacedim>> &points =
-                fe_v.get_quadrature_points();
-              for (unsigned int q = 0; q < points.size(); ++q)
-                {
-                  const unsigned int comp =
-                    fe.system_to_component_index(q).first;
-                  if (fe_mask[comp])
-                    ::dealii::internal::ElementAccess<VectorType>::set(
-                      points[q][fe_to_real[comp]], dofs[q], vector);
-                }
-            }
+        for (const auto &cell :
+             dh.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+          {
+            fe_v.reinit(cell);
+            cell->get_dof_indices(dofs);
+            const std::vector<Point<spacedim>> &points =
+              fe_v.get_quadrature_points();
+            for (unsigned int q = 0; q < points.size(); ++q)
+              {
+                const unsigned int comp = fe.system_to_component_index(q).first;
+                if (fe_mask[comp])
+                  ::dealii::internal::ElementAccess<VectorType>::set(
+                    points[q][fe_to_real[comp]], dofs[q], vector);
+              }
+          }
       }
     else
       {
@@ -824,10 +820,10 @@ namespace VectorTools
   {
     // Create a small lambda capture wrapping the function map and call the
     // internal implementation
-    const auto function_map = [&functions](
-      const typename DoFHandler<dim, spacedim>::active_cell_iterator &cell)
-      -> const Function<spacedim, typename VectorType::value_type> *
-    {
+    const auto function_map =
+      [&functions](
+        const typename DoFHandler<dim, spacedim>::active_cell_iterator &cell)
+      -> const Function<spacedim, typename VectorType::value_type> * {
       const auto function = functions.find(cell->material_id());
       if (function != functions.end())
         return function->second;
@@ -918,10 +914,8 @@ namespace VectorTools
     Assert(dof1.get_fe_collection() == dof2.get_fe_collection(),
            ExcMessage(
              "The FECollections of both DoFHandler objects must match"));
-    Assert(u1.size() == dof1.n_dofs(),
-           ExcDimensionMismatch(u1.size(), dof1.n_dofs()));
-    Assert(u2.size() == dof2.n_dofs(),
-           ExcDimensionMismatch(u2.size(), dof2.n_dofs()));
+    AssertDimension(u1.size(), dof1.n_dofs());
+    AssertDimension(u2.size(), dof2.n_dofs());
 
     Vector<typename VectorType::value_type> cache;
 

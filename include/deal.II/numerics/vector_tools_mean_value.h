@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,19 +19,33 @@
 
 #include <deal.II/base/config.h>
 
-#include <deal.II/fe/mapping_q1.h>
+#include <vector>
 
 DEAL_II_NAMESPACE_OPEN
 
+#ifndef DOXYGEN
+// forward declarations
 template <int dim, int spacedim>
 class DoFHandler;
+template <int dim, int spacedim>
+class Mapping;
+template <int dim>
+class Quadrature;
+namespace hp
+{
+  template <int dim, int spacedim>
+  class MappingCollection;
+  template <int dim>
+  class QCollection;
+} // namespace hp
+#endif
 
 namespace VectorTools
 {
   /**
    * Mean value operations
    */
-  //@{
+  /** @{ */
 
   /**
    * Subtract the (algebraic) mean value from a vector.
@@ -112,6 +126,20 @@ namespace VectorTools
    */
   template <int dim, typename VectorType, int spacedim>
   typename VectorType::value_type
+  compute_mean_value(
+    const hp::MappingCollection<dim, spacedim> &mapping_collection,
+    const DoFHandler<dim, spacedim> &           dof,
+    const hp::QCollection<dim> &                q_collection,
+    const VectorType &                          v,
+    const unsigned int                          component);
+
+  /**
+   * Calls the other compute_mean_value() function, see above, for the non-hp
+   * case. That means, it requires a single FiniteElement, a single Quadrature,
+   * and a single Mapping object.
+   */
+  template <int dim, typename VectorType, int spacedim>
+  typename VectorType::value_type
   compute_mean_value(const Mapping<dim, spacedim> &   mapping,
                      const DoFHandler<dim, spacedim> &dof,
                      const Quadrature<dim> &          quadrature,
@@ -120,7 +148,7 @@ namespace VectorTools
 
   /**
    * Call the other compute_mean_value() function, see above, with
-   * <tt>mapping=MappingQGeneric@<dim@>(1)</tt>.
+   * <tt>mapping=MappingQ@<dim@>(1)</tt>.
    */
   template <int dim, typename VectorType, int spacedim>
   typename VectorType::value_type
@@ -128,7 +156,7 @@ namespace VectorTools
                      const Quadrature<dim> &          quadrature,
                      const VectorType &               v,
                      const unsigned int               component);
-  //@}
+  /** @} */
 } // namespace VectorTools
 
 DEAL_II_NAMESPACE_CLOSE

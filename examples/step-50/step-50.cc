@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2019 - 2020 by the deal.II authors
+ * Copyright (C) 2019 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -37,11 +37,13 @@
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_q1.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_refinement.h>
 #include <deal.II/grid/tria.h>
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/lac/dynamic_sparsity_pattern.h>
+#include <deal.II/lac/sparsity_tools.h>
 #include <deal.II/lac/solver_cg.h>
 
 // We use the same strategy as in step-40 to switch between PETSc and
@@ -327,7 +329,7 @@ bool Settings::try_parse(const std::string &prm_filename)
     {
       std::cout << "****  Error: No input file provided!\n"
                 << "****  Error: Call this program as './step-50 input.prm\n"
-                << "\n"
+                << '\n'
                 << "****  You may want to use one of the input files in this\n"
                 << "****  directory, or use the following default values\n"
                 << "****  to create an input file:\n";
@@ -374,7 +376,7 @@ bool Settings::try_parse(const std::string &prm_filename)
 // MatrixFreeOperators::LaplaceOperator class which defines `local_apply()`,
 // `compute_diagonal()`, and `set_coefficient()` functions internally. Note that
 // the polynomial degree is a template parameter of this class. This is
-// necesary for the matrix-free code.
+// necessary for the matrix-free code.
 template <int dim, int degree>
 class LaplaceProblem
 {
@@ -487,8 +489,8 @@ void LaplaceProblem<dim, degree>::setup_system()
 
   dof_handler.distribute_dofs(fe);
 
-  DoFTools::extract_locally_relevant_dofs(dof_handler, locally_relevant_dofs);
-  locally_owned_dofs = dof_handler.locally_owned_dofs();
+  locally_relevant_dofs = DoFTools::extract_locally_relevant_dofs(dof_handler);
+  locally_owned_dofs    = dof_handler.locally_owned_dofs();
 
   solution.reinit(locally_owned_dofs, mpi_communicator);
   right_hand_side.reinit(locally_owned_dofs, mpi_communicator);
@@ -594,10 +596,9 @@ void LaplaceProblem<dim, degree>::setup_multigrid()
 
           for (unsigned int level = 0; level < n_levels; ++level)
             {
-              IndexSet relevant_dofs;
-              DoFTools::extract_locally_relevant_level_dofs(dof_handler,
-                                                            level,
-                                                            relevant_dofs);
+              const IndexSet relevant_dofs =
+                DoFTools::extract_locally_relevant_level_dofs(dof_handler,
+                                                              level);
               AffineConstraints<double> level_constraints;
               level_constraints.reinit(relevant_dofs);
               level_constraints.add_lines(
@@ -642,10 +643,9 @@ void LaplaceProblem<dim, degree>::setup_multigrid()
 
           for (unsigned int level = 0; level < n_levels; ++level)
             {
-              IndexSet dof_set;
-              DoFTools::extract_locally_relevant_level_dofs(dof_handler,
-                                                            level,
-                                                            dof_set);
+              const IndexSet dof_set =
+                DoFTools::extract_locally_relevant_level_dofs(dof_handler,
+                                                              level);
 
               {
 #ifdef USE_PETSC_LA
@@ -828,10 +828,8 @@ void LaplaceProblem<dim, degree>::assemble_multigrid()
     triangulation.n_global_levels());
   for (unsigned int level = 0; level < triangulation.n_global_levels(); ++level)
     {
-      IndexSet dof_set;
-      DoFTools::extract_locally_relevant_level_dofs(dof_handler,
-                                                    level,
-                                                    dof_set);
+      const IndexSet dof_set =
+        DoFTools::extract_locally_relevant_level_dofs(dof_handler, level);
       boundary_constraints[level].reinit(dof_set);
       boundary_constraints[level].add_lines(
         mg_constrained_dofs.get_refinement_edge_indices(level));
@@ -919,7 +917,7 @@ void LaplaceProblem<dim, degree>::assemble_multigrid()
 // Finally, the system_rhs vector is of type LA::MPI::Vector, but the
 // MatrixFree class only work for
 // dealii::LinearAlgebra::distributed::Vector.  Therefore we must
-// compute the right-hand side using MatrixFree funtionality and then
+// compute the right-hand side using MatrixFree functionality and then
 // use the functions in the `ChangeVectorType` namespace to copy it to
 // the correct type.
 template <int dim, int degree>
@@ -1250,8 +1248,6 @@ struct CopyData
     : cell_index(numbers::invalid_unsigned_int)
     , value(0.)
   {}
-
-  CopyData(const CopyData &) = default;
 
   struct FaceData
   {

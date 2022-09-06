@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -59,7 +59,7 @@ test()
           triangulation.begin_active();
         for (; cell != triangulation.end(); ++cell)
           {
-            deallog << cell->subdomain_id() << " ";
+            deallog << cell->subdomain_id() << ' ';
           }
         deallog << std::endl;
       }

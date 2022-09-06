@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2013 - 2020 by the deal.II authors
+ * Copyright (C) 2013 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -698,10 +698,8 @@ namespace Step51
     PerTaskData &                                         task_data)
   {
     // Construct iterator for dof_handler_local for FEValues reinit function.
-    typename DoFHandler<dim>::active_cell_iterator loc_cell(&triangulation,
-                                                            cell->level(),
-                                                            cell->index(),
-                                                            &dof_handler_local);
+    const typename DoFHandler<dim>::active_cell_iterator loc_cell =
+      cell->as_dof_handler_iterator(dof_handler_local);
 
     const unsigned int n_q_points =
       scratch.fe_values_local.get_quadrature().size();
@@ -1128,16 +1126,14 @@ namespace Step51
     PostProcessScratchData &                              scratch,
     unsigned int &)
   {
-    typename DoFHandler<dim>::active_cell_iterator loc_cell(&triangulation,
-                                                            cell->level(),
-                                                            cell->index(),
-                                                            &dof_handler_local);
+    const typename DoFHandler<dim>::active_cell_iterator loc_cell =
+      cell->as_dof_handler_iterator(dof_handler_local);
 
     scratch.fe_values_local.reinit(loc_cell);
     scratch.fe_values.reinit(cell);
 
-    FEValuesExtractors::Vector fluxes(0);
-    FEValuesExtractors::Scalar scalar(dim);
+    const FEValuesExtractors::Vector fluxes(0);
+    const FEValuesExtractors::Scalar scalar(dim);
 
     const unsigned int n_q_points = scratch.fe_values.get_quadrature().size();
     const unsigned int dofs_per_cell = scratch.fe_values.dofs_per_cell;
@@ -1316,7 +1312,7 @@ namespace Step51
               Vector<float> estimated_error_per_cell(
                 triangulation.n_active_cells());
 
-              FEValuesExtractors::Scalar scalar(dim);
+              const FEValuesExtractors::Scalar scalar(dim);
               std::map<types::boundary_id, const Function<dim> *>
                 neumann_boundary;
               KellyErrorEstimator<dim>::estimate(dof_handler_local,

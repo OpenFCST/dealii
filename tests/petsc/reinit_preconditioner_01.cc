@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2018 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -98,7 +98,6 @@ main(int argc, char **argv)
 
   test<PETScWrappers::PreconditionJacobi>();
   test<PETScWrappers::PreconditionBlockJacobi>();
-  test<PETScWrappers::PreconditionEisenstat>();
   test<PETScWrappers::PreconditionBoomerAMG>();
   test<PETScWrappers::PreconditionParaSails>();
   test<PETScWrappers::PreconditionNone>();

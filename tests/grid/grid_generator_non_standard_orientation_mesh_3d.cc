@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -63,7 +63,7 @@ plot_all_info(const Triangulation<dim> &tria)
         {
           deallog << cell->line_orientation(line_index) << "  ";
         } // line_index
-      deallog << "}" << std::endl << std::endl;
+      deallog << '}' << std::endl << std::endl;
     } // cell
 }
 

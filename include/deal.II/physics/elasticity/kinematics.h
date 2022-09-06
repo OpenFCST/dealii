@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2019 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -34,21 +34,20 @@ namespace Physics
     /**
      * A collection of tensor definitions for deformation and strain measures,
      * as well as a few special transformations, that conform to notation used
-     in
-     * standard scientific literature, in particular the books of
+     * in standard scientific literature, in particular the books of
      * Holzapfel (2007) and Wriggers (2008). The citation for these references,
      * as well as other notation used here, can be found in the description for
      * the Physics::Elasticity namespace.
-
-     * @note These hold specifically for the codimension
-     * 0 case, where the metric tensor is the identity tensor.
-*/
+     *
+     * @note These hold specifically for the codimension 0 case,
+     * where the metric tensor is the identity tensor.
+     */
     namespace Kinematics
     {
       /**
        * @name Deformation tensors
        */
-      //@{
+      /** @{ */
 
       /**
        * Return the deformation gradient tensor,
@@ -135,12 +134,12 @@ namespace Physics
       DEAL_II_ALWAYS_INLINE SymmetricTensor<2, dim, Number>
                             b(const Tensor<2, dim, Number> &F);
 
-      //@}
+      /** @} */
 
       /**
        * @name Strain tensors
        */
-      //@{
+      /** @{ */
 
       /**
        * Return the symmetric Green-Lagrange strain tensor,
@@ -194,12 +193,12 @@ namespace Physics
       DEAL_II_ALWAYS_INLINE SymmetricTensor<2, dim, Number>
                             e(const Tensor<2, dim, Number> &F);
 
-      //@}
+      /** @} */
 
       /**
        * @name Strain rate tensors
        */
-      //@{
+      /** @{ */
 
       /**
        * Return the spatial velocity gradient tensor,
@@ -263,7 +262,7 @@ namespace Physics
       Tensor<2, dim, Number>
       w(const Tensor<2, dim, Number> &F, const Tensor<2, dim, Number> &dF_dt);
 
-      //@}
+      /** @} */
     } // namespace Kinematics
   }   // namespace Elasticity
 } // namespace Physics
@@ -289,7 +288,10 @@ template <int dim, typename Number>
 inline Tensor<2, dim, Number>
 Physics::Elasticity::Kinematics::F_iso(const Tensor<2, dim, Number> &F)
 {
-  return std::pow(determinant(F), -1.0 / dim) * F;
+  // Make things work with AD types
+  using std::pow;
+  return internal::NumberType<Number>::value(pow(determinant(F), -1.0 / dim)) *
+         F;
 }
 
 
@@ -298,8 +300,9 @@ template <int dim, typename Number>
 inline SymmetricTensor<2, dim, Number>
 Physics::Elasticity::Kinematics::F_vol(const Tensor<2, dim, Number> &F)
 {
-  return internal::NumberType<Number>::value(
-           std::pow(determinant(F), 1.0 / dim)) *
+  // Make things work with AD types
+  using std::pow;
+  return internal::NumberType<Number>::value(pow(determinant(F), 1.0 / dim)) *
          static_cast<SymmetricTensor<2, dim, Number>>(
            unit_symmetric_tensor<dim>());
 }

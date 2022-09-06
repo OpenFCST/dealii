@@ -1,6 +1,6 @@
 //------------------  matrix_vector_faces_common.h  ------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -145,7 +145,7 @@ private:
                                 VectorizedArrayType>::value_type;
     const int actual_degree = data.get_dof_handler().get_fe().degree;
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval_neighbor.reinit(face);
@@ -210,7 +210,7 @@ private:
                                 number,
                                 VectorizedArrayType>::value_type;
     const int actual_degree = data.get_dof_handler().get_fe().degree;
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval.read_dof_values(src);
@@ -349,7 +349,7 @@ private:
                                 VectorizedArrayType>::value_type;
     const int actual_degree = data.get_dof_handler().get_fe().degree;
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval_neighbor.reinit(face);
@@ -416,7 +416,7 @@ private:
                                 number,
                                 VectorizedArrayType>::value_type;
     const int actual_degree = data.get_dof_handler().get_fe().degree;
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval.gather_evaluate(src,
@@ -586,7 +586,7 @@ private:
                                 number,
                                 VectorizedArrayType>::value_type;
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         phi_m.reinit(face);
         phi_m.gather_evaluate(src, EvaluationFlags::values);
@@ -633,10 +633,11 @@ private:
                                 n_components,
                                 number,
                                 VectorizedArrayType>::value_type;
-    value_type u_plus;
-    u_plus = make_vectorized_array<number, VectorizedArrayType::size()>(1.3);
+    value_type u_plus = {};
+    for (unsigned int d = 0; d < n_components; ++d)
+      u_plus[d] = 1.3;
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval.gather_evaluate(src, EvaluationFlags::values);
@@ -774,7 +775,7 @@ do_test(const DoFHandler<dim> &          dof,
   // of degrees of freedom: " << dof.n_dofs() << std::endl; std::cout << "Number
   // of constraints: " << constraints.n_constraints() << std::endl;
 
-  MappingQGeneric<dim> mapping(dof.get_fe().degree + 1);
+  MappingQ<dim> mapping(dof.get_fe().degree + 1);
 
   Vector<number> in(dof.n_dofs()), out(dof.n_dofs());
   Vector<number> out_dist(out);

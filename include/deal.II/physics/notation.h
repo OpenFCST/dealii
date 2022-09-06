@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -293,7 +293,7 @@ namespace Physics
                      int,
                      << "The number of rows in the input matrix is " << arg1
                      << ", but needs to be either " << arg2 << " or " << arg3
-                     << ".");
+                     << '.');
 
 
       /**
@@ -305,8 +305,8 @@ namespace Physics
                      int,
                      int,
                      << "The number of rows in the input matrix is " << arg1
-                     << ", but needs to be either " << arg2 << "," << arg3
-                     << ", or " << arg4 << ".");
+                     << ", but needs to be either " << arg2 << ',' << arg3
+                     << ", or " << arg4 << '.');
 
 
       /**
@@ -318,7 +318,7 @@ namespace Physics
                      int,
                      << "The number of columns in the input matrix is " << arg1
                      << ", but needs to be either " << arg2 << " or " << arg3
-                     << ".");
+                     << '.');
 
 
       /**
@@ -330,14 +330,14 @@ namespace Physics
                      int,
                      int,
                      << "The number of columns in the input matrix is " << arg1
-                     << ", but needs to be either " << arg2 << "," << arg3
-                     << ", or " << arg4 << ".");
+                     << ", but needs to be either " << arg2 << ',' << arg3
+                     << ", or " << arg4 << '.');
 
 
       /**
        * @name Forward operation: Tensor notation to Kelvin notation
        */
-      //@{
+      /** @{ */
 
       /**
        * Convert a scalar value to its compressed vector equivalent.
@@ -505,12 +505,12 @@ namespace Physics
       FullMatrix<Number>
       to_matrix(const SymmetricTensor<4, dim, Number> &st);
 
-      //@}
+      /** @} */
 
       /**
        * @name Reverse operation: Kelvin notation to tensor notation
        */
-      //@{
+      /** @{ */
 
       /**
        * Convert a compressed vector to its equivalent scalar value.
@@ -640,7 +640,7 @@ namespace Physics
       template <typename TensorType, typename Number>
       TensorType
       to_tensor(const FullMatrix<Number> &vec);
-      //@}
+      /** @} */
 
     } // namespace Kelvin
 

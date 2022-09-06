@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -73,7 +73,7 @@ test()
   hp_fe_values1.reinit(cell1);
 
   // Now make a copy of the object and initialize it for the second cell
-  const auto        cell2 = ++dof_handler.begin_active();
+  const auto        cell2 = std::next(dof_handler.begin_active());
   hp::FEValues<dim> hp_fe_values2(hp_fe_values1);
   hp_fe_values2.reinit(cell2);
 

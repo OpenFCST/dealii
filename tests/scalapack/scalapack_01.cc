@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2018 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -49,8 +49,8 @@ test(const unsigned int size, const unsigned int block_size)
       mpi_communicator, size, size, block_size, block_size);
   ScaLAPACKMatrix<NumberType> scalapack_matrix(size, grid, block_size);
 
-  pcout << size << " " << block_size << " " << grid->get_process_grid_rows()
-        << " " << grid->get_process_grid_columns() << std::endl;
+  pcout << size << ' ' << block_size << ' ' << grid->get_process_grid_rows()
+        << ' ' << grid->get_process_grid_columns() << std::endl;
 
   {
     unsigned int index = 0;

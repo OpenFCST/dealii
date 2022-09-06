@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2006 - 2018 by the deal.II authors
+// Copyright (C) 2006 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -30,11 +30,12 @@
 
 
 
-void check(Triangulation<3> &tria)
+void
+check(Triangulation<3> &tria)
 {
   const std::vector<Point<3>> &v = tria.get_vertices();
-  for (unsigned i = 0; i < v.size(); i++)
-    deallog << "["
+  for (unsigned i = 0; i < v.size(); ++i)
+    deallog << '['
             << GridTools::find_closest_vertex(tria,
                                               v[i] +
                                                 Point<3>(0.01, -0.01, 0.01))

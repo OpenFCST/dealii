@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2019 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -39,6 +39,7 @@
 
 #include <deal.II/fe/fe_q.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_in.h>
 #include <deal.II/grid/intergrid_map.h>
 #include <deal.II/grid/tria_accessor.h>
@@ -89,21 +90,19 @@ test()
   // that to build a hash value from it that is then used to assign an
   // active_fe_index
   DoFHandler<dim> dof_handler(triangulation);
-  for (auto &cell : dof_handler.active_cell_iterators())
-    if (cell->is_locally_owned())
-      cell->set_active_fe_index(
-        (cell->active_cell_index() +
-         13 * cell->active_cell_index() * cell->active_cell_index()) %
-        fe.size());
+  for (const auto &cell : dof_handler.active_cell_iterators() |
+                            IteratorFilters::LocallyOwnedCell())
+    cell->set_active_fe_index(
+      (cell->active_cell_index() +
+       13 * cell->active_cell_index() * cell->active_cell_index()) %
+      fe.size());
   dof_handler.distribute_dofs(fe);
 
-  deallog << "Processor: " << Utilities::MPI::this_mpi_process(MPI_COMM_WORLD)
-          << std::endl;
-  deallog << "  n_globally_active_cells: "
+  deallog << "n_globally_active_cells: "
           << triangulation.n_global_active_cells() << std::endl;
-  deallog << "  n_locally_owned_dofs: " << dof_handler.n_locally_owned_dofs()
+  deallog << "n_locally_owned_dofs: " << dof_handler.n_locally_owned_dofs()
           << std::endl;
-  deallog << "  n_global_dofs: " << dof_handler.n_dofs() << std::endl;
+  deallog << "n_global_dofs: " << dof_handler.n_dofs() << std::endl;
 }
 
 

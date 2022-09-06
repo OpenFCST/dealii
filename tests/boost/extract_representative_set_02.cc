@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -22,6 +22,7 @@
 
 #include <deal.II/distributed/tria.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_tools_cache.h>
 
@@ -42,9 +43,9 @@ print(const BoundingBox<2> &box)
   const auto p2 = p.second;
 
   str << p1 << std::endl
-      << p2[0] << " " << p1[1] << std::endl
+      << p2[0] << ' ' << p1[1] << std::endl
       << p2 << std::endl
-      << p1[0] << " " << p2[1] << std::endl
+      << p1[0] << ' ' << p2[1] << std::endl
       << p1 << std::endl;
   return str.str();
 }
@@ -59,9 +60,9 @@ test(const unsigned int n_refinements)
 
   std::vector<BoundingBox<2>> all_boxes(tria.n_locally_owned_active_cells());
   unsigned int                i = 0;
-  for (const auto &cell : tria.active_cell_iterators())
-    if (cell->is_locally_owned())
-      all_boxes[i++] = cell->bounding_box();
+  for (const auto &cell :
+       tria.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+    all_boxes[i++] = cell->bounding_box();
 
   const auto tree  = pack_rtree(all_boxes);
   const auto boxes = extract_rtree_level(tree, 0);

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2020 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -569,6 +569,14 @@
  *       </td></tr>
  *
  *   <tr valign="top">
+ *       <td>step-66</td>
+ *       <td> A matrix-free geometric multigrid solver for a nonlinear problem.
+ *       <br/> Keywords: MatrixFree, Multigrid,
+ *       MGTransferMatrixFree::interpolate_to_mg(), MatrixFreeTools::compute_diagonal(),
+ *       TransfiniteInterpolationManifold, MappingQGeneric
+ *       </td></tr>
+ *
+ *   <tr valign="top">
  *       <td>step-67</td>
  *        <td> Solving the Euler equations of compressible gas dynamics with an
  *        explicit time integrator and high-order discontinuous Galerkin
@@ -598,9 +606,72 @@
  *       </td></tr>
  *
  *   <tr valign="top">
+ *       <td>step-71</td>
+ *       <td> Constitutive modelling: a demonstration of how automatic and symbolic 
+ *       differentiation can be used to rapidly implement a complex coupled constitutive
+ *       law.
+ *       <br/> Keywords: Automatic differentiation, Symbolic differentiation, 
+ *       Constitutive modelling
+ *       </td></tr>
+ *
+ *   <tr valign="top">
+ *       <td>step-72</td>
+ *       <td> A nonlinear elliptic problem: The minimal surface equation.
+ *       Newton's method. Using automatic differentiation to linearize the 
+ *       residual, or to compute the full linear system from an energy
+ *       functional.
+ *       <br/> Keywords: Automatic differentiation, MeshWorker::mesh_loop()
+ *       </td></tr>
+ *
+ *   <tr valign="top">
  *       <td>step-74</td>
  *       <td> The Symmetric interior penalty Galerkin (SIPG) method for Poisson's equation.
  *       <br/> Keywords: MeshWorker::mesh_loop(), FEInterfaceValues, ConvergenceTable
+ *       </td></tr>
+ *
+ *   <tr valign="top">
+ *       <td>step-75</td>
+ *       <td> Solving the Laplace equation on hp-adaptive meshes with MatrixFree
+ *       methods on thousands of processors.
+ *       <br/> Keywords: parallel::distributed::Triangulation, hp::Refinement, MatrixFree
+ *       </td></tr>
+ *
+ *   <tr valign="top">
+ *       <td>step-76</td>
+ *       <td> Like step-67, but for demonstrating MPI-3.0 shared-memory features.
+ *       <br/> Keywords: MatrixFree, MatrixFree::cell_loop()
+ *       </td></tr>
+ *
+ *   <tr valign="top">
+ *       <td>step-77</td>
+ *       <td> The nonlinear minimal surface equation revisited.
+ *       Interfacing with SUNDIALS' KINSOL nonlinear solver.
+ *       </td></tr>
+ *
+ *   <tr valign="top">
+ *       <td>step-78</td>
+ *       <td> Solving the Black-Scholes equation for options pricing in 1d.
+ *       </td></tr>
+ *
+ *   <tr valign="top">
+ *       <td>step-79</td>
+ *       <td> A topology optimization program for elastic media using the solid
+ *       isotropic material penalization (SIMP) formulation.
+ *       </td></tr>
+ *
+ *   <tr valign="top">
+ *       <td>step-81</td>
+ *        <td> Solving the complex-valued time-harmonic Maxwell equations.
+ *       </td></tr>
+ *
+ *   <tr valign="top">
+ *       <td>step-82</td>
+ *        <td> Solving the fourth-order biharmonic equation using a lifting operator approach.
+ *       </td></tr>
+ *
+ *   <tr valign="top">
+ *       <td>step-85</td>
+ *       <td> Solving the Poisson equation using the cut finite element method.
  *       </td></tr>
  *
  * </table>
@@ -708,7 +779,10 @@
  *       step-42,
  *       step-43,
  *       step-50,
- *       step-55
+ *       step-55,
+ *       step-71,
+ *       step-72,
+ *       step-75
  *     </td>
  *   </tr>
  *
@@ -764,9 +838,11 @@
  *       step-50,
  *       step-55,
  *       step-59,
+ *       step-66,
  *       step-67,
  *       step-69,
- *       step-70
+ *       step-70,
+ *       step-75
  *     </td>
  *   </tr>
  *
@@ -786,7 +862,9 @@
  *       step-60,
  *       step-62,
  *       step-69,
- *       step-70
+ *       step-70,
+ *       step-71,
+ *       step-72
  *     </td>
  *   </tr>
  *
@@ -799,6 +877,7 @@
  *       step-32,
  *       step-60,
  *       step-65,
+ *       step-66,
  *       step-67
  *     </td>
  *   </tr>
@@ -845,7 +924,8 @@
  *       step-59,
  *       step-61,
  *       step-67,
- *       step-74
+ *       step-74,
+ *       step-82
  *     </td>
  *   </tr>
  *
@@ -854,7 +934,8 @@
  *     </td>
  *     <td>
  *       step-27,
- *       step-46
+ *       step-46,
+ *       step-75
  *     </td>
  *   </tr>
  *
@@ -865,9 +946,13 @@
  *   </tr>
  *
  *   <tr valign="top">
- *     <td> Computing Jacobians from residuals, automatic differentiation
+ *     <td> Computing Jacobians from residuals, automatic and symbolic differentiation
  *     </td>
- *     <td>step-33</td>
+ *     <td>
+ *       step-33,
+ *       step-71,
+ *       step-72
+ *     </td>
  *   </tr>
  *
  *   <tr valign="top">
@@ -906,7 +991,10 @@
  *       step-48,
  *       step-59,
  *       step-64,
- *       step-67
+ *       step-66,
+ *       step-67,
+ *       step-75,
+ *       step-76
  *     </td>
  *   </tr>
  *
@@ -926,7 +1014,8 @@
  *     </td>
  *     <td>
  *       step-60,
- *       step-70
+ *       step-70,
+ *       step-85
  *     </td>
  *   </tr>
  *
@@ -979,7 +1068,9 @@
  *       step-47,
  *       step-46,
  *       step-58,
- *       step-62
+ *       step-62,
+ *       step-81,
+ *       step-82
  *     </td>
  *   </tr>
  *
@@ -999,7 +1090,9 @@
  *       step-50,
  *       step-56,
  *       step-59,
- *       step-63
+ *       step-63,
+ *       step-66,
+ *       step-75
  *     </td>
  *   </tr>
  *
@@ -1015,7 +1108,9 @@
  *       step-42,
  *       step-50,
  *       step-55,
- *       step-59
+ *       step-59,
+ *       step-66,
+ *       step-75
  *     </td>
  *   </tr>
  *
@@ -1205,7 +1300,10 @@
  *   <tr valign="top">
  *     <td> Fourth-order biharmonic equation
  *     </td>
- *     <td>step-47</td>
+ *     <td>
+ *       step-47, 
+ *       step-82
+ *     </td>
  *   </tr>
  *
  *   <tr valign="top">
@@ -1221,6 +1319,12 @@
  *     <td> The nonlinear Schr&ouml;dinger equation
  *     </td>
  *     <td>step-58</td>
+ *   </tr>
+ *
+ *   <tr valign="top">
+ *     <td> The time-harmonic Maxwell equations
+ *     </td>
+ *     <td>step-81</td>
  *   </tr>
  *
  *   <tr valign="top">

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -17,7 +17,7 @@
 
 // on a test case similar to mapping_real_to_unit_q4_curved, check the
 // implementation of the many-point interface
-// Mapping::transform_points_real_to_unit_cell for both a MappingQGeneric and
+// Mapping::transform_points_real_to_unit_cell for both a MappingQ and
 // MappingFEField
 
 #include <deal.II/base/utilities.h>
@@ -27,7 +27,7 @@
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/mapping_fe_field.h>
-#include <deal.II/fe/mapping_q_generic.h>
+#include <deal.II/fe/mapping_q.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/manifold_lib.h>
@@ -42,7 +42,7 @@ template <int dim, int spacedim>
 void
 test_real_to_unit_cell(const Mapping<dim, spacedim> &mapping)
 {
-  // define a boundary that fits the the vertices of the hyper cube we're
+  // define a boundary that fits the vertices of the hyper cube we're
   // going to create below
   SphericalManifold<dim, spacedim> boundary;
 
@@ -114,9 +114,9 @@ test()
 {
   deallog << "dim=" << dim << ", spacedim=" << spacedim << std::endl;
   deallog << "MappingQ(1): ";
-  test_real_to_unit_cell(MappingQGeneric<dim, spacedim>(1));
+  test_real_to_unit_cell(MappingQ<dim, spacedim>(1));
   deallog << "MappingQ(4): ";
-  test_real_to_unit_cell(MappingQGeneric<dim, spacedim>(4));
+  test_real_to_unit_cell(MappingQ<dim, spacedim>(4));
 
   deallog << "MappingFEField(FESystem(FE_Q(4))): ";
   Triangulation<dim, spacedim> triangulation;

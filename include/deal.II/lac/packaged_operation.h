@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2014 - 2020 by the deal.II authors
+// Copyright (C) 2014 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -198,7 +198,7 @@ public:
   /**
    * @name In-place vector space operations
    */
-  //@{
+  /** @{ */
 
   /**
    * Addition with a PackagedOperation @p second_comp with the same @p Range.
@@ -252,7 +252,7 @@ public:
     *this = *this * number;
     return *this;
   }
-  //@}
+  /** @} */
 
   /**
    * Store the result of the PackagedOperation in a vector v of the @p Range
@@ -280,7 +280,7 @@ public:
 /**
  * @name Vector space operations
  */
-//@{
+/** @{ */
 
 /**
  * @relatesalso PackagedOperation
@@ -360,8 +360,9 @@ operator-(const PackagedOperation<Range> &first_comp,
  * @ingroup LAOperators
  */
 template <typename Range>
-PackagedOperation<Range> operator*(const PackagedOperation<Range> &comp,
-                                   typename Range::value_type      number)
+PackagedOperation<Range>
+operator*(const PackagedOperation<Range> &comp,
+          typename Range::value_type      number)
 {
   PackagedOperation<Range> return_comp;
 
@@ -400,8 +401,9 @@ PackagedOperation<Range> operator*(const PackagedOperation<Range> &comp,
  * @ingroup LAOperators
  */
 template <typename Range>
-PackagedOperation<Range> operator*(typename Range::value_type      number,
-                                   const PackagedOperation<Range> &comp)
+PackagedOperation<Range>
+operator*(typename Range::value_type      number,
+          const PackagedOperation<Range> &comp)
 {
   return comp * number;
 }
@@ -468,13 +470,13 @@ operator-(const Range &offset, const PackagedOperation<Range> &comp)
   return PackagedOperation<Range>(offset) - comp;
 }
 
-//@}
+/** @} */
 
 
 /**
  * @name Creation of a PackagedOperation object
  */
-//@{
+/** @{ */
 
 namespace internal
 {
@@ -521,10 +523,10 @@ namespace internal
  * @ingroup LAOperators
  */
 
-template <typename Range,
-          typename = typename std::enable_if<
-            internal::PackagedOperationImplementation::has_vector_interface<
-              Range>::type::value>::type>
+template <
+  typename Range,
+  typename = std::enable_if_t<internal::PackagedOperationImplementation::
+                                has_vector_interface<Range>::type::value>>
 PackagedOperation<Range>
 operator+(const Range &u, const Range &v)
 {
@@ -566,10 +568,10 @@ operator+(const Range &u, const Range &v)
  * @ingroup LAOperators
  */
 
-template <typename Range,
-          typename = typename std::enable_if<
-            internal::PackagedOperationImplementation::has_vector_interface<
-              Range>::type::value>::type>
+template <
+  typename Range,
+  typename = std::enable_if_t<internal::PackagedOperationImplementation::
+                                has_vector_interface<Range>::type::value>>
 PackagedOperation<Range>
 operator-(const Range &u, const Range &v)
 {
@@ -610,12 +612,12 @@ operator-(const Range &u, const Range &v)
  *
  * @ingroup LAOperators
  */
-template <typename Range,
-          typename = typename std::enable_if<
-            internal::PackagedOperationImplementation::has_vector_interface<
-              Range>::type::value>::type>
-PackagedOperation<Range> operator*(const Range &              u,
-                                   typename Range::value_type number)
+template <
+  typename Range,
+  typename = std::enable_if_t<internal::PackagedOperationImplementation::
+                                has_vector_interface<Range>::type::value>>
+PackagedOperation<Range>
+operator*(const Range &u, typename Range::value_type number)
 {
   return PackagedOperation<Range>(u) * number;
 }
@@ -635,12 +637,12 @@ PackagedOperation<Range> operator*(const Range &              u,
  *
  * @ingroup LAOperators
  */
-template <typename Range,
-          typename = typename std::enable_if<
-            internal::PackagedOperationImplementation::has_vector_interface<
-              Range>::type::value>::type>
-PackagedOperation<Range> operator*(typename Range::value_type number,
-                                   const Range &              u)
+template <
+  typename Range,
+  typename = std::enable_if_t<internal::PackagedOperationImplementation::
+                                has_vector_interface<Range>::type::value>>
+PackagedOperation<Range>
+operator*(typename Range::value_type number, const Range &u)
 {
   return number * PackagedOperation<Range>(u);
 }
@@ -803,7 +805,7 @@ operator*(const PackagedOperation<Range> &              comp,
   return return_comp;
 }
 
-//@}
+/** @} */
 
 DEAL_II_NAMESPACE_CLOSE
 

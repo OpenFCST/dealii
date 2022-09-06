@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2018 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -85,9 +85,9 @@ transfer(std::ostream &out)
     {
       fe_q.push_back(FE_Q_Hierarchical<dim>(deg));
     }
-  DoFHandler<dim>      q_dof_handler(tria);
-  Vector<double>       q_solution;
-  MappingQGeneric<dim> mapping(1);
+  DoFHandler<dim> q_dof_handler(tria);
+  Vector<double>  q_solution;
+  MappingQ<dim>   mapping(1);
 
   // refine a few cells
   typename Triangulation<dim>::active_cell_iterator cell = tria.begin_active(),
@@ -105,6 +105,7 @@ transfer(std::ostream &out)
     typename DoFHandler<dim>::active_cell_iterator cell = q_dof_handler
                                                             .begin_active(),
                                                    endc = q_dof_handler.end();
+
     for (; cell != endc; ++cell, ++counter)
       {
         if (counter < 15)
@@ -136,6 +137,7 @@ transfer(std::ostream &out)
     typename DoFHandler<dim>::active_cell_iterator cell = q_dof_handler
                                                             .begin_active(),
                                                    endc = q_dof_handler.end();
+
     for (; cell != endc; ++cell)
       {
         hp_fe_val.reinit(cell, 0);
@@ -155,8 +157,8 @@ transfer(std::ostream &out)
       }
   }
 
-  SolutionTransfer<dim, Vector<double>, DoFHandler<dim>> q_soltrans(
-    q_dof_handler);
+  SolutionTransfer<dim, Vector<double>> q_soltrans(q_dof_handler);
+
 
 
   // test b): do some coarsening and
@@ -186,6 +188,7 @@ transfer(std::ostream &out)
     typename DoFHandler<dim>::active_cell_iterator cell = q_dof_handler
                                                             .begin_active(),
                                                    endc = q_dof_handler.end();
+
     for (; cell != endc; ++cell, ++counter)
       {
         if (counter > 20 && counter < 90)
@@ -211,6 +214,7 @@ transfer(std::ostream &out)
     typename DoFHandler<dim>::active_cell_iterator cell = q_dof_handler
                                                             .begin_active(),
                                                    endc = q_dof_handler.end();
+
     for (; cell != endc; ++cell)
       {
         hp_fe_val.reinit(cell, 0);

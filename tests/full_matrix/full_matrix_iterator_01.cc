@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -29,7 +29,7 @@ test()
   FullMatrix<double> A(3, 3);
 
   // test prefix operator
-  const IteratorType k = A.begin(), j = ++A.begin();
+  const IteratorType k = A.begin(), j = std::next(A.begin());
 
   AssertThrow(k < j, ExcInternalError());
   AssertThrow(j > k, ExcInternalError());

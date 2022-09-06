@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2020 by the deal.II authors
+ * Copyright (C) 2020 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -31,10 +31,10 @@
 #include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/grid_refinement.h>
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_q1.h>
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_tools.h>
 #include <deal.II/numerics/data_out.h>
-#include <deal.II/fe/mapping_q1.h>
 // Here the discontinuous finite elements and FEInterfaceValues are defined.
 #include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_interface_values.h>
@@ -175,47 +175,6 @@ namespace Step74
 
 
   // @sect3{Auxiliary functions}
-  // The following two auxiliary functions are used to compute
-  // jump terms for $u_h$ and $\nabla u_h$ on a face,
-  // respectively.
-  template <int dim>
-  void get_function_jump(const FEInterfaceValues<dim> &fe_iv,
-                         const Vector<double> &        solution,
-                         std::vector<double> &         jump)
-  {
-    const unsigned int                 n_q = fe_iv.n_quadrature_points;
-    std::array<std::vector<double>, 2> face_values;
-    jump.resize(n_q);
-    for (unsigned int i = 0; i < 2; ++i)
-      {
-        face_values[i].resize(n_q);
-        fe_iv.get_fe_face_values(i).get_function_values(solution,
-                                                        face_values[i]);
-      }
-    for (unsigned int q = 0; q < n_q; ++q)
-      jump[q] = face_values[0][q] - face_values[1][q];
-  }
-
-
-
-  template <int dim>
-  void get_function_gradient_jump(const FEInterfaceValues<dim> &fe_iv,
-                                  const Vector<double> &        solution,
-                                  std::vector<Tensor<1, dim>> & gradient_jump)
-  {
-    const unsigned int          n_q = fe_iv.n_quadrature_points;
-    std::vector<Tensor<1, dim>> face_gradients[2];
-    gradient_jump.resize(n_q);
-    for (unsigned int i = 0; i < 2; ++i)
-      {
-        face_gradients[i].resize(n_q);
-        fe_iv.get_fe_face_values(i).get_function_gradients(solution,
-                                                           face_gradients[i]);
-      }
-    for (unsigned int q = 0; q < n_q; ++q)
-      gradient_jump[q] = face_gradients[0][q] - face_gradients[1][q];
-  }
-
   // This function computes the penalty $\sigma$.
   double get_penalty_factor(const unsigned int fe_degree,
                             const double       cell_extent_left,
@@ -488,9 +447,6 @@ namespace Step74
       const FEInterfaceValues<dim> &fe_iv =
         scratch_data.reinit(cell, f, sf, ncell, nf, nsf);
 
-      const auto &       q_points   = fe_iv.get_quadrature_points();
-      const unsigned int n_q_points = q_points.size();
-
       copy_data.face_data.emplace_back();
       CopyDataFace &     copy_data_face = copy_data.face_data.back();
       const unsigned int n_dofs_face    = fe_iv.n_current_interface_dofs();
@@ -504,24 +460,26 @@ namespace Step74
       const double extent2 = ncell->measure() / ncell->face(nf)->measure();
       const double penalty = get_penalty_factor(degree, extent1, extent2);
 
-      for (unsigned int point = 0; point < n_q_points; ++point)
+      for (const unsigned int point : fe_iv.quadrature_point_indices())
         {
-          for (unsigned int i = 0; i < n_dofs_face; ++i)
-            for (unsigned int j = 0; j < n_dofs_face; ++j)
+          for (const unsigned int i : fe_iv.dof_indices())
+            for (const unsigned int j : fe_iv.dof_indices())
               copy_data_face.cell_matrix(i, j) +=
-                (-diffusion_coefficient *              // - nu
-                   fe_iv.jump(i, point) *              // [v_h]
-                   (fe_iv.average_gradient(j, point) * // ({grad u_h} .
-                    normals[point])                    //  n)
+                (-diffusion_coefficient *                     // - nu
+                   fe_iv.jump_in_shape_values(i, point) *     // [v_h]
+                   (fe_iv.average_of_shape_gradients(j,       //
+                                                     point) * // ({grad u_h} .
+                    normals[point])                           //  n)
 
-                 - diffusion_coefficient *               // - nu
-                     (fe_iv.average_gradient(i, point) * // (grad v_h .
-                      normals[point]) *                  //  n)
-                     fe_iv.jump(j, point)                // [u_h]
+                 -
+                 diffusion_coefficient *                         // - nu
+                   (fe_iv.average_of_shape_gradients(i, point) * // (grad v_h .
+                    normals[point]) *                            //  n)
+                   fe_iv.jump_in_shape_values(j, point)          // [u_h]
 
-                 + diffusion_coefficient * penalty * // + nu sigma
-                     fe_iv.jump(i, point) *          // [v_h]
-                     fe_iv.jump(j, point)            // [u_h]
+                 + diffusion_coefficient * penalty *        // + nu sigma
+                     fe_iv.jump_in_shape_values(i, point) * // [v_h]
+                     fe_iv.jump_in_shape_values(j, point)   // [u_h]
 
                  ) *
                 JxW[point]; // dx
@@ -531,7 +489,7 @@ namespace Step74
     // The following lambda function will then copy data into the
     // global matrix and right-hand side.  Though there are no hanging
     // node constraints in DG discretization, we define an empty
-    // AffineConstraints oject that allows us to use the
+    // AffineConstraints object that allows us to use the
     // AffineConstraints::distribute_local_to_global() functionality.
     AffineConstraints<double> constraints;
     constraints.close();
@@ -706,10 +664,10 @@ namespace Step74
       const unsigned int n_q_points = q_points.size();
 
       std::vector<double> jump(n_q_points);
-      get_function_jump(fe_iv, solution, jump);
+      fe_iv.get_jump_in_function_values(solution, jump);
 
       std::vector<Tensor<1, dim>> grad_jump(n_q_points);
-      get_function_gradient_jump(fe_iv, solution, grad_jump);
+      fe_iv.get_jump_in_function_gradients(solution, grad_jump);
 
       const double h = cell->face(f)->diameter();
 
@@ -872,7 +830,7 @@ namespace Step74
       const unsigned int n_q_points = q_points.size();
 
       std::vector<double> jump(n_q_points);
-      get_function_jump(fe_iv, solution, jump);
+      fe_iv.get_jump_in_function_values(solution, jump);
 
       const double extent1 = cell->measure() / cell->face(f)->measure();
       const double extent2 = ncell->measure() / ncell->face(nf)->measure();

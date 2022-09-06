@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2007 - 2020 by the deal.II authors
+ * Copyright (C) 2007 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -847,8 +847,7 @@ namespace Step31
       stokes_constraints.clear();
       DoFTools::make_hanging_node_constraints(stokes_dof_handler,
                                               stokes_constraints);
-      std::set<types::boundary_id> no_normal_flux_boundaries;
-      no_normal_flux_boundaries.insert(0);
+      const std::set<types::boundary_id> no_normal_flux_boundaries = {0};
       VectorTools::compute_no_normal_flux_constraints(stokes_dof_handler,
                                                       0,
                                                       no_normal_flux_boundaries,
@@ -867,9 +866,9 @@ namespace Step31
     const std::vector<types::global_dof_index> stokes_dofs_per_block =
       DoFTools::count_dofs_per_fe_block(stokes_dof_handler, stokes_sub_blocks);
 
-    const unsigned int n_u = stokes_dofs_per_block[0],
-                       n_p = stokes_dofs_per_block[1],
-                       n_T = temperature_dof_handler.n_dofs();
+    const types::global_dof_index n_u = stokes_dofs_per_block[0],
+                                  n_p = stokes_dofs_per_block[1],
+                                  n_T = temperature_dof_handler.n_dofs();
 
     std::cout << "Number of active cells: " << triangulation.n_active_cells()
               << " (on " << triangulation.n_levels() << " levels)" << std::endl
@@ -919,14 +918,8 @@ namespace Step31
     {
       stokes_matrix.clear();
 
-      BlockDynamicSparsityPattern dsp(2, 2);
-
-      dsp.block(0, 0).reinit(n_u, n_u);
-      dsp.block(0, 1).reinit(n_u, n_p);
-      dsp.block(1, 0).reinit(n_p, n_u);
-      dsp.block(1, 1).reinit(n_p, n_p);
-
-      dsp.collect_sizes();
+      BlockDynamicSparsityPattern dsp(stokes_dofs_per_block,
+                                      stokes_dofs_per_block);
 
       Table<2, DoFTools::Coupling> coupling(dim + 1, dim + 1);
 
@@ -948,14 +941,8 @@ namespace Step31
       Mp_preconditioner.reset();
       stokes_preconditioner_matrix.clear();
 
-      BlockDynamicSparsityPattern dsp(2, 2);
-
-      dsp.block(0, 0).reinit(n_u, n_u);
-      dsp.block(0, 1).reinit(n_u, n_p);
-      dsp.block(1, 0).reinit(n_p, n_u);
-      dsp.block(1, 1).reinit(n_p, n_p);
-
-      dsp.collect_sizes();
+      BlockDynamicSparsityPattern dsp(stokes_dofs_per_block,
+                                      stokes_dofs_per_block);
 
       Table<2, DoFTools::Coupling> coupling(dim + 1, dim + 1);
       for (unsigned int c = 0; c < dim + 1; ++c)
@@ -1133,8 +1120,8 @@ namespace Step31
 
     Amg_preconditioner = std::make_shared<TrilinosWrappers::PreconditionAMG>();
 
-    std::vector<std::vector<bool>> constant_modes;
-    FEValuesExtractors::Vector     velocity_components(0);
+    std::vector<std::vector<bool>>   constant_modes;
+    const FEValuesExtractors::Vector velocity_components(0);
     DoFTools::extract_constant_modes(stokes_dof_handler,
                                      stokes_fe.component_mask(
                                        velocity_components),

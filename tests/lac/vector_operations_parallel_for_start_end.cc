@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2012 - 2018 by the deal.II authors
+// Copyright (C) 2012 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -17,6 +17,7 @@
 // check that internal::VectorOperations::parallel_for works for start-end
 
 #include <deal.II/base/index_set.h>
+#include <deal.II/base/numbers.h>
 
 #include <deal.II/lac/vector_operations_internal.h>
 
@@ -42,7 +43,7 @@ check()
                                         64,
                                         sizeof(Number) * size);
 
-      const Number                                   s = 3.1415;
+      const Number                                   s = numbers::PI;
       internal::VectorOperations::Vector_set<Number> setter(s, val);
 
       // now break the size in chunks

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2018 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -51,7 +51,7 @@ main()
       Triangulation<3> triangulation;
       GridGenerator::cylinder(triangulation);
 
-      const MappingQ<3> mapping(degree, true);
+      const MappingQ<3> mapping(degree);
       const FE_Q<3>     dummy_fe(1);
       DoFHandler<3>     dof_handler(triangulation);
 

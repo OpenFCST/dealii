@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -41,7 +41,7 @@ main(int, char **)
       using namespace FEConforimityTest;
       constexpr int dim = 2;
 
-      for (unsigned int fe_degree = 0; fe_degree < 5; ++fe_degree)
+      for (unsigned int fe_degree = 0; fe_degree < 1; ++fe_degree)
         {
           // H(curl) conformal
           FE_NedelecSZ<dim> fe(fe_degree);

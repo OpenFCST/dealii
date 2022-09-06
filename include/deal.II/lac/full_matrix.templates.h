@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -1216,10 +1216,9 @@ namespace internal
   // LAPACKFullMatrix is only implemented for
   // floats and doubles
   template <typename number>
-  struct Determinant<
-    number,
-    typename std::enable_if<std::is_same<number, float>::value ||
-                            std::is_same<number, double>::value>::type>
+  struct Determinant<number,
+                     std::enable_if_t<std::is_same<number, float>::value ||
+                                      std::is_same<number, double>::value>>
   {
 #ifdef DEAL_II_WITH_LAPACK
     static number
@@ -1697,13 +1696,14 @@ FullMatrix<number>::copy_from(const Tensor<2, dim> &T,
 
 template <typename number>
 template <int dim>
-void FullMatrix<number>::copy_to(Tensor<2, dim> &   T,
-                                 const size_type    src_r_i,
-                                 const size_type    src_r_j,
-                                 const size_type    src_c_i,
-                                 const size_type    src_c_j,
-                                 const unsigned int dst_r,
-                                 const unsigned int dst_c) const
+void
+FullMatrix<number>::copy_to(Tensor<2, dim> &   T,
+                            const size_type    src_r_i,
+                            const size_type    src_r_j,
+                            const size_type    src_c_i,
+                            const size_type    src_c_j,
+                            const unsigned int dst_r,
+                            const unsigned int dst_c) const
 {
   Assert(!this->empty(), ExcEmptyMatrix());
   AssertIndexRange(src_r_j - src_r_i, dim - dst_r);
@@ -1768,13 +1768,13 @@ FullMatrix<number>::print_formatted(std::ostream &     out,
   if (scientific)
     {
       out.setf(std::ios::scientific, std::ios::floatfield);
-      if (!width)
+      if (width == 0u)
         width = precision + 7;
     }
   else
     {
       out.setf(std::ios::fixed, std::ios::floatfield);
-      if (!width)
+      if (width == 0u)
         width = precision + 2;
     }
 
@@ -1792,7 +1792,7 @@ FullMatrix<number>::print_formatted(std::ostream &     out,
       out << std::endl;
     };
 
-  AssertThrow(out, ExcIO());
+  AssertThrow(out.fail() == false, ExcIO());
   // reset output format
   out.flags(old_flags);
   out.precision(old_precision);

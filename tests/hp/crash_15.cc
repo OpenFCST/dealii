@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2018 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -91,7 +91,7 @@ test()
                       << cell->line(line)->nth_active_fe_index(i) << " ("
                       << fe_collection[cell->line(line)->nth_active_fe_index(i)]
                            .get_name()
-                      << ")" << std::endl;
+                      << ')' << std::endl;
 
               cell->line(line)->get_dof_indices(
                 line_dof_indices_1, cell->line(line)->nth_active_fe_index(i));

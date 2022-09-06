@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2018 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -59,7 +59,7 @@ namespace Particles
                                " open handles to memory that was allocated "
                                "via allocate_properties_array() but that has "
                                "not been returned via "
-                               "deallocate_properties_array()."));
+                               "deregister_particle()."));
       }
 
     // Clear vectors and ensure deallocation of memory
@@ -123,6 +123,13 @@ namespace Particles
       ExcMessage(
         "This handle is invalid and cannot be deallocated. This can happen if the "
         "handle was deallocated already before calling this function."));
+
+    Assert(
+      currently_available_handles.size() < locations.size(),
+      ExcMessage(
+        "Trying to deallocate a particle when none are allocated. This can happen if all "
+        "handles were deallocated already before calling this function."));
+
     currently_available_handles.push_back(handle);
     handle = invalid_handle;
 
@@ -158,6 +165,74 @@ namespace Particles
   PropertyPool<dim, spacedim>::n_properties_per_slot() const
   {
     return n_properties;
+  }
+
+
+
+  template <int dim, int spacedim>
+  unsigned int
+  PropertyPool<dim, spacedim>::n_registered_slots() const
+  {
+    Assert(locations.size() == reference_locations.size(),
+           ExcMessage("Number of registered locations is not equal to number "
+                      "of registered reference locations."));
+
+    Assert(locations.size() == ids.size(),
+           ExcMessage("Number of registered locations is not equal to number "
+                      "of registered ids."));
+
+    Assert(locations.size() * n_properties == properties.size(),
+           ExcMessage("Number of registered locations is not equal to number "
+                      "of registered property slots."));
+
+    return locations.size() - currently_available_handles.size();
+  }
+
+
+
+  template <int dim, int spacedim>
+  void
+  PropertyPool<dim, spacedim>::sort_memory_slots(
+    const std::vector<Handle> &handles_to_sort)
+  {
+    std::vector<Point<spacedim>>       sorted_locations;
+    std::vector<Point<dim>>            sorted_reference_locations;
+    std::vector<types::particle_index> sorted_ids;
+    std::vector<double>                sorted_properties;
+
+    sorted_locations.reserve(locations.size());
+    sorted_reference_locations.reserve(reference_locations.size());
+    sorted_ids.reserve(ids.size());
+    sorted_properties.reserve(properties.size());
+
+    for (auto &handle : handles_to_sort)
+      {
+        Assert(handle != invalid_handle,
+               ExcMessage(
+                 "Invalid handle detected during sorting particle memory."));
+
+        sorted_locations.push_back(locations[handle]);
+        sorted_reference_locations.push_back(reference_locations[handle]);
+        sorted_ids.push_back(ids[handle]);
+
+        for (unsigned int j = 0; j < n_properties; ++j)
+          sorted_properties.push_back(properties[handle * n_properties + j]);
+      }
+
+    Assert(sorted_locations.size() ==
+             locations.size() - currently_available_handles.size(),
+           ExcMessage("Number of sorted property handles is not equal to "
+                      "number of currently registered handles: " +
+                      std::to_string(sorted_locations.size()) + " vs " +
+                      std::to_string(locations.size()) + " - " +
+                      std::to_string(currently_available_handles.size())));
+
+    locations           = std::move(sorted_locations);
+    reference_locations = std::move(sorted_reference_locations);
+    ids                 = std::move(sorted_ids);
+    properties          = std::move(sorted_properties);
+
+    currently_available_handles.clear();
   }
 
 

@@ -1,63 +1,60 @@
-//-----------------------------------------------------------
+// ---------------------------------------------------------------------
 //
-//    Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
-//    This file is part of the deal.II library.
+// This file is part of the deal.II library.
 //
-//    The deal.II library is free software; you can use it, redistribute
-//    it, and/or modify it under the terms of the GNU Lesser General
-//    Public License as published by the Free Software Foundation; either
-//    version 2.1 of the License, or (at your option) any later version.
-//    The full text of the license can be found in the file LICENSE.md at
-//    the top level directory of deal.II.
+// The deal.II library is free software; you can use it, redistribute
+// it, and/or modify it under the terms of the GNU Lesser General
+// Public License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+// The full text of the license can be found in the file LICENSE.md at
+// the top level directory of deal.II.
 //
-//---------------------------------------------------------------
+// ---------------------------------------------------------------------
+
 
 #ifndef dealii_sundials_ida_h
 #define dealii_sundials_ida_h
 
 #include <deal.II/base/config.h>
 
-#include <deal.II/base/mpi.h>
 #ifdef DEAL_II_WITH_SUNDIALS
-#  if DEAL_II_SUNDIALS_VERSION_LT(4, 0, 0)
+#  include <deal.II/base/conditional_ostream.h>
+#  include <deal.II/base/exceptions.h>
+#  include <deal.II/base/logstream.h>
+#  include <deal.II/base/mpi_stub.h>
+#  include <deal.II/base/parameter_handler.h>
 
-#    include <deal.II/base/conditional_ostream.h>
-#    include <deal.II/base/exceptions.h>
-#    include <deal.II/base/logstream.h>
-#    include <deal.II/base/parameter_handler.h>
-#    ifdef DEAL_II_WITH_PETSC
-#      include <deal.II/lac/petsc_block_vector.h>
-#      include <deal.II/lac/petsc_vector.h>
-#    endif
-#    include <deal.II/lac/vector.h>
-#    include <deal.II/lac/vector_memory.h>
+#  ifdef DEAL_II_WITH_PETSC
+#    include <deal.II/lac/petsc_block_vector.h>
+#    include <deal.II/lac/petsc_vector.h>
+#  endif
+#  include <deal.II/lac/vector.h>
+#  include <deal.II/lac/vector_memory.h>
 
-#    ifdef DEAL_II_SUNDIALS_WITH_IDAS
-#      include <idas/idas.h>
-#    else
-#      include <ida/ida.h>
-#    endif
+#  ifdef DEAL_II_SUNDIALS_WITH_IDAS
+#    include <idas/idas.h>
+#  else
+#    include <ida/ida.h>
+#  endif
 
-#    include <sundials/sundials_config.h>
-#    if DEAL_II_SUNDIALS_VERSION_LT(3, 0, 0)
-#      include <ida/ida_spbcgs.h>
-#      include <ida/ida_spgmr.h>
-#      include <ida/ida_sptfqmr.h>
-#    endif
-#    include <boost/signals2.hpp>
+#  include <deal.II/sundials/sunlinsol_wrapper.h>
 
-#    include <nvector/nvector_serial.h>
-#    include <sundials/sundials_math.h>
-#    include <sundials/sundials_types.h>
+#  include <boost/signals2.hpp>
 
-#    include <memory>
+#  include <nvector/nvector_serial.h>
+#  include <sundials/sundials_config.h>
+#  include <sundials/sundials_math.h>
+#  include <sundials/sundials_types.h>
+
+#  include <memory>
 
 
 DEAL_II_NAMESPACE_OPEN
 
 // Shorthand notation for IDA error codes.
-#    define AssertIDA(code) Assert(code >= 0, ExcIDAError(code))
+#  define AssertIDA(code) Assert(code >= 0, ExcIDAError(code))
 
 namespace SUNDIALS
 {
@@ -72,9 +69,12 @@ namespace SUNDIALS
    *  - reinit_vector;
    *  - residual;
    *  - setup_jacobian;
-   *  - solve_jacobian_system;
+   *  - solve_jacobian_system/solve_with_jacobian;
    *
-   * Optionally, also the following functions could be rewritten. By default
+   * The function solve_jacobian_system() is deprecated. You should use
+   * solve_with_jacobian() to leverage better non-linear algorithms.
+   *
+   * Optionally, also the following functions could be provided. By default
    * they do nothing, or are not required. If you call the constructor in a way
    * that requires a not-implemented function, an Assertion will be
    * thrown.
@@ -158,16 +158,17 @@ namespace SUNDIALS
    *
    * That is $F(y', y, t) = y' + A y = 0 $
    * where
+   * A =
    * \f[
-   * \begin{matrix}
+   * \begin{pmatrix}
    * 0 & -1 \\
    * k^2 &0
-   * \end{matrix}
+   * \end{pmatrix}
    * \f]
    * and $y(0)=(0, k)$, $y'(0) = (k, 0)$.
    *
-   * The exact solution is $y_0(t) = \sin(k t)$, $y_1(t) = y_0'(t) = k \cos(k
-   *t)$, $y_1'(t) = -k^2 \sin(k t)$.
+   * The exact solution is $y_0(t) = \sin(k t)$, $y_1(t) = y_0'(t)
+   * = k \cos(k t)$, $y_1'(t) = -k^2 \sin(k t)$.
    *
    * The Jacobian to assemble is the following:  $J = \alpha I + A$.
    *
@@ -286,6 +287,9 @@ namespace SUNDIALS
        * @param maximum_order Maximum BDF order
        * @param maximum_non_linear_iterations Maximum number of nonlinear
        * iterations
+       * @param ls_norm_factor Converting factor from the integrator tolerance
+       * to the linear solver tolerance
+       * iterations
        *
        * Error parameters:
        *
@@ -310,6 +314,7 @@ namespace SUNDIALS
         const double       minimum_step_size             = 1e-6,
         const unsigned int maximum_order                 = 5,
         const unsigned int maximum_non_linear_iterations = 10,
+        const double       ls_norm_factor                = 0,
         // Error parameters
         const double absolute_tolerance                = 1e-6,
         const double relative_tolerance                = 1e-5,
@@ -331,6 +336,7 @@ namespace SUNDIALS
         , reset_type(reset_type)
         , maximum_non_linear_iterations_ic(maximum_non_linear_iterations_ic)
         , maximum_non_linear_iterations(maximum_non_linear_iterations)
+        , ls_norm_factor(ls_norm_factor)
       {}
 
       /**
@@ -452,6 +458,9 @@ namespace SUNDIALS
                        });
         prm.add_parameter("Maximum number of nonlinear iterations",
                           maximum_non_linear_iterations_ic);
+        prm.add_parameter(
+          "Factor to use when converting from the integrator tolerance to the linear solver tolerance",
+          ls_norm_factor);
         prm.leave_subsection();
       }
 
@@ -537,6 +546,12 @@ namespace SUNDIALS
        * Maximum number of iterations for Newton method during time advancement.
        */
       unsigned int maximum_non_linear_iterations;
+
+      /**
+       * Factor to use when converting from the integrator tolerance to the
+       * linear solver tolerance
+       */
+      double ls_norm_factor;
     };
 
     /**
@@ -575,13 +590,22 @@ namespace SUNDIALS
      * choose how these are made consistent, using the same three options that
      * you used for the initial conditions in `reset_type`.
      *
-     * The MPI communicator is simply ignored in the serial case.
-     *
      * @param data IDA configuration data
-     * @param mpi_comm MPI communicator
+     *
+     * @note With SUNDIALS 6 and later this constructor sets up logging
+     * objects to only work on the present processor (i.e., results are only
+     * communicated over MPI_COMM_SELF).
      */
-    IDA(const AdditionalData &data     = AdditionalData(),
-        const MPI_Comm &      mpi_comm = MPI_COMM_WORLD);
+    IDA(const AdditionalData &data = AdditionalData());
+
+    /**
+     * Constructor.
+     *
+     * @param data IDA configuration data. Same as the other constructor.
+     * @param mpi_comm MPI Communicator over which logging operations are
+     * computed. Only used in SUNDIALS 6 and newer.
+     */
+    IDA(const AdditionalData &data, const MPI_Comm &mpi_comm);
 
     /**
      * Destructor.
@@ -644,7 +668,8 @@ namespace SUNDIALS
      * Compute Jacobian. This function is called by IDA any time a Jacobian
      * update is required. The user should compute the Jacobian (or update all
      * the variables that allow the application of the Jacobian). This function
-     * is called by IDA once, before any call to solve_jacobian_system().
+     * is called by IDA once, before any call to solve_jacobian_system() or
+     * solve_with_jacobian().
      *
      * The Jacobian $J$ should be a (possibly inexact) computation of
      * \f[
@@ -655,13 +680,15 @@ namespace SUNDIALS
      * If the user uses a matrix based computation of the Jacobian, than this
      * is the right place where an assembly routine should be called to
      * assemble both a matrix and a preconditioner for the Jacobian system.
-     * Subsequent calls (possibly more than one) to solve_jacobian_system() can
-     * assume that this function has been called at least once.
+     * Subsequent calls (possibly more than one) to solve_jacobian_system() or
+     * solve_with_jacobian() can assume that this function has
+     * been called at least once.
      *
      * Notice that no assumption is made by this interface on what the user
      * should do in this function. IDA only assumes that after a call to
-     * setup_jacobian() it is possible to call solve_jacobian_system(), to
-     * obtain a solution $x$ to the system $J x = b$.
+     * setup_jacobian() it is possible to call solve_jacobian_system() or
+     * solve_with_jacobian() to obtain a solution $x$ to the
+     * system $J x = b$.
      *
      * This function should return:
      * - 0: Success
@@ -703,9 +730,58 @@ namespace SUNDIALS
      *       then last function will be attempted again
      * - <0: Unrecoverable error the computation will be aborted and an
      * assertion will be thrown.
+     *
+     * @deprecated Use solve_with_jacobian() instead which also uses a numerical
+     * tolerance.
      */
+    DEAL_II_DEPRECATED
     std::function<int(const VectorType &rhs, VectorType &dst)>
       solve_jacobian_system;
+
+    /**
+     * Solve the Jacobian linear system up to a specified tolerance. This
+     * function will be called by IDA (possibly several times) after
+     * setup_jacobian() has been called at least once. IDA tries to do its best
+     * to call setup_jacobian() the minimum number of times. If convergence can
+     * be achieved without updating the Jacobian, then IDA does not call
+     * setup_jacobian() again. If, on the contrary, internal IDA convergence
+     * tests fail, then IDA calls again setup_jacobian() with updated vectors
+     * and coefficients so that successive calls to
+     * solve_with_jacobian() lead to better convergence in the
+     * Newton process.
+     *
+     * The Jacobian $J$ should be (an approximation of) the system Jacobian
+     * \f[
+     *   J=\dfrac{\partial G}{\partial y} = \dfrac{\partial F}{\partial y} +
+     *  \alpha \dfrac{\partial F}{\partial \dot y}.
+     * \f]
+     *
+     * Arguments to the function are:
+     *
+     * @param[in] rhs The system right hand side to solve for.
+     * @param[out] dst The solution of $J^{-1} * src$.
+     * @param[in] tolerance The tolerance with which to solve the linear system
+     *   of equations.
+     *
+     * A call to this function should store in `dst` the result of $J^{-1}$
+     * applied to `src`, i.e., the solution of the linear system `J*dst = src`.
+     * It is the user's responsibility to set up proper solvers and
+     * preconditioners either inside this function, or already within the
+     * `setup_jacobian()` function. (The latter is, for example, what the
+     * step-77 program does: All expensive operations happen in
+     * `setup_jacobian()`, given that that function is called far less often
+     * than the current one.)
+     *
+     * This function should return:
+     * - 0: Success
+     * - >0: Recoverable error (IDAReinit will be called if this happens, and
+     *       then the last function will be attempted again).
+     * - <0: Unrecoverable error the computation will be aborted and an
+     * assertion will be thrown.
+     */
+    std::function<
+      int(const VectorType &rhs, VectorType &dst, const double tolerance)>
+      solve_with_jacobian;
 
     /**
      * Process solution. This function is called by IDA at fixed time steps,
@@ -753,6 +829,12 @@ namespace SUNDIALS
      * contains algebraic constraints, or Lagrange multipliers), you should
      * overwrite this function in order to return only the differential
      * components of your system.
+     *
+     * When running in parallel, every process will call this function
+     * independently, and synchronization will happen at the end of the
+     * initialization setup to communicate what components are local. Make sure
+     * you only return the locally owned (or locally relevant) components, in
+     * order to minimize communication between processes.
      */
     std::function<IndexSet()> differential_components;
 
@@ -795,47 +877,33 @@ namespace SUNDIALS
     /**
      * IDA configuration data.
      */
-    AdditionalData data;
+    const AdditionalData data;
 
     /**
      * IDA memory object.
      */
     void *ida_mem;
 
+#  if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
     /**
-     * IDA solution vector.
+     * A context object associated with the IDA solver.
      */
-    N_Vector yy;
+    SUNContext ida_ctx;
+#  endif
 
     /**
-     * IDA solution derivative vector.
+     * MPI communicator. Only used for SUNDIALS' logging routines - the actual
+     * solve routines will use the communicator provided by the vector class.
      */
-    N_Vector yp;
-
-    /**
-     * IDA absolute tolerances vector.
-     */
-    N_Vector abs_tolls;
-
-    /**
-     * IDA differential components vector.
-     */
-    N_Vector diff_id;
-
-    /**
-     * MPI communicator. SUNDIALS solver runs happily in
-     * parallel. Note that if the library is compiled without MPI
-     * support, MPI_Comm is aliased as int.
-     */
-    MPI_Comm communicator;
+    MPI_Comm mpi_communicator;
 
     /**
      * Memory pool of vectors.
      */
     GrowingVectorMemory<VectorType> mem;
 
-#    ifdef DEAL_II_WITH_PETSC
-#      ifdef PETSC_USE_COMPLEX
+#  ifdef DEAL_II_WITH_PETSC
+#    ifdef PETSC_USE_COMPLEX
     static_assert(!std::is_same<VectorType, PETScWrappers::MPI::Vector>::value,
                   "Sundials does not support complex scalar types, "
                   "but PETSc is configured to use a complex scalar type!");
@@ -844,15 +912,13 @@ namespace SUNDIALS
       !std::is_same<VectorType, PETScWrappers::MPI::BlockVector>::value,
       "Sundials does not support complex scalar types, "
       "but PETSc is configured to use a complex scalar type!");
-#      endif // PETSC_USE_COMPLEX
-#    endif   // DEAL_II_WITH_PETSC
+#    endif // PETSC_USE_COMPLEX
+#  endif   // DEAL_II_WITH_PETSC
   };
-
 } // namespace SUNDIALS
 
 DEAL_II_NAMESPACE_CLOSE
 
-#  endif
 #endif // DEAL_II_WITH_SUNDIALS
 
 #endif

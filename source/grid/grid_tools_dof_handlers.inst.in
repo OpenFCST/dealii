@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2019 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -249,19 +249,21 @@ for (X : SEQUENTIAL_TRIANGULATION_AND_DOFHANDLER;
     namespace GridTools
     \{
 
-      template bool orthogonal_equality<X::active_face_iterator>(
+      template bool
+      orthogonal_equality<X::active_face_iterator>(
         std::bitset<3> &,
         const X::active_face_iterator &,
         const X::active_face_iterator &,
-        const int,
+        const unsigned int,
         const Tensor<1, deal_II_space_dimension> &,
         const FullMatrix<double> &);
 
-      template bool orthogonal_equality<X::face_iterator>(
+      template bool
+      orthogonal_equality<X::face_iterator>(
         std::bitset<3> &,
         const X::face_iterator &,
         const X::face_iterator &,
-        const int,
+        const unsigned int,
         const Tensor<1, deal_II_space_dimension> &,
         const FullMatrix<double> &);
 
@@ -269,7 +271,7 @@ for (X : SEQUENTIAL_TRIANGULATION_AND_DOFHANDLER;
       orthogonal_equality<X::active_face_iterator>(
         const X::active_face_iterator &,
         const X::active_face_iterator &,
-        const int,
+        const unsigned int,
         const Tensor<1, deal_II_space_dimension> &,
         const FullMatrix<double> &);
 
@@ -277,7 +279,7 @@ for (X : SEQUENTIAL_TRIANGULATION_AND_DOFHANDLER;
       orthogonal_equality<X::face_iterator>(
         const X::face_iterator &,
         const X::face_iterator &,
-        const int,
+        const unsigned int,
         const Tensor<1, deal_II_space_dimension> &,
         const FullMatrix<double> &);
 
@@ -297,7 +299,7 @@ for (X : SEQUENTIAL_TRIANGULATION_AND_DOFHANDLERS;
         const X &,
         const types::boundary_id,
         const types::boundary_id,
-        const int,
+        const unsigned int,
         std::vector<PeriodicFacePair<X::cell_iterator>> &,
         const Tensor<1, X::space_dimension> &,
         const FullMatrix<double> &);
@@ -306,7 +308,7 @@ for (X : SEQUENTIAL_TRIANGULATION_AND_DOFHANDLERS;
       collect_periodic_faces<X>(
         const X &,
         const types::boundary_id,
-        const int,
+        const unsigned int,
         std::vector<PeriodicFacePair<X::cell_iterator>> &,
         const Tensor<1, X::space_dimension> &,
         const FullMatrix<double> &);
@@ -332,7 +334,7 @@ for (deal_II_dimension : DIMENSIONS; deal_II_space_dimension : SPACE_DIMENSIONS)
                                                    deal_II_space_dimension> &,
         const types::boundary_id,
         const types::boundary_id,
-        const int,
+        const unsigned int,
         std::vector<PeriodicFacePair<parallel::distributed::Triangulation<
           deal_II_dimension,
           deal_II_space_dimension>::cell_iterator>> &,
@@ -349,7 +351,7 @@ for (deal_II_dimension : DIMENSIONS; deal_II_space_dimension : SPACE_DIMENSIONS)
         const parallel::distributed::Triangulation<deal_II_dimension,
                                                    deal_II_space_dimension> &,
         const types::boundary_id,
-        const int,
+        const unsigned int,
         std::vector<PeriodicFacePair<parallel::distributed::Triangulation<
           deal_II_dimension,
           deal_II_space_dimension>::cell_iterator>> &,
@@ -380,7 +382,7 @@ for (deal_II_dimension : DIMENSIONS; deal_II_space_dimension : SPACE_DIMENSIONS)
                                               deal_II_space_dimension> &,
         const types::boundary_id,
         const types::boundary_id,
-        const int,
+        const unsigned int,
         std::vector<PeriodicFacePair<parallel::shared::Triangulation<
           deal_II_dimension,
           deal_II_space_dimension>::cell_iterator>> &,
@@ -397,7 +399,7 @@ for (deal_II_dimension : DIMENSIONS; deal_II_space_dimension : SPACE_DIMENSIONS)
         const parallel::shared::Triangulation<deal_II_dimension,
                                               deal_II_space_dimension> &,
         const types::boundary_id,
-        const int,
+        const unsigned int,
         std::vector<PeriodicFacePair<parallel::shared::Triangulation<
           deal_II_dimension,
           deal_II_space_dimension>::cell_iterator>> &,

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,6 +25,7 @@
 #include <deal.II/base/utilities.h>
 
 #include <cstddef>
+#include <iterator>
 #include <vector>
 
 DEAL_II_NAMESPACE_OPEN
@@ -118,7 +119,7 @@ public:
   /**
    * @name Size information
    */
-  //@{
+  /** @{ */
 
   /**
    * Number of blocks in index field.
@@ -147,7 +148,7 @@ public:
   std::string
   to_string() const;
 
-  //@}
+  /** @} */
 
   /**
    * @name Index conversion
@@ -157,7 +158,7 @@ public:
    * object. If applied to other objects, the numbers obtained from these
    * functions are meaningless.
    */
-  //@{
+  /** @{ */
 
   /**
    * Return the block and the index within that block for the global index @p
@@ -178,7 +179,7 @@ public:
    */
   size_type
   block_start(const unsigned int i) const;
-  //@}
+  /** @} */
 
   /**
    * Copy operator.
@@ -331,8 +332,8 @@ BlockIndices::global_to_local(const size_type i) const
   Assert(n_blocks > 0, ExcLowerRangeType<size_type>(i, size_type(1)));
 
   // start_indices[0] == 0 so we might as well start from the next one
-  const auto it =
-    --std::upper_bound(++start_indices.begin(), start_indices.end(), i);
+  const auto it = std::prev(
+    std::upper_bound(std::next(start_indices.begin()), start_indices.end(), i));
 
   return {std::distance(start_indices.begin(), it), i - *it};
 }

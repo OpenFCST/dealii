@@ -1,6 +1,6 @@
 //-----------------------------------------------------------
 //
-//    Copyright (C) 2020 by the deal.II authors
+//    Copyright (C) 2020 - 2022 by the deal.II authors
 //
 //    This file is part of the deal.II library.
 //
@@ -33,6 +33,12 @@
 
 using namespace SUNDIALS::internal;
 
+// For better compatibility with older versions of SUNDIALS just define this as
+// a static member so we can use it whenever we need it
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+static SUNContext global_nvector_context;
+#endif
+
 // anonymous namespace groups helper functions for testing
 namespace
 {
@@ -63,7 +69,7 @@ namespace
   }
 
   /**
-   * Create a vector for testing and intialize all entries to @p value.
+   * Create a vector for testing and initialize all entries to @p value.
    */
   template <typename VectorType>
   VectorType
@@ -199,10 +205,20 @@ template <typename VectorType>
 void
 test_nvector_view_unwrap()
 {
-  auto       vector         = create_test_vector<VectorType>();
-  const auto const_vector   = create_test_vector<VectorType>();
-  auto       n_vector       = make_nvector_view(vector);
-  auto       const_n_vector = make_nvector_view(const_vector);
+  auto       vector       = create_test_vector<VectorType>();
+  const auto const_vector = create_test_vector<VectorType>();
+  auto       n_vector     = make_nvector_view(vector
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                    ,
+                                    global_nvector_context
+#endif
+  );
+  auto const_n_vector = make_nvector_view(const_vector
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                          ,
+                                          global_nvector_context
+#endif
+  );
 
   Assert(n_vector != nullptr, NVectorTestError());
   Assert((n_vector)->content != nullptr, NVectorTestError());
@@ -229,7 +245,7 @@ test_nvector_view_unwrap()
       unwrap_nvector<VectorType>(const_n_vector);
       Assert(false, NVectorTestError());
     }
-  catch (ExcMessage e)
+  catch (const ExcMessage &e)
     {
       const std::string msg(e.what());
       Assert(msg.find(
@@ -248,8 +264,14 @@ void
 test_get_vector_id()
 {
   auto vector   = create_test_vector<VectorType>();
-  auto n_vector = make_nvector_view(vector);
-  auto id       = N_VGetVectorID(n_vector);
+  auto n_vector = make_nvector_view(vector
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                    ,
+                                    global_nvector_context
+#endif
+
+  );
+  auto id = N_VGetVectorID(n_vector);
   Assert(id == SUNDIALS_NVEC_CUSTOM, NVectorTestError());
   deallog << "test_get_vector_id OK" << std::endl;
 }
@@ -261,8 +283,13 @@ void
 test_clone()
 {
   auto vector   = create_test_vector<VectorType>();
-  auto n_vector = make_nvector_view(vector);
-  auto cloned   = N_VClone(n_vector);
+  auto n_vector = make_nvector_view(vector
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                    ,
+                                    global_nvector_context
+#endif
+  );
+  auto cloned = N_VClone(n_vector);
 
   Assert(cloned != nullptr, NVectorTestError());
   AssertDimension(unwrap_nvector<VectorType>(cloned)->size(), vector.size());
@@ -279,7 +306,12 @@ test_destroy()
 {
   GrowingVectorMemory<VectorType>                   mem;
   typename GrowingVectorMemory<VectorType>::Pointer vector(mem);
-  auto n_vector = make_nvector_view(*vector);
+  auto n_vector = make_nvector_view(*vector
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                    ,
+                                    global_nvector_context
+#endif
+  );
 
   Assert(n_vector != nullptr, NVectorTestError());
   auto cloned = N_VClone(n_vector);
@@ -313,7 +345,12 @@ void
 test_get_communicator()
 {
   auto vector   = create_test_vector<VectorType>();
-  auto n_vector = make_nvector_view(vector);
+  auto n_vector = make_nvector_view(vector
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                    ,
+                                    global_nvector_context
+#endif
+  );
   // required by SUNDIALS: MPI-unaware vectors should return the nullptr
   Assert(N_VGetCommunicator(n_vector) == nullptr, NVectorTestError());
 
@@ -328,8 +365,15 @@ void
 test_get_communicator()
 {
   auto vector   = create_test_vector<VectorType>();
-  auto n_vector = make_nvector_view(vector);
-  Assert(N_VGetCommunicator(n_vector) == MPI_COMM_WORLD, NVectorTestError());
+  auto n_vector = make_nvector_view(vector
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                    ,
+                                    global_nvector_context
+#endif
+  );
+  Assert(*static_cast<MPI_Comm *>(N_VGetCommunicator(n_vector)) ==
+           MPI_COMM_WORLD,
+         NVectorTestError());
 
   deallog << "test_get_communicator OK" << std::endl;
 }
@@ -341,7 +385,12 @@ void
 test_length()
 {
   auto vector   = create_test_vector<VectorType>();
-  auto n_vector = make_nvector_view(vector);
+  auto n_vector = make_nvector_view(vector
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                    ,
+                                    global_nvector_context
+#endif
+  );
   Assert(N_VGetLength(n_vector) == static_cast<int>(vector.size()),
          NVectorTestError());
 
@@ -359,9 +408,24 @@ test_linear_sum()
   auto vc       = create_test_vector<VectorType>();
   auto expected = create_test_vector<VectorType>();
 
-  auto nv_a = make_nvector_view(va);
-  auto nv_b = make_nvector_view(vb);
-  auto nv_c = make_nvector_view(vc);
+  auto nv_a = make_nvector_view(va
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_b = make_nvector_view(vb
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_c = make_nvector_view(vc
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
 
   va = 1.0;
   vb = 2.0;
@@ -396,8 +460,18 @@ test_dot_product()
   const auto vb   = create_test_vector<VectorType>(3.0);
   const auto size = va.size();
 
-  auto nv_a = make_nvector_view(va);
-  auto nv_b = make_nvector_view(vb);
+  auto nv_a = make_nvector_view(va
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_b = make_nvector_view(vb
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
 
   auto result   = N_VDotProd(nv_a, nv_b);
   auto expected = 6.0 * size;
@@ -421,7 +495,12 @@ test_set_constant()
   auto expected = create_test_vector<VectorType>();
   expected      = 1.0;
 
-  auto n_vector = make_nvector_view(vector);
+  auto n_vector = make_nvector_view(vector
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                    ,
+                                    global_nvector_context
+#endif
+  );
 
   N_VConst(1.0, n_vector);
   Assert(vector_equal(vector, expected), NVectorTestError());
@@ -443,8 +522,18 @@ test_add_constant()
   auto       result   = create_test_vector<VectorType>(-1.0);
   auto       expected = create_test_vector<VectorType>(3.0);
 
-  auto nv_a      = make_nvector_view(vector_a);
-  auto nv_result = make_nvector_view(result);
+  auto nv_a = make_nvector_view(vector_a
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_result = make_nvector_view(result
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                     ,
+                                     global_nvector_context
+#endif
+  );
 
   N_VAddConst(nv_a, 1.0, nv_result);
   Assert(vector_equal(result, expected), NVectorTestError());
@@ -468,9 +557,24 @@ test_elementwise_product()
   auto       vector_result = create_test_vector<VectorType>();
   auto       expected      = create_test_vector<VectorType>(6.0);
 
-  auto nv_a      = make_nvector_view(vector_a);
-  auto nv_b      = make_nvector_view(vector_b);
-  auto nv_result = make_nvector_view(vector_result);
+  auto nv_a = make_nvector_view(vector_a
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_b = make_nvector_view(vector_b
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_result = make_nvector_view(vector_result
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                     ,
+                                     global_nvector_context
+#endif
+  );
 
   // result = a.*b
   N_VProd(nv_a, nv_b, nv_result);
@@ -478,7 +582,12 @@ test_elementwise_product()
 
   auto vector_c = create_test_vector<VectorType>(2.0);
 
-  auto nv_c = make_nvector_view(vector_c);
+  auto nv_c = make_nvector_view(vector_c
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
 
   // c .*= b
   N_VProd(nv_c, nv_b, nv_c);
@@ -507,9 +616,24 @@ test_elementwise_div()
   auto       vector_result = create_test_vector<VectorType>();
   auto       expected      = create_test_vector<VectorType>(2.0);
 
-  auto nv_a      = make_nvector_view(vector_a);
-  auto nv_b      = make_nvector_view(vector_b);
-  auto nv_result = make_nvector_view(vector_result);
+  auto nv_a = make_nvector_view(vector_a
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_b = make_nvector_view(vector_b
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_result = make_nvector_view(vector_result
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                     ,
+                                     global_nvector_context
+#endif
+  );
 
   N_VDiv(nv_a, nv_b, nv_result);
   Assert(vector_equal(vector_result, expected), NVectorTestError());
@@ -527,8 +651,18 @@ test_elementwise_inv()
   auto       vector_result = create_test_vector<VectorType>();
   auto       expected      = create_test_vector<VectorType>(1.0 / 6.0);
 
-  auto nv_a      = make_nvector_view(vector_a);
-  auto nv_result = make_nvector_view(vector_result);
+  auto nv_a = make_nvector_view(vector_a
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_result = make_nvector_view(vector_result
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                     ,
+                                     global_nvector_context
+#endif
+  );
 
   N_VInv(nv_a, nv_result);
   Assert(vector_equal(vector_result, expected), NVectorTestError());
@@ -551,8 +685,18 @@ test_elementwise_abs()
   auto       vector_result = create_test_vector<VectorType>();
   auto       expected      = create_test_vector<VectorType>(2.0);
 
-  auto nv_a      = make_nvector_view(vector_a);
-  auto nv_result = make_nvector_view(vector_result);
+  auto nv_a = make_nvector_view(vector_a
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_result = make_nvector_view(vector_result
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                     ,
+                                     global_nvector_context
+#endif
+  );
 
   N_VAbs(nv_a, nv_result);
   Assert(vector_equal(vector_result, expected), NVectorTestError());
@@ -574,8 +718,18 @@ test_weighted_rms_norm()
   const auto vector_a = create_test_vector<VectorType>(2.0);
   const auto vector_b = create_test_vector<VectorType>(3.0);
 
-  auto nv_a = make_nvector_view(vector_a);
-  auto nv_b = make_nvector_view(vector_b);
+  auto nv_a = make_nvector_view(vector_a
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_b = make_nvector_view(vector_b
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
 
   const auto result = N_VWrmsNorm(nv_a, nv_b);
   Assert(std::fabs(result - 6.0) < 1e-12, NVectorTestError());
@@ -587,13 +741,104 @@ test_weighted_rms_norm()
 
 template <typename VectorType>
 void
+test_weighted_rms_norm_mask()
+{
+  const auto vector_a = create_test_vector<VectorType>(2.0);
+  const auto vector_b = create_test_vector<VectorType>(3.0);
+  const auto vector_c = create_test_vector<VectorType>(1.0);
+  const auto vector_d = create_test_vector<VectorType>(0.0);
+
+  auto nv_a = make_nvector_view(vector_a
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_b = make_nvector_view(vector_b
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_c = make_nvector_view(vector_c
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_d = make_nvector_view(vector_d
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  {
+    const auto result = N_VWrmsNormMask(nv_a, nv_b, nv_c);
+    Assert(std::fabs(result - 6.0) < 1e-12, NVectorTestError());
+    deallog << "test_weighted_rms_norm_mask 1 OK" << std::endl;
+  }
+  {
+    const auto result = N_VWrmsNormMask(nv_a, nv_b, nv_d);
+    Assert(std::fabs(result) < 1e-12, NVectorTestError());
+    deallog << "test_weighted_rms_norm_mask 0 OK" << std::endl;
+  }
+}
+
+
+
+template <typename VectorType>
+void
+test_weighted_l2_norm()
+{
+  const auto vector_a = create_test_vector<VectorType>(2.0);
+  const auto vector_b = create_test_vector<VectorType>(3.0);
+
+  auto nv_a = make_nvector_view(vector_a
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_b = make_nvector_view(vector_b
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+
+  const auto result = N_VWL2Norm(nv_a, nv_b);
+
+  auto vector_a_reference = create_test_vector<VectorType>(2.0);
+  auto vector_b_reference = create_test_vector<VectorType>(3.0);
+  vector_a_reference.scale(vector_b_reference);
+  const auto result_reference = vector_a_reference.l2_norm();
+
+  Assert(std::fabs(result - result_reference) < 1e-12, NVectorTestError());
+
+  deallog << "test_weighted_l2_norm OK" << std::endl;
+}
+
+
+
+template <typename VectorType>
+void
 test_max_norm()
 {
   const auto vector_a = create_test_vector<VectorType>(2.0);
   const auto vector_b = create_test_vector<VectorType>(-3.0);
 
-  auto nv_a = make_nvector_view(vector_a);
-  auto nv_b = make_nvector_view(vector_b);
+  auto nv_a = make_nvector_view(vector_a
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_b = make_nvector_view(vector_b
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
 
   auto result = N_VMaxNorm(nv_a);
   Assert(std::fabs(result - 2.0) < 1e-12, NVectorTestError());
@@ -608,13 +853,54 @@ test_max_norm()
 
 template <typename VectorType>
 void
+test_l1_norm()
+{
+  const auto vector_a = create_test_vector<VectorType>(2.0);
+  const auto vector_b = create_test_vector<VectorType>(-3.0);
+
+  auto nv_a = make_nvector_view(vector_a
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_b = make_nvector_view(vector_b
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+
+  auto result = N_VL1Norm(nv_a);
+  Assert(std::fabs(result - vector_a.l1_norm()) < 1e-12, NVectorTestError());
+
+  result = N_VL1Norm(nv_b);
+  Assert(std::fabs(result - vector_b.l1_norm()) < 1e-12, NVectorTestError());
+
+  deallog << "test_l1_norm OK" << std::endl;
+}
+
+
+
+template <typename VectorType>
+void
 test_min_element()
 {
   const auto vector_a = create_test_vector<VectorType>(2.0);
   const auto vector_b = create_test_vector<VectorType>(-3.0);
 
-  auto nv_a = make_nvector_view(vector_a);
-  auto nv_b = make_nvector_view(vector_b);
+  auto nv_a = make_nvector_view(vector_a
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_b = make_nvector_view(vector_b
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
 
   auto result = N_VMin(nv_a);
   Assert(std::fabs(result - 2.0) < 1e-12, NVectorTestError());
@@ -635,8 +921,18 @@ test_scale()
   auto       vector_b = create_test_vector<VectorType>(2.0);
   const auto expected = create_test_vector<VectorType>(4.0);
 
-  auto nv_a = make_nvector_view(vector_a);
-  auto nv_b = make_nvector_view(vector_b);
+  auto nv_a = make_nvector_view(vector_a
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
+  auto nv_b = make_nvector_view(vector_b
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                ,
+                                global_nvector_context
+#endif
+  );
 
   // b *= 2
   N_VScale(2.0, nv_b, nv_b);
@@ -674,7 +970,10 @@ run_all_tests(const std::string &prefix)
   test_elementwise_inv<VectorType>();
   test_elementwise_abs<VectorType>();
   test_weighted_rms_norm<VectorType>();
+  test_weighted_rms_norm_mask<VectorType>();
+  test_weighted_l2_norm<VectorType>();
   test_max_norm<VectorType>();
+  test_l1_norm<VectorType>();
   test_min_element<VectorType>();
   test_scale<VectorType>();
 }
@@ -684,6 +983,11 @@ main(int argc, char **argv)
 {
   Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
   MPILogInitAll                    log_all;
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+  MPI_Comm  communicator = MPI_COMM_WORLD;
+  const int ierr = SUNContext_Create(&communicator, &global_nvector_context);
+  AssertThrow(ierr == 0, ExcMessage("unable to create SUNContext object"));
+#endif
 
   using VectorType = Vector<double>;
 
@@ -705,4 +1009,8 @@ main(int argc, char **argv)
   // which is invoked first
   GrowingVectorMemory<PETScWrappers::MPI::Vector>::release_unused_memory();
   GrowingVectorMemory<PETScWrappers::MPI::BlockVector>::release_unused_memory();
+
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+  SUNContext_Free(&global_nvector_context);
+#endif
 }

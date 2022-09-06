@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2018 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -119,6 +119,7 @@ private:
 
   static double
   energy(const DoFHandler<dim> &dof_handler, const Vector<double> &function);
+
 
 
   const unsigned int run_number;
@@ -376,7 +377,7 @@ template <int dim>
 void
 MinimizationProblem<dim>::output_results() const
 {
-  DataOut<dim, DoFHandler<dim>> data_out;
+  DataOut<dim> data_out;
   data_out.attach_dof_handler(dof_handler);
   data_out.add_data_vector(present_solution, "solution");
   data_out.build_patches();
@@ -610,7 +611,7 @@ main()
       for (unsigned int realization = 0; realization < n_realizations;
            ++realization)
         {
-          deallog << "Realization " << realization << ":" << std::endl;
+          deallog << "Realization " << realization << ':' << std::endl;
 
           MinimizationProblem<1> minimization_problem_1d(realization);
           minimization_problem_1d.run();

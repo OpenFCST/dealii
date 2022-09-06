@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -20,8 +20,13 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/array_view.h>
+#include <deal.II/base/mpi_stub.h>
 #include <deal.II/base/partitioner.h>
 
+#include <deal.II/lac/vector_operation.h>
+
+#include <memory>
 
 DEAL_II_NAMESPACE_OPEN
 

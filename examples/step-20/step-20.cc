@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2005 - 2020 by the deal.II authors
+ * Copyright (C) 2005 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -195,8 +195,7 @@ namespace Step20
     void ExactSolution<dim>::vector_value(const Point<dim> &p,
                                           Vector<double> &  values) const
     {
-      Assert(values.size() == dim + 1,
-             ExcDimensionMismatch(values.size(), dim + 1));
+      AssertDimension(values.size(), dim + 1);
 
       values(0) = alpha * p[1] * p[1] / 2 + beta - alpha * p[0] * p[0] / 2;
       values(1) = alpha * p[0] * p[1];
@@ -404,15 +403,9 @@ namespace Step20
     // <code>DynamicSparsityPattern</code>. This block sparsity pattern has
     // four blocks in a $2 \times 2$ pattern. The blocks' sizes depend on
     // <code>n_u</code> and <code>n_p</code>, which hold the number of velocity
-    // and pressure variables. In the second step we have to instruct the block
-    // system to update its knowledge about the sizes of the blocks it manages;
-    // this happens with the <code>dsp.collect_sizes ()</code> call.
-    BlockDynamicSparsityPattern dsp(2, 2);
-    dsp.block(0, 0).reinit(n_u, n_u);
-    dsp.block(1, 0).reinit(n_p, n_u);
-    dsp.block(0, 1).reinit(n_u, n_p);
-    dsp.block(1, 1).reinit(n_p, n_p);
-    dsp.collect_sizes();
+    // and pressure variables.
+    const std::vector<types::global_dof_index> block_sizes = {n_u, n_p};
+    BlockDynamicSparsityPattern                dsp(block_sizes, block_sizes);
     DoFTools::make_sparsity_pattern(dof_handler, dsp);
 
     // We use the compressed block sparsity pattern in the same way as the
@@ -423,15 +416,8 @@ namespace Step20
 
     // Then we have to resize the solution and right hand side vectors in
     // exactly the same way as the block compressed sparsity pattern:
-    solution.reinit(2);
-    solution.block(0).reinit(n_u);
-    solution.block(1).reinit(n_p);
-    solution.collect_sizes();
-
-    system_rhs.reinit(2);
-    system_rhs.block(0).reinit(n_u);
-    system_rhs.block(1).reinit(n_p);
-    system_rhs.collect_sizes();
+    solution.reinit(block_sizes);
+    system_rhs.reinit(block_sizes);
   }
 
 

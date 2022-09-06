@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2021 by the deal.II authors
+// Copyright (C) 2021 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,10 +18,10 @@
 
 #include <deal.II/base/config.h>
 
-#include <deal.II/dofs/dof_handler.h>
+#include <deal.II/base/mpi.h>
+#include <deal.II/base/mpi_tags.h>
 
-#include <deal.II/grid/grid_tools.h>
-#include <deal.II/grid/grid_tools_cache.h>
+#include <deal.II/dofs/dof_handler.h>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -53,8 +53,17 @@ namespace Utilities
        *   the tolerance in order to be able to identify a cell.
        *   Floating point arithmetic implies that a point will, in general, not
        *   lie exactly on a vertex, edge, or face.
+       * @param enforce_unique_mapping Enforce unique mapping, i.e.,
+       *   (one-to-one) relation of points and cells.
+       * @param rtree_level RTree level to be used during the construction of the bounding boxes.
+       * @param marked_vertices Function that marks relevant vertices to make search
+       *   of active cells around point more efficient.
        */
-      RemotePointEvaluation(const double tolerance = 1e-6);
+      RemotePointEvaluation(
+        const double       tolerance                              = 1e-6,
+        const bool         enforce_unique_mapping                 = false,
+        const unsigned int rtree_level                            = 0,
+        const std::function<std::vector<bool>()> &marked_vertices = {});
 
       /**
        * Destructor.
@@ -65,6 +74,12 @@ namespace Utilities
        * Set up internal data structures and communication pattern based on
        * a list of points @p points and mesh description (@p tria and @p
        * mapping).
+       *
+       * @warning This is a collective call that needs to be executed by all
+       *   processors in the communicator.
+       *
+       * @note If you want to be sure that all points have been found, call
+       *   all_points_found() after calling this function.
        */
       void
       reinit(const std::vector<Point<spacedim>> &points,
@@ -103,6 +118,9 @@ namespace Utilities
        *   might be the case if a point coincides with a geometric entity (e.g.,
        *   vertex) that is shared by multiple cells or a point is outside of the
        *   computational domain.
+       *
+       * @warning This is a collective call that needs to be executed by all
+       *   processors in the communicator.
        */
       template <typename T>
       void
@@ -116,6 +134,9 @@ namespace Utilities
        * This method is the inverse of the method evaluate_and_process(). It
        * makes the data at the points, provided by @p input, available in the
        * function @p evaluation_function.
+       *
+       * @warning This is a collective call that needs to be executed by all
+       *   processors in the communicator.
        */
       template <typename T>
       void
@@ -140,6 +161,18 @@ namespace Utilities
        */
       bool
       is_map_unique() const;
+
+      /**
+       * Return if all points could be found in the domain.
+       */
+      bool
+      all_points_found() const;
+
+      /**
+       * Return if point @p i could be found in the domain.
+       */
+      bool
+      point_found(const unsigned int i) const;
 
       /**
        * Return the Triangulation object used during reinit().
@@ -169,6 +202,23 @@ namespace Utilities
       const double tolerance;
 
       /**
+       * Enforce unique mapping, i.e., (one-to-one) relation of points and
+       * cells.
+       */
+      const bool enforce_unique_mapping;
+
+      /**
+       * RTree level to be used during the construction of the bounding boxes.
+       */
+      const unsigned int rtree_level;
+
+      /**
+       * Function that marks relevant vertices to make search of active cells
+       * around point more efficient.
+       */
+      const std::function<std::vector<bool>()> marked_vertices;
+
+      /**
        * Storage for the status of the triangulation signal.
        */
       boost::signals2::connection tria_signal;
@@ -194,6 +244,11 @@ namespace Utilities
        * (One-to-one) relation of points and cells.
        */
       bool unique_mapping;
+
+      /**
+       * Cache if all points passed in during reinit() have been found.
+       */
+      bool all_points_found_flag;
 
       /**
        * Since for each point multiple or no results can be available, the
@@ -257,6 +312,9 @@ namespace Utilities
       (void)buffer;
       (void)evaluation_function;
 #else
+      static CollectiveMutex      mutex;
+      CollectiveMutex::ScopedLock lock(mutex, tria->get_communicator());
+
       output.resize(point_ptrs.back());
       buffer.resize(send_permutation.size() * 2);
       ArrayView<T> buffer_1(buffer.data(), buffer.size() / 2);
@@ -301,13 +359,14 @@ namespace Utilities
 
           requests.push_back(MPI_Request());
 
-          MPI_Isend(buffer.data(),
-                    buffer.size(),
-                    MPI_CHAR,
-                    send_ranks[i],
-                    internal::Tags::remote_point_evaluation,
-                    tria->get_communicator(),
-                    &requests.back());
+          const int ierr = MPI_Isend(buffer.data(),
+                                     buffer.size(),
+                                     MPI_CHAR,
+                                     send_ranks[i],
+                                     internal::Tags::remote_point_evaluation,
+                                     tria->get_communicator(),
+                                     &requests.back());
+          AssertThrowMPI(ierr);
         }
 
       for (const auto recv_rank : recv_ranks)
@@ -316,30 +375,35 @@ namespace Utilities
             continue;
 
           MPI_Status status;
-          MPI_Probe(MPI_ANY_SOURCE,
-                    internal::Tags::remote_point_evaluation,
-                    tria->get_communicator(),
-                    &status);
+          int        ierr = MPI_Probe(MPI_ANY_SOURCE,
+                               internal::Tags::remote_point_evaluation,
+                               tria->get_communicator(),
+                               &status);
+          AssertThrowMPI(ierr);
 
           int message_length;
-          MPI_Get_count(&status, MPI_CHAR, &message_length);
+          ierr = MPI_Get_count(&status, MPI_CHAR, &message_length);
+          AssertThrowMPI(ierr);
 
           std::vector<char> buffer(message_length);
 
-          MPI_Recv(buffer.data(),
-                   buffer.size(),
-                   MPI_CHAR,
-                   status.MPI_SOURCE,
-                   internal::Tags::remote_point_evaluation,
-                   tria->get_communicator(),
-                   MPI_STATUS_IGNORE);
+          ierr = MPI_Recv(buffer.data(),
+                          buffer.size(),
+                          MPI_CHAR,
+                          status.MPI_SOURCE,
+                          internal::Tags::remote_point_evaluation,
+                          tria->get_communicator(),
+                          MPI_STATUS_IGNORE);
+          AssertThrowMPI(ierr);
 
           temp_recv_map[status.MPI_SOURCE] =
             Utilities::unpack<std::vector<T>>(buffer, false);
         }
 
       // make sure all messages have been sent
-      MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
+      const int ierr =
+        MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
+      AssertThrowMPI(ierr);
 
       // copy received data into output vector
       auto it = recv_permutation.begin();
@@ -368,6 +432,9 @@ namespace Utilities
       (void)buffer;
       (void)evaluation_function;
 #else
+      static CollectiveMutex      mutex;
+      CollectiveMutex::ScopedLock lock(mutex, tria->get_communicator());
+
       const auto &ptr = this->get_point_ptrs();
 
       std::map<unsigned int, std::vector<T>> temp_recv_map;
@@ -434,13 +501,14 @@ namespace Utilities
 
           requests.push_back(MPI_Request());
 
-          MPI_Isend(buffer_send.data(),
-                    buffer_send.size(),
-                    MPI_CHAR,
-                    recv_rank,
-                    internal::Tags::remote_point_evaluation,
-                    tria->get_communicator(),
-                    &requests.back());
+          const int ierr = MPI_Isend(buffer_send.data(),
+                                     buffer_send.size(),
+                                     MPI_CHAR,
+                                     recv_rank,
+                                     internal::Tags::remote_point_evaluation,
+                                     tria->get_communicator(),
+                                     &requests.back());
+          AssertThrowMPI(ierr);
         }
 
       for (unsigned int i = 0; i < send_ranks.size(); ++i)
@@ -465,24 +533,26 @@ namespace Utilities
             }
 
           MPI_Status status;
-          MPI_Probe(MPI_ANY_SOURCE,
-                    internal::Tags::remote_point_evaluation,
-                    tria->get_communicator(),
-                    &status);
+          int        ierr = MPI_Probe(MPI_ANY_SOURCE,
+                               internal::Tags::remote_point_evaluation,
+                               tria->get_communicator(),
+                               &status);
+          AssertThrowMPI(ierr);
 
           int message_length;
-          MPI_Get_count(&status, MPI_CHAR, &message_length);
+          ierr = MPI_Get_count(&status, MPI_CHAR, &message_length);
+          AssertThrowMPI(ierr);
 
           std::vector<char> recv_buffer(message_length);
 
-          MPI_Recv(recv_buffer.data(),
-                   recv_buffer.size(),
-                   MPI_CHAR,
-                   status.MPI_SOURCE,
-                   internal::Tags::remote_point_evaluation,
-                   tria->get_communicator(),
-                   MPI_STATUS_IGNORE);
-
+          ierr = MPI_Recv(recv_buffer.data(),
+                          recv_buffer.size(),
+                          MPI_CHAR,
+                          status.MPI_SOURCE,
+                          internal::Tags::remote_point_evaluation,
+                          tria->get_communicator(),
+                          MPI_STATUS_IGNORE);
+          AssertThrowMPI(ierr);
 
           const auto recv_buffer_unpacked =
             Utilities::unpack<std::vector<T>>(recv_buffer, false);
@@ -506,7 +576,9 @@ namespace Utilities
             }
         }
 
-      MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
+      const int ierr =
+        MPI_Waitall(requests.size(), requests.data(), MPI_STATUSES_IGNORE);
+      AssertThrowMPI(ierr);
 
       // sort for easy access during function call
       for (unsigned int i = 0; i < send_permutation.size(); ++i)

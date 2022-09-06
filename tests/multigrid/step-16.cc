@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -182,7 +182,7 @@ LaplaceProblem<dim>::setup_system()
   std::map<types::boundary_id, const Function<dim> *> dirichlet_boundary;
   Functions::ZeroFunction<dim> homogeneous_dirichlet_bc(1);
   dirichlet_boundary[0] = &homogeneous_dirichlet_bc;
-  MappingQGeneric<dim> mapping(1);
+  MappingQ<dim> mapping(1);
   VectorTools::interpolate_boundary_values(mapping,
                                            mg_dof_handler,
                                            dirichlet_boundary,
@@ -399,7 +399,7 @@ LaplaceProblem<dim>::assemble_multigrid()
           else
             {
               cell_matrix(i, j) = 0;
-              std::cout << i << " " << j << "\n";
+              std::cout << i << ' ' << j << "\n";
             }
 
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2020 by the deal.II authors
+// Copyright (C) 2009 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -138,9 +138,9 @@ namespace Step40
   LaplaceProblem<dim>::setup_system()
   {
     // set active_fe_index mostly randomly
-    for (const auto &cell : dof_handler.active_cell_iterators())
-      if (cell->is_locally_owned())
-        cell->set_active_fe_index(cell->active_cell_index() % fe.size());
+    for (const auto &cell : dof_handler.active_cell_iterators() |
+                              IteratorFilters::LocallyOwnedCell())
+      cell->set_active_fe_index(cell->active_cell_index() % fe.size());
 
     dof_handler.distribute_dofs(fe);
 

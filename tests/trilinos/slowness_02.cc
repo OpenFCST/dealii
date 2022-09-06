@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2018 by the deal.II authors
+// Copyright (C) 2005 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -40,8 +40,8 @@ test()
 
   // build the sparse matrix
   TrilinosWrappers::SparseMatrix matrix(N * N, N * N, 5U);
-  for (unsigned int i = 0; i < N; i++)
-    for (unsigned int j = 0; j < N; j++)
+  for (unsigned int i = 0; i < N; ++i)
+    for (unsigned int j = 0; j < N; ++j)
       {
         const unsigned int global = i * N + j;
         matrix.set(global, global, 4);

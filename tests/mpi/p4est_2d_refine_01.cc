@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2018 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -54,7 +54,7 @@ test()
       if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
         {
           for (unsigned int i = 0; i < tr.n_active_cells(); ++i)
-            deallog << cell_subd[i] << " ";
+            deallog << cell_subd[i] << ' ';
           deallog << std::endl;
         }
 

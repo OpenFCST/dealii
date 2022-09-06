@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2018 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -24,8 +24,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup MeshWorker */
-/*@{*/
+/**
+ * @addtogroup MeshWorker
+ * @{
+ */
 
 namespace MeshWorker
 {
@@ -173,7 +175,8 @@ namespace MeshWorker
    *
    * @ref AssembleFlags
    */
-  inline AssembleFlags operator&(AssembleFlags f1, AssembleFlags f2)
+  inline AssembleFlags
+  operator&(AssembleFlags f1, AssembleFlags f2)
   {
     return static_cast<AssembleFlags>(static_cast<unsigned int>(f1) &
                                       static_cast<unsigned int>(f2));
@@ -194,7 +197,7 @@ namespace MeshWorker
   }
 } // namespace MeshWorker
 
-/*@}*/
+/** @} */
 
 DEAL_II_NAMESPACE_CLOSE
 

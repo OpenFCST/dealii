@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2019 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -210,7 +210,7 @@ TensorProductPolynomials<dim, PolynomialType>::compute_grad(
   // compute values and
   // uni-directional derivatives at
   // the given point in each
-  // co-ordinate direction
+  // coordinate direction
   ndarray<double, dim, 2> v;
   {
     std::vector<double> tmp(2);
@@ -504,6 +504,16 @@ TensorProductPolynomials<dim, PolynomialType>::memory_consumption() const
 
 
 
+template <int dim, typename PolynomialType>
+std::vector<PolynomialType>
+TensorProductPolynomials<dim, PolynomialType>::get_underlying_polynomials()
+  const
+{
+  return polynomials;
+}
+
+
+
 /* ------------------- AnisotropicPolynomials -------------- */
 
 
@@ -539,8 +549,7 @@ AnisotropicPolynomials<dim>::compute_index(
 #endif
 
   if (dim == 0)
-    {
-    }
+    {}
   else if (dim == 1)
     internal::compute_tensor_index(i,
                                    polynomials[0].size(),
@@ -607,7 +616,7 @@ AnisotropicPolynomials<dim>::compute_grad(const unsigned int i,
   // compute values and
   // uni-directional derivatives at
   // the given point in each
-  // co-ordinate direction
+  // coordinate direction
   ndarray<double, dim, 2> v;
   for (unsigned int d = 0; d < dim; ++d)
     polynomials[d][indices[d]].value(p(d), 1, v[d].data());

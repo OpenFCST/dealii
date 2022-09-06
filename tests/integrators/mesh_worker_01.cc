@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -143,7 +143,7 @@ test_simple(DoFHandler<dim> &mgdofs)
   local.cells = true;
   local.faces = false;
 
-  MappingQGeneric<dim> mapping(1);
+  MappingQ<dim> mapping(1);
 
   MeshWorker::IntegrationInfoBox<dim> info_box;
   info_box.initialize_gauss_quadrature(1, 1, 1);

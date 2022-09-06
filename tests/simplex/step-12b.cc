@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2020 by the deal.II authors
+// Copyright (C) 2005 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -919,7 +919,7 @@ DGMethod<dim>::output_results(const unsigned int cycle) const
   deallog << "Writing solution to <" << filename << ">..." << std::endl
           << std::endl;
 
-  DataOut<dim, DoFHandler<dim>> data_out;
+  DataOut<dim> data_out;
   data_out.attach_dof_handler(dof_handler);
   data_out.add_data_vector(solution2, "u");
 
@@ -1015,10 +1015,9 @@ main()
         {
           ScratchData<2> scratch_data;
 
-          scratch_data.mapping =
-            hp::MappingCollection<2>(MappingQGeneric<2>(1));
-          scratch_data.fe              = hp::FECollection<2>(FE_DGQ<2>(i));
-          scratch_data.quadrature      = hp::QCollection<2>(QGauss<2>(i + 1));
+          scratch_data.mapping    = hp::MappingCollection<2>(MappingQ<2>(1));
+          scratch_data.fe         = hp::FECollection<2>(FE_DGQ<2>(i));
+          scratch_data.quadrature = hp::QCollection<2>(QGauss<2>(i + 1));
           scratch_data.face_quadrature = std::vector<hp::QCollection<1>>{
             hp::QCollection<1>(QGauss<1>(i + 1))};
           scratch_data.mesh_generator =
@@ -1106,10 +1105,9 @@ main()
         {
           ScratchData<3> scratch_data;
 
-          scratch_data.mapping =
-            hp::MappingCollection<3>(MappingQGeneric<3>(1));
-          scratch_data.fe              = hp::FECollection<3>(FE_DGQ<3>(i));
-          scratch_data.quadrature      = hp::QCollection<3>(QGauss<3>(i + 1));
+          scratch_data.mapping    = hp::MappingCollection<3>(MappingQ<3>(1));
+          scratch_data.fe         = hp::FECollection<3>(FE_DGQ<3>(i));
+          scratch_data.quadrature = hp::QCollection<3>(QGauss<3>(i + 1));
           scratch_data.face_quadrature = std::vector<hp::QCollection<2>>{
             hp::QCollection<2>(QGauss<2>(i + 1))};
           scratch_data.mesh_generator =

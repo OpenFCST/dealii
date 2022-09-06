@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -42,10 +42,10 @@ struct Mat1 : MaterialBase
 constexpr unsigned int n_data_points_per_cell = 4;
 
 
-void setup_history(
-  Triangulation<2> &tria,
-  CellDataStorage<typename Triangulation<2>::active_cell_iterator, MaterialBase>
-    &storage)
+void
+setup_history(Triangulation<2> &             tria,
+              CellDataStorage<typename Triangulation<2>::active_cell_iterator,
+                              MaterialBase> &storage)
 {
   deallog << "initializing history" << std::endl;
   for (auto cell : tria.active_cell_iterators())
@@ -58,10 +58,10 @@ void setup_history(
     }
 }
 
-void read_history(
-  Triangulation<2> &tria,
-  CellDataStorage<typename Triangulation<2>::active_cell_iterator, MaterialBase>
-    &storage)
+void
+read_history(Triangulation<2> &             tria,
+             CellDataStorage<typename Triangulation<2>::active_cell_iterator,
+                             MaterialBase> &storage)
 {
   deallog << "reading history" << std::endl;
   for (auto cell : tria.active_cell_iterators())

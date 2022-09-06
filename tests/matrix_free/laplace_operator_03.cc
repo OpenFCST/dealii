@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -15,8 +15,8 @@
 
 
 
-// the same as laplace_operator_01, but heterogeneous Laplace operator with a
-// single constant coefficient per cell
+// the same as laplace_operator_01 (excluding the extra detection tests), but
+// heterogeneous Laplace operator with a single constant coefficient per cell
 
 #include <deal.II/base/function.h>
 #include <deal.II/base/utilities.h>
@@ -29,6 +29,7 @@
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_values.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/manifold_lib.h>
 
@@ -54,10 +55,10 @@ test()
   parallel::distributed::Triangulation<dim> tria(MPI_COMM_WORLD);
   GridGenerator::hyper_cube(tria);
   tria.refine_global(1);
-  for (const auto &cell : tria.active_cell_iterators())
-    if (cell->is_locally_owned())
-      if (cell->center().norm() < 0.2)
-        cell->set_refine_flag();
+  for (const auto &cell :
+       tria.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+    if (cell->center().norm() < 0.2)
+      cell->set_refine_flag();
   tria.execute_coarsening_and_refinement();
   if (dim < 3 && fe_degree < 2)
     tria.refine_global(2);
@@ -71,10 +72,10 @@ test()
   for (unsigned int i = 0; i < 10 - 3 * dim; ++i)
     {
       unsigned int counter = 0;
-      for (const auto &cell : tria.active_cell_iterators())
-        if (cell->is_locally_owned())
-          if (counter++ % (7 - i) == 0)
-            cell->set_refine_flag();
+      for (const auto &cell :
+           tria.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+        if (counter++ % (7 - i) == 0)
+          cell->set_refine_flag();
       tria.execute_coarsening_and_refinement();
     }
 
@@ -109,7 +110,7 @@ test()
     data.tasks_block_size      = 7;
     data.mapping_update_flags =
       update_quadrature_points | update_gradients | update_JxW_values;
-    mf_data->reinit(dof, constraints, quad, data);
+    mf_data->reinit(MappingQ1<dim>{}, dof, constraints, quad, data);
   }
 
   std::shared_ptr<Table<2, VectorizedArray<number>>> coefficient;

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2010 - 2018 by the deal.II authors
+// Copyright (C) 2010 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -49,7 +49,7 @@ test()
     deallog << "Before serialization particle id " << particle.get_id()
             << " has location " << particle.get_location()
             << ", has reference location " << particle.get_reference_location()
-            << ", and has properties " << particle.get_properties()[0] << " "
+            << ", and has properties " << particle.get_properties()[0] << ' '
             << particle.get_properties()[1] << std::endl;
 
     boost::archive::text_oarchive oa(oss, boost::archive::no_header);
@@ -75,7 +75,7 @@ test()
     deallog << "After serialization particle id " << particle.get_id()
             << " has location " << particle.get_location()
             << ", has reference location " << particle.get_reference_location()
-            << ", and has properties " << particle.get_properties()[0] << " "
+            << ", and has properties " << particle.get_properties()[0] << ' '
             << particle.get_properties()[1] << std::endl;
   }
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2011 - 2020 by the deal.II authors
+// Copyright (C) 2011 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -39,142 +39,6 @@ namespace Utilities
   {
     namespace internal
     {
-#ifdef DEAL_II_WITH_MPI
-      /**
-       * Return the corresponding MPI data type id for the argument given.
-       */
-      inline MPI_Datatype
-      mpi_type_id(const bool *)
-      {
-#  if DEAL_II_MPI_VERSION_GTE(2, 2)
-        return MPI_CXX_BOOL;
-#  else
-        return MPI_C_BOOL;
-#  endif
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const char *)
-      {
-        return MPI_CHAR;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const signed char *)
-      {
-        return MPI_SIGNED_CHAR;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const short *)
-      {
-        return MPI_SHORT;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const int *)
-      {
-        return MPI_INT;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const long int *)
-      {
-        return MPI_LONG;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const unsigned char *)
-      {
-        return MPI_UNSIGNED_CHAR;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const unsigned short *)
-      {
-        return MPI_UNSIGNED_SHORT;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const unsigned int *)
-      {
-        return MPI_UNSIGNED;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const unsigned long int *)
-      {
-        return MPI_UNSIGNED_LONG;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const unsigned long long int *)
-      {
-        return MPI_UNSIGNED_LONG_LONG;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const float *)
-      {
-        return MPI_FLOAT;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const double *)
-      {
-        return MPI_DOUBLE;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const long double *)
-      {
-        return MPI_LONG_DOUBLE;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const std::complex<float> *)
-      {
-        return MPI_COMPLEX;
-      }
-
-
-
-      inline MPI_Datatype
-      mpi_type_id(const std::complex<double> *)
-      {
-        return MPI_DOUBLE_COMPLEX;
-      }
-#endif
-
-
       template <typename T>
       void
       all_reduce(const MPI_Op &            mpi_op,
@@ -216,12 +80,10 @@ namespace Utilities
             }
 #  endif
             const int ierr =
-              MPI_Allreduce(values != output ?
-                              DEAL_II_MPI_CONST_CAST(values.data()) :
-                              MPI_IN_PLACE,
+              MPI_Allreduce(values != output ? values.data() : MPI_IN_PLACE,
                             static_cast<void *>(output.data()),
                             static_cast<int>(values.size()),
-                            internal::mpi_type_id(values.data()),
+                            mpi_type_id_for_type<decltype(*values.data())>,
                             mpi_op,
                             mpi_communicator);
             AssertThrowMPI(ierr);
@@ -261,7 +123,7 @@ namespace Utilities
                               MPI_IN_PLACE,
                             static_cast<void *>(output.data()),
                             static_cast<int>(values.size() * 2),
-                            internal::mpi_type_id(static_cast<T *>(nullptr)),
+                            mpi_type_id_for_type<T>,
                             mpi_op,
                             mpi_communicator);
             AssertThrowMPI(ierr);
@@ -323,12 +185,20 @@ namespace Utilities
 
     template <int rank, int dim, typename Number>
     Tensor<rank, dim, Number>
-    sum(const Tensor<rank, dim, Number> &local,
-        const MPI_Comm &                 mpi_communicator)
+    sum(const Tensor<rank, dim, Number> &t, const MPI_Comm &mpi_communicator)
     {
-      Tensor<rank, dim, Number> sums;
-      sum(local, mpi_communicator, sums);
-      return sums;
+      // Copy the tensor into a C-style array with which we can then
+      // call the other sum() function.
+      Number array[Tensor<rank, dim, Number>::n_independent_components];
+      for (unsigned int i = 0;
+           i < Tensor<rank, dim, Number>::n_independent_components;
+           ++i)
+        array[i] =
+          t[Tensor<rank, dim, Number>::unrolled_to_component_indices(i)];
+
+      sum(array, mpi_communicator, array);
+
+      return Tensor<rank, dim, Number>(make_array_view(array));
     }
 
 
@@ -338,6 +208,8 @@ namespace Utilities
     sum(const SymmetricTensor<rank, dim, Number> &local,
         const MPI_Comm &                          mpi_communicator)
     {
+      // Copy the tensor into a C-style array with which we can then
+      // call the other sum() function.
       const unsigned int n_entries =
         SymmetricTensor<rank, dim, Number>::n_independent_components;
       Number
@@ -530,12 +402,13 @@ namespace Utilities
 
     template <typename T>
     T
-    all_reduce(const T &                                     vec,
-               const MPI_Comm &                              comm,
-               const std::function<T(const T &, const T &)> &combiner)
+    reduce(const T &                                     vec,
+           const MPI_Comm &                              comm,
+           const std::function<T(const T &, const T &)> &combiner,
+           const unsigned int                            root_process)
     {
 #ifdef DEAL_II_WITH_MPI
-      if (job_supports_mpi())
+      if (job_supports_mpi() && n_mpi_processes(comm) > 1)
         {
           // 1) perform custom reduction
           T result = vec;
@@ -545,12 +418,17 @@ namespace Utilities
 
           for (unsigned int stride = 1; stride < nproc; stride *= 2)
             {
-              const unsigned int rank_recv =
-                (2 * stride) * (rank / (2 * stride));
-              const unsigned int rank_send = rank_recv + stride;
+              unsigned int rank_recv =
+                (2 * stride) *
+                  ((rank + nproc - root_process) % nproc / (2 * stride)) +
+                root_process;
+              unsigned int rank_send = rank_recv + stride;
 
-              if (rank_send >= nproc) // nothing to do
+              if (rank_send >= nproc + root_process) // nothing to do
                 continue;
+
+              rank_recv = rank_recv % nproc;
+              rank_send = rank_send % nproc;
 
               if (rank_recv == rank) // process receives data
                 {
@@ -592,13 +470,36 @@ namespace Utilities
                 }
             }
 
-          // 2) broadcast result
-          return Utilities::MPI::broadcast(comm, result);
+          if (rank == root_process)
+            return result;
+          else
+            return {};
         }
 #endif
       (void)comm;
       (void)combiner;
+      (void)root_process;
       return vec;
+    }
+
+
+
+    template <typename T>
+    T
+    all_reduce(const T &                                     vec,
+               const MPI_Comm &                              comm,
+               const std::function<T(const T &, const T &)> &combiner)
+    {
+      if (job_supports_mpi() && n_mpi_processes(comm) > 1)
+        {
+          // 1) perform reduction
+          const auto result = Utilities::MPI::reduce<T>(vec, comm, combiner);
+
+          // 2) broadcast result
+          return Utilities::MPI::broadcast(comm, result);
+        }
+      else
+        return vec;
     }
 
 

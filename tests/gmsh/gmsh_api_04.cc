@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2021 by the deal.II authors
+// Copyright (C) 2021 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -15,6 +15,7 @@
 
 // Create all reference cells, and output them with gmsh.
 
+#include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_in.h>
 #include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/reference_cell.h>
@@ -26,12 +27,12 @@ template <int dim, int spacedim>
 void
 test(const std::uint8_t kind, const std::string out = "")
 {
-  deallog << "Testing kind(" << (int)kind << ") in dimensions "
-          << "<" << dim << "," << spacedim << ">" << std::endl;
+  deallog << "Testing kind(" << (int)kind << ") in dimensions " << '<' << dim
+          << ',' << spacedim << '>' << std::endl;
 
   Triangulation<dim, spacedim> tria;
-  ReferenceCell::make_triangulation(
-    ReferenceCell::internal::make_reference_cell_from_int(kind), tria);
+  GridGenerator::reference_cell(
+    tria, internal::ReferenceCell::make_reference_cell_from_int(kind));
 
   GridOut go;
   go.write_msh(tria, "output.msh");

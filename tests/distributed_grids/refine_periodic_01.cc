@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -40,8 +40,9 @@ test()
     typename parallel::distributed::Triangulation<dim>::Settings(
       parallel::distributed::Triangulation<
         dim>::mesh_reconstruction_after_repartitioning |
+      parallel::distributed::Triangulation<dim>::construct_multigrid_hierarchy |
       parallel::distributed::Triangulation<
-        dim>::construct_multigrid_hierarchy));
+        dim>::communicate_vertices_to_p4est));
 
   GridGenerator::subdivided_hyper_cube(tr, 4, -1.0, 3.0, true);
 

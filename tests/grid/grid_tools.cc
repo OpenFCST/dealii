@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2018 by the deal.II authors
+// Copyright (C) 2001 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -14,6 +14,8 @@
 // ---------------------------------------------------------------------
 
 
+
+#include <deal.II/base/numbers.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_out.h>
@@ -77,7 +79,7 @@ test2()
   GridOut().write_gnuplot(tria, logfile);
 
   logfile << "Rotated grid:" << std::endl;
-  GridTools::rotate(3.14159265258 / 4, tria);
+  GridTools::rotate(numbers::PI_4, tria);
   GridOut().write_gnuplot(tria, logfile);
 }
 

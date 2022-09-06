@@ -1,6 +1,6 @@
 ## ---------------------------------------------------------------------
 ##
-## Copyright (C) 2016 - 2020 by the deal.II authors
+## Copyright (C) 2016 - 2022 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
@@ -21,7 +21,15 @@ IF(DEAL_II_COMPONENT_PYTHON_BINDINGS)
   #
   # Find Python:
   #
-  INCLUDE(FindPythonInterp)
+  # Since CMake 3.12, FindPythonInterp is deprecated.
+  if (CMAKE_VERSION VERSION_LESS 3.12)
+    INCLUDE(FindPythonInterp)
+  else()
+    FIND_PACKAGE(Python3)
+    SET(PYTHON_VERSION_MAJOR ${Python3_VERSION_MAJOR})
+    SET(PYTHON_VERSION_MINOR ${Python3_VERSION_MINOR})
+    SET(PYTHON_EXECUTABLE ${Python3_EXECUTABLE})
+  endif()
   INCLUDE(FindPythonLibs)
 
   IF(FEATURE_BOOST_BUNDLED_CONFIGURED)
@@ -40,10 +48,11 @@ IF(DEAL_II_COMPONENT_PYTHON_BINDINGS)
   # On case-insensitive file systems, FindBOOST.cmake and FindBoost.cmake are indistinguishable.
   # Make sure FindBoost.cmake from CMake installation is found.
   LIST(REMOVE_ITEM CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules/)
+  SET(Boost_USE_DEBUG_RUNTIME FALSE)
   IF(${BOOST_VERSION} VERSION_LESS 1.67)
-    _FIND_PACKAGE(Boost 1.59 COMPONENTS python REQUIRED)
+    FIND_PACKAGE(Boost 1.59 COMPONENTS python REQUIRED)
   ELSE()
-    _FIND_PACKAGE(Boost 1.67 COMPONENTS python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR} REQUIRED)
+    FIND_PACKAGE(Boost 1.67 COMPONENTS python${PYTHON_VERSION_MAJOR}${PYTHON_VERSION_MINOR} REQUIRED)
   ENDIF()
   LIST(APPEND CMAKE_MODULE_PATH ${CMAKE_SOURCE_DIR}/cmake/modules/)
 

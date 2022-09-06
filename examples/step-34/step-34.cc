@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2009 - 2020 by the deal.II authors
+ * Copyright (C) 2009 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -47,7 +47,7 @@
 
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_values.h>
-#include <deal.II/fe/mapping_q.h>
+#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
@@ -212,7 +212,7 @@ namespace Step34
     // To allow for dimension independent programming, we specialize this
     // single function to extract the singular quadrature formula needed to
     // integrate the singular kernels in the interior of the cells.
-    const Quadrature<dim - 1> &get_singular_quadrature(
+    Quadrature<dim - 1> get_singular_quadrature(
       const typename DoFHandler<dim - 1, dim>::active_cell_iterator &cell,
       const unsigned int index) const;
 
@@ -229,7 +229,7 @@ namespace Step34
     // examples.
     //
     // The class is constructed in a way to allow for arbitrary order of
-    // approximation of both the domain (through high order mapping) and the
+    // approximation of both the domain (through high order mappings) and the
     // finite element space. The order of the finite element space and of the
     // mapping can be selected in the constructor of the class.
 
@@ -315,7 +315,7 @@ namespace Step34
                               const unsigned int mapping_degree)
     : fe(fe_degree)
     , dof_handler(tria)
-    , mapping(mapping_degree, true)
+    , mapping(mapping_degree)
     , wind(dim)
     , singular_quadrature_order(5)
     , n_cycles(4)
@@ -661,12 +661,12 @@ namespace Step34
                 // against a singular weight on the reference cell.
                 //
                 // The correct quadrature formula is selected by the
-                // get_singular_quadrature function, which is explained in
+                // `get_singular_quadrature()` function, which is explained in
                 // detail below.
                 Assert(singular_index != numbers::invalid_unsigned_int,
                        ExcInternalError());
 
-                const Quadrature<dim - 1> &singular_quadrature =
+                const Quadrature<dim - 1> singular_quadrature =
                   get_singular_quadrature(cell, singular_index);
 
                 FEValues<dim - 1, dim> fe_v_singular(
@@ -860,7 +860,7 @@ namespace Step34
   // singularity is located.
 
   template <>
-  const Quadrature<2> &BEMProblem<3>::get_singular_quadrature(
+  Quadrature<2> BEMProblem<3>::get_singular_quadrature(
     const DoFHandler<2, 3>::active_cell_iterator &,
     const unsigned int index) const
   {
@@ -878,22 +878,17 @@ namespace Step34
 
 
   template <>
-  const Quadrature<1> &BEMProblem<2>::get_singular_quadrature(
+  Quadrature<1> BEMProblem<2>::get_singular_quadrature(
     const DoFHandler<1, 2>::active_cell_iterator &cell,
     const unsigned int                            index) const
   {
     Assert(index < fe.n_dofs_per_cell(),
            ExcIndexRange(0, fe.n_dofs_per_cell(), index));
 
-    static Quadrature<1> *q_pointer = nullptr;
-    if (q_pointer)
-      delete q_pointer;
-
-    q_pointer = new QGaussLogR<1>(singular_quadrature_order,
-                                  fe.get_unit_support_points()[index],
-                                  1. / cell->measure(),
-                                  true);
-    return (*q_pointer);
+    return QGaussLogR<1>(singular_quadrature_order,
+                         fe.get_unit_support_points()[index],
+                         1. / cell->measure(),
+                         true);
   }
 
 
@@ -999,19 +994,16 @@ namespace Step34
   template <int dim>
   void BEMProblem<dim>::output_results(const unsigned int cycle)
   {
-    DataOut<dim - 1, DoFHandler<dim - 1, dim>> dataout;
+    DataOut<dim - 1, dim> dataout;
 
     dataout.attach_dof_handler(dof_handler);
-    dataout.add_data_vector(
-      phi, "phi", DataOut<dim - 1, DoFHandler<dim - 1, dim>>::type_dof_data);
-    dataout.add_data_vector(
-      alpha,
-      "alpha",
-      DataOut<dim - 1, DoFHandler<dim - 1, dim>>::type_dof_data);
-    dataout.build_patches(
-      mapping,
-      mapping.get_degree(),
-      DataOut<dim - 1, DoFHandler<dim - 1, dim>>::curved_inner_cells);
+    dataout.add_data_vector(phi, "phi", DataOut<dim - 1, dim>::type_dof_data);
+    dataout.add_data_vector(alpha,
+                            "alpha",
+                            DataOut<dim - 1, dim>::type_dof_data);
+    dataout.build_patches(mapping,
+                          mapping.get_degree(),
+                          DataOut<dim - 1, dim>::curved_inner_cells);
 
     const std::string filename = std::to_string(dim) + "d_boundary_solution_" +
                                  std::to_string(cycle) + ".vtk";

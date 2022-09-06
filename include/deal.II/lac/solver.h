@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2019 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -23,7 +23,6 @@
 #include <deal.II/lac/solver_control.h>
 #include <deal.II/lac/vector_memory.h>
 
-// Ignore deprecation warnings for auto_ptr.
 #include <boost/signals2.hpp>
 
 DEAL_II_NAMESPACE_OPEN
@@ -478,9 +477,9 @@ protected:
 
 template <class VectorType>
 inline SolverControl::State
-SolverBase<VectorType>::StateCombiner::
-operator()(const SolverControl::State state1,
-           const SolverControl::State state2) const
+SolverBase<VectorType>::StateCombiner::operator()(
+  const SolverControl::State state1,
+  const SolverControl::State state2) const
 {
   if ((state1 == SolverControl::failure) || (state2 == SolverControl::failure))
     return SolverControl::failure;

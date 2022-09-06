@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2018 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -69,7 +69,7 @@ test()
 
           for (unsigned int i = 0; i < locally_level_active.size(); ++i)
             if (locally_level_active.is_element(i))
-              deallog << i << " ";
+              deallog << i << ' ';
           deallog << "OK" << std::endl;
         }
     }

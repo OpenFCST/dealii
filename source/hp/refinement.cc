@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2021 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,6 +25,7 @@
 #include <deal.II/dofs/dof_accessor.templates.h>
 #include <deal.II/dofs/dof_handler.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_refinement.h>
 #include <deal.II/grid/grid_tools.h>
 
@@ -44,15 +45,14 @@ namespace hp
      */
     template <int dim, int spacedim>
     void
-    full_p_adaptivity(const dealii::DoFHandler<dim, spacedim> &dof_handler)
+    full_p_adaptivity(const DoFHandler<dim, spacedim> &dof_handler)
     {
       if (dof_handler.get_fe_collection().size() == 0)
         // nothing to do
         return;
 
-      Assert(
-        dof_handler.has_hp_capabilities(),
-        (typename dealii::DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
+      Assert(dof_handler.has_hp_capabilities(),
+             (typename DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
 
       std::vector<bool> p_flags(
         dof_handler.get_triangulation().n_active_cells(), true);
@@ -64,17 +64,15 @@ namespace hp
 
     template <int dim, int spacedim>
     void
-    p_adaptivity_from_flags(
-      const dealii::DoFHandler<dim, spacedim> &dof_handler,
-      const std::vector<bool> &                p_flags)
+    p_adaptivity_from_flags(const DoFHandler<dim, spacedim> &dof_handler,
+                            const std::vector<bool> &        p_flags)
     {
       if (dof_handler.get_fe_collection().size() == 0)
         // nothing to do
         return;
 
-      Assert(
-        dof_handler.has_hp_capabilities(),
-        (typename dealii::DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
+      Assert(dof_handler.has_hp_capabilities(),
+             (typename DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
       AssertDimension(dof_handler.get_triangulation().n_active_cells(),
                       p_flags.size());
 
@@ -109,10 +107,10 @@ namespace hp
     template <int dim, typename Number, int spacedim>
     void
     p_adaptivity_from_absolute_threshold(
-      const dealii::DoFHandler<dim, spacedim> &dof_handler,
-      const Vector<Number> &                   criteria,
-      const Number                             p_refine_threshold,
-      const Number                             p_coarsen_threshold,
+      const DoFHandler<dim, spacedim> &dof_handler,
+      const Vector<Number> &           criteria,
+      const Number                     p_refine_threshold,
+      const Number                     p_coarsen_threshold,
       const ComparisonFunction<typename identity<Number>::type> &compare_refine,
       const ComparisonFunction<typename identity<Number>::type>
         &compare_coarsen)
@@ -121,9 +119,8 @@ namespace hp
         // nothing to do
         return;
 
-      Assert(
-        dof_handler.has_hp_capabilities(),
-        (typename dealii::DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
+      Assert(dof_handler.has_hp_capabilities(),
+             (typename DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
       AssertDimension(dof_handler.get_triangulation().n_active_cells(),
                       criteria.size());
 
@@ -148,10 +145,10 @@ namespace hp
     template <int dim, typename Number, int spacedim>
     void
     p_adaptivity_from_relative_threshold(
-      const dealii::DoFHandler<dim, spacedim> &dof_handler,
-      const Vector<Number> &                   criteria,
-      const double                             p_refine_fraction,
-      const double                             p_coarsen_fraction,
+      const DoFHandler<dim, spacedim> &dof_handler,
+      const Vector<Number> &           criteria,
+      const double                     p_refine_fraction,
+      const double                     p_coarsen_fraction,
       const ComparisonFunction<typename identity<Number>::type> &compare_refine,
       const ComparisonFunction<typename identity<Number>::type>
         &compare_coarsen)
@@ -160,15 +157,14 @@ namespace hp
         // nothing to do
         return;
 
-      Assert(
-        dof_handler.has_hp_capabilities(),
-        (typename dealii::DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
+      Assert(dof_handler.has_hp_capabilities(),
+             (typename DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
       AssertDimension(dof_handler.get_triangulation().n_active_cells(),
                       criteria.size());
       Assert((p_refine_fraction >= 0) && (p_refine_fraction <= 1),
-             dealii::GridRefinement::ExcInvalidParameterValue());
+             GridRefinement::ExcInvalidParameterValue());
       Assert((p_coarsen_fraction >= 0) && (p_coarsen_fraction <= 1),
-             dealii::GridRefinement::ExcInvalidParameterValue());
+             GridRefinement::ExcInvalidParameterValue());
 
       // We first have to determine the maximal and minimal values of the
       // criteria of all flagged cells.
@@ -245,10 +241,10 @@ namespace hp
     template <int dim, typename Number, int spacedim>
     void
     p_adaptivity_fixed_number(
-      const dealii::DoFHandler<dim, spacedim> &dof_handler,
-      const Vector<Number> &                   criteria,
-      const double                             p_refine_fraction,
-      const double                             p_coarsen_fraction,
+      const DoFHandler<dim, spacedim> &dof_handler,
+      const Vector<Number> &           criteria,
+      const double                     p_refine_fraction,
+      const double                     p_coarsen_fraction,
       const ComparisonFunction<typename identity<Number>::type> &compare_refine,
       const ComparisonFunction<typename identity<Number>::type>
         &compare_coarsen)
@@ -257,15 +253,14 @@ namespace hp
         // nothing to do
         return;
 
-      Assert(
-        dof_handler.has_hp_capabilities(),
-        (typename dealii::DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
+      Assert(dof_handler.has_hp_capabilities(),
+             (typename DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
       AssertDimension(dof_handler.get_triangulation().n_active_cells(),
                       criteria.size());
       Assert((p_refine_fraction >= 0) && (p_refine_fraction <= 1),
-             dealii::GridRefinement::ExcInvalidParameterValue());
+             GridRefinement::ExcInvalidParameterValue());
       Assert((p_coarsen_fraction >= 0) && (p_coarsen_fraction <= 1),
-             dealii::GridRefinement::ExcInvalidParameterValue());
+             GridRefinement::ExcInvalidParameterValue());
 
       // ComparisonFunction returning 'true' or 'false' for any set of
       // parameters. These will be used to overwrite user-provided comparison
@@ -301,7 +296,7 @@ namespace hp
       // 2.) Determine the number of cells for p-refinement and p-coarsening on
       //     basis of the flagged cells.
       //
-      // 3.) Find thresholds for p-refinment and p-coarsening on only those
+      // 3.) Find thresholds for p-refinement and p-coarsening on only those
       //     cells flagged for adaptation.
       //
       //     For cases in which no or all cells flagged for refinement and/or
@@ -352,12 +347,12 @@ namespace hp
           // 3.) Figure out the global max and min of the criteria. We don't
           //     need it here, but it's a collective communication call.
           const std::pair<Number, Number> global_min_max_refinement =
-            dealii::internal::parallel::distributed::GridRefinement::
+            internal::parallel::distributed::GridRefinement::
               compute_global_min_and_max_at_root(indicators_refinement,
                                                  mpi_communicator);
 
           const std::pair<Number, Number> global_min_max_coarsening =
-            dealii::internal::parallel::distributed::GridRefinement::
+            internal::parallel::distributed::GridRefinement::
               compute_global_min_and_max_at_root(indicators_coarsening,
                                                  mpi_communicator);
 
@@ -367,7 +362,7 @@ namespace hp
           else if (target_index_refinement == n_global_flags_refinement)
             reference_compare_refine = std::cref(compare_true);
           else
-            threshold_refinement = dealii::internal::parallel::distributed::
+            threshold_refinement = internal::parallel::distributed::
               GridRefinement::RefineAndCoarsenFixedNumber::compute_threshold(
                 indicators_refinement,
                 global_min_max_refinement,
@@ -379,7 +374,7 @@ namespace hp
           else if (target_index_coarsening == 0)
             reference_compare_coarsen = std::cref(compare_true);
           else
-            threshold_coarsening = dealii::internal::parallel::distributed::
+            threshold_coarsening = internal::parallel::distributed::
               GridRefinement::RefineAndCoarsenFixedNumber::compute_threshold(
                 indicators_coarsening,
                 global_min_max_coarsening,
@@ -445,17 +440,15 @@ namespace hp
 
     template <int dim, typename Number, int spacedim>
     void
-    p_adaptivity_from_regularity(
-      const dealii::DoFHandler<dim, spacedim> &dof_handler,
-      const Vector<Number> &                   sobolev_indices)
+    p_adaptivity_from_regularity(const DoFHandler<dim, spacedim> &dof_handler,
+                                 const Vector<Number> &sobolev_indices)
     {
       if (dof_handler.get_fe_collection().size() == 0)
         // nothing to do
         return;
 
-      Assert(
-        dof_handler.has_hp_capabilities(),
-        (typename dealii::DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
+      Assert(dof_handler.has_hp_capabilities(),
+             (typename DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
       AssertDimension(dof_handler.get_triangulation().n_active_cells(),
                       sobolev_indices.size());
 
@@ -504,7 +497,7 @@ namespace hp
     template <int dim, typename Number, int spacedim>
     void
     p_adaptivity_from_reference(
-      const dealii::DoFHandler<dim, spacedim> &                  dof_handler,
+      const DoFHandler<dim, spacedim> &                          dof_handler,
       const Vector<Number> &                                     criteria,
       const Vector<Number> &                                     references,
       const ComparisonFunction<typename identity<Number>::type> &compare_refine,
@@ -515,9 +508,8 @@ namespace hp
         // nothing to do
         return;
 
-      Assert(
-        dof_handler.has_hp_capabilities(),
-        (typename dealii::DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
+      Assert(dof_handler.has_hp_capabilities(),
+             (typename DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
       AssertDimension(dof_handler.get_triangulation().n_active_cells(),
                       criteria.size());
       AssertDimension(dof_handler.get_triangulation().n_active_cells(),
@@ -546,12 +538,12 @@ namespace hp
      */
     template <int dim, typename Number, int spacedim>
     void
-    predict_error(const dealii::DoFHandler<dim, spacedim> &dof_handler,
-                  const Vector<Number> &                   error_indicators,
-                  Vector<Number> &                         predicted_errors,
-                  const double                             gamma_p,
-                  const double                             gamma_h,
-                  const double                             gamma_n)
+    predict_error(const DoFHandler<dim, spacedim> &dof_handler,
+                  const Vector<Number> &           error_indicators,
+                  Vector<Number> &                 predicted_errors,
+                  const double                     gamma_p,
+                  const double                     gamma_h,
+                  const double                     gamma_n)
     {
       if (dof_handler.get_fe_collection().size() == 0)
         // nothing to do
@@ -562,9 +554,9 @@ namespace hp
       AssertDimension(dof_handler.get_triangulation().n_active_cells(),
                       predicted_errors.size());
       Assert(0 < gamma_p && gamma_p < 1,
-             dealii::GridRefinement::ExcInvalidParameterValue());
-      Assert(0 < gamma_h, dealii::GridRefinement::ExcInvalidParameterValue());
-      Assert(0 < gamma_n, dealii::GridRefinement::ExcInvalidParameterValue());
+             GridRefinement::ExcInvalidParameterValue());
+      Assert(0 < gamma_h, GridRefinement::ExcInvalidParameterValue());
+      Assert(0 < gamma_n, GridRefinement::ExcInvalidParameterValue());
 
       // auxiliary variables
       unsigned int future_fe_degree       = numbers::invalid_unsigned_int;
@@ -577,84 +569,83 @@ namespace hp
       // deep copy error indicators
       predicted_errors = error_indicators;
 
-      for (const auto &cell : dof_handler.active_cell_iterators())
-        if (cell->is_locally_owned())
-          {
-            // current cell will not be adapted
-            if (!(cell->future_fe_index_set()) && !(cell->refine_flag_set()) &&
-                !(cell->coarsen_flag_set()))
-              {
-                predicted_errors[cell->active_cell_index()] *= gamma_n;
-                continue;
-              }
+      for (const auto &cell : dof_handler.active_cell_iterators() |
+                                IteratorFilters::LocallyOwnedCell())
+        {
+          // current cell will not be adapted
+          if (!(cell->future_fe_index_set()) && !(cell->refine_flag_set()) &&
+              !(cell->coarsen_flag_set()))
+            {
+              predicted_errors[cell->active_cell_index()] *= gamma_n;
+              continue;
+            }
 
-            // current cell will be adapted
-            // determine degree of its future finite element
-            if (cell->coarsen_flag_set())
-              {
-                // cell will be coarsened, thus determine future finite element
-                // on parent cell
-                const auto &parent = cell->parent();
-                if (future_fe_indices_on_coarsened_cells.find(parent) ==
-                    future_fe_indices_on_coarsened_cells.end())
-                  {
+          // current cell will be adapted
+          // determine degree of its future finite element
+          if (cell->coarsen_flag_set())
+            {
+              // cell will be coarsened, thus determine future finite element
+              // on parent cell
+              const auto &parent = cell->parent();
+              if (future_fe_indices_on_coarsened_cells.find(parent) ==
+                  future_fe_indices_on_coarsened_cells.end())
+                {
 #ifdef DEBUG
-                    for (const auto &child : parent->child_iterators())
-                      Assert(child->is_active() && child->coarsen_flag_set(),
-                             typename dealii::Triangulation<
-                               dim>::ExcInconsistentCoarseningFlags());
+                  for (const auto &child : parent->child_iterators())
+                    Assert(child->is_active() && child->coarsen_flag_set(),
+                           typename Triangulation<
+                             dim>::ExcInconsistentCoarseningFlags());
 #endif
 
-                    parent_future_fe_index =
-                      dealii::internal::hp::DoFHandlerImplementation::
-                        dominated_future_fe_on_children<dim, spacedim>(parent);
+                  parent_future_fe_index =
+                    internal::hp::DoFHandlerImplementation::
+                      dominated_future_fe_on_children<dim, spacedim>(parent);
 
-                    future_fe_indices_on_coarsened_cells.insert(
-                      {parent, parent_future_fe_index});
-                  }
-                else
-                  {
-                    parent_future_fe_index =
-                      future_fe_indices_on_coarsened_cells[parent];
-                  }
+                  future_fe_indices_on_coarsened_cells.insert(
+                    {parent, parent_future_fe_index});
+                }
+              else
+                {
+                  parent_future_fe_index =
+                    future_fe_indices_on_coarsened_cells[parent];
+                }
 
-                future_fe_degree =
-                  dof_handler.get_fe_collection()[parent_future_fe_index]
-                    .degree;
-              }
-            else
-              {
-                // future finite element on current cell is already set
-                future_fe_degree =
-                  dof_handler.get_fe_collection()[cell->future_fe_index()]
-                    .degree;
-              }
+              future_fe_degree =
+                dof_handler.get_fe_collection()[parent_future_fe_index].degree;
+            }
+          else
+            {
+              // future finite element on current cell is already set
+              future_fe_degree =
+                dof_handler.get_fe_collection()[cell->future_fe_index()].degree;
+            }
 
-            // step 1: exponential decay with p-adaptation
-            if (cell->future_fe_index_set())
-              {
-                predicted_errors[cell->active_cell_index()] *=
-                  std::pow(gamma_p, future_fe_degree - cell->get_fe().degree);
-              }
+          // step 1: exponential decay with p-adaptation
+          if (cell->future_fe_index_set())
+            {
+              predicted_errors[cell->active_cell_index()] *=
+                std::pow(gamma_p,
+                         int(future_fe_degree) - int(cell->get_fe().degree));
+            }
 
-            // step 2: algebraic decay with h-adaptation
-            if (cell->refine_flag_set())
-              {
-                predicted_errors[cell->active_cell_index()] *=
-                  (gamma_h * std::pow(.5, future_fe_degree));
+          // step 2: algebraic decay with h-adaptation
+          if (cell->refine_flag_set())
+            {
+              predicted_errors[cell->active_cell_index()] *=
+                (gamma_h * std::pow(.5, future_fe_degree));
 
-                // predicted error will be split on children cells
-                // after adaptation via CellDataTransfer
-              }
-            else if (cell->coarsen_flag_set())
-              {
-                predicted_errors[cell->active_cell_index()] /=
-                  (gamma_h * std::pow(.5, future_fe_degree));
+              // predicted error will be split on children cells
+              // after adaptation via CellDataTransfer
+            }
+          else if (cell->coarsen_flag_set())
+            {
+              predicted_errors[cell->active_cell_index()] /=
+                (gamma_h * std::pow(.5, future_fe_degree));
 
-                // predicted error will be summed up on parent cell
-                // after adaptation via CellDataTransfer
-              }
-          }
+              // predicted error will be summed up on parent cell
+              // after adaptation via CellDataTransfer
+            }
+        }
     }
 
 
@@ -664,15 +655,14 @@ namespace hp
      */
     template <int dim, int spacedim>
     void
-    force_p_over_h(const dealii::DoFHandler<dim, spacedim> &dof_handler)
+    force_p_over_h(const DoFHandler<dim, spacedim> &dof_handler)
     {
       if (dof_handler.get_fe_collection().size() == 0)
         // nothing to do
         return;
 
-      Assert(
-        dof_handler.has_hp_capabilities(),
-        (typename dealii::DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
+      Assert(dof_handler.has_hp_capabilities(),
+             (typename DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
 
       for (const auto &cell : dof_handler.active_cell_iterators())
         if (cell->is_locally_owned() && cell->future_fe_index_set())
@@ -686,24 +676,22 @@ namespace hp
 
     template <int dim, int spacedim>
     void
-    choose_p_over_h(const dealii::DoFHandler<dim, spacedim> &dof_handler)
+    choose_p_over_h(const DoFHandler<dim, spacedim> &dof_handler)
     {
       if (dof_handler.get_fe_collection().size() == 0)
         // nothing to do
         return;
 
-      Assert(
-        dof_handler.has_hp_capabilities(),
-        (typename dealii::DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
+      Assert(dof_handler.has_hp_capabilities(),
+             (typename DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
 
       // Ghost siblings might occur on parallel::shared::Triangulation objects.
       // We need information about future FE indices on all locally relevant
       // cells here, and thus communicate them.
       if (dynamic_cast<const parallel::shared::Triangulation<dim, spacedim> *>(
             &dof_handler.get_triangulation()) != nullptr)
-        dealii::internal::hp::DoFHandlerImplementation::
-          communicate_future_fe_indices(
-            const_cast<dealii::DoFHandler<dim, spacedim> &>(dof_handler));
+        internal::hp::DoFHandlerImplementation::communicate_future_fe_indices(
+          const_cast<DoFHandler<dim, spacedim> &>(dof_handler));
 
       for (const auto &cell : dof_handler.active_cell_iterators())
         if (cell->is_locally_owned() && cell->future_fe_index_set())
@@ -749,11 +737,10 @@ namespace hp
                             // need this information here and thus call the
                             // internal function that does not check for cell
                             // ownership.
-                            if (dealii::internal::
-                                  DoFCellAccessorImplementation::
-                                    Implementation::
-                                      future_fe_index_set<dim, spacedim, false>(
-                                        *child))
+                            if (internal::DoFCellAccessorImplementation::
+                                  Implementation::
+                                    future_fe_index_set<dim, spacedim, false>(
+                                      *child))
                               ++p_flagged_children;
                           }
                         else
@@ -800,18 +787,16 @@ namespace hp
      */
     template <int dim, int spacedim>
     bool
-    limit_p_level_difference(
-      const dealii::DoFHandler<dim, spacedim> &dof_handler,
-      const unsigned int                       max_difference,
-      const unsigned int                       contains_fe_index)
+    limit_p_level_difference(const DoFHandler<dim, spacedim> &dof_handler,
+                             const unsigned int               max_difference,
+                             const unsigned int               contains_fe_index)
     {
       if (dof_handler.get_fe_collection().size() == 0)
         // nothing to do
         return false;
 
-      Assert(
-        dof_handler.has_hp_capabilities(),
-        (typename dealii::DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
+      Assert(dof_handler.has_hp_capabilities(),
+             (typename DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
       Assert(
         max_difference > 0,
         ExcMessage(
@@ -826,10 +811,8 @@ namespace hp
 
       // there can be as many levels in the hierarchy as active FE indices are
       // possible
-      using level_type =
-        typename dealii::DoFHandler<dim, spacedim>::active_fe_index_type;
-      static const level_type invalid_level =
-        dealii::DoFHandler<dim, spacedim>::invalid_active_fe_index;
+      using level_type         = types::fe_index;
+      const auto invalid_level = static_cast<level_type>(-1);
 
       // map from FE index to level in hierarchy
       // FE indices that are not covered in the hierarchy are not in the map
@@ -869,10 +852,10 @@ namespace hp
             dof_handler.get_triangulation().n_active_cells());
         }
 
-      for (const auto &cell : dof_handler.active_cell_iterators())
-        if (cell->is_locally_owned())
-          future_levels[cell->global_active_cell_index()] =
-            hierarchy_level_for_fe_index[cell->future_fe_index()];
+      for (const auto &cell : dof_handler.active_cell_iterators() |
+                                IteratorFilters::LocallyOwnedCell())
+        future_levels[cell->global_active_cell_index()] =
+          hierarchy_level_for_fe_index[cell->future_fe_index()];
 
 
       //
@@ -888,8 +871,8 @@ namespace hp
       // Function that updates the level of neighbor to fulfill difference
       // criterion, and returns whether it was changed.
       const auto update_neighbor_level =
-        [&future_levels, max_difference](const auto &     neighbor,
-                                         const level_type cell_level) -> bool {
+        [&future_levels, max_difference, invalid_level](
+          const auto &neighbor, const level_type cell_level) -> bool {
         Assert(neighbor->is_active(), ExcInternalError());
         // We only care about locally owned neighbors. If neighbor is a ghost
         // cell, its future FE index will be updated on the owning process and
@@ -941,7 +924,7 @@ namespace hp
             for (const auto &child : parent->child_iterators())
               {
                 Assert(child->is_active() && child->coarsen_flag_set(),
-                       (typename dealii::Triangulation<dim, spacedim>::
+                       (typename Triangulation<dim, spacedim>::
                           ExcInconsistentCoarseningFlags()));
 
                 const level_type child_level = static_cast<level_type>(
@@ -1041,22 +1024,22 @@ namespace hp
       while (levels_changed_in_cycle);
 
       // update future FE indices on locally owned cells
-      for (const auto &cell : dof_handler.active_cell_iterators())
-        if (cell->is_locally_owned())
-          {
-            const level_type cell_level = static_cast<level_type>(
-              future_levels[cell->global_active_cell_index()]);
+      for (const auto &cell : dof_handler.active_cell_iterators() |
+                                IteratorFilters::LocallyOwnedCell())
+        {
+          const level_type cell_level = static_cast<level_type>(
+            future_levels[cell->global_active_cell_index()]);
 
-            if (cell_level != invalid_level)
-              {
-                const unsigned int fe_index =
-                  fe_index_for_hierarchy_level[cell_level];
+          if (cell_level != invalid_level)
+            {
+              const unsigned int fe_index =
+                fe_index_for_hierarchy_level[cell_level];
 
-                // only update if necessary
-                if (fe_index != cell->active_fe_index())
-                  cell->set_future_fe_index(fe_index);
-              }
-          }
+              // only update if necessary
+              if (fe_index != cell->active_fe_index())
+                cell->set_future_fe_index(fe_index);
+            }
+        }
 
       return levels_changed;
     }

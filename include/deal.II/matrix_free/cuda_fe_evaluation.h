@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -48,12 +48,11 @@ namespace CUDAWrappers
     __device__ inline unsigned int
     compute_index()
     {
-      return (dim == 1 ?
-                threadIdx.x % n_points_1d :
-                dim == 2 ?
-                threadIdx.x % n_points_1d + n_points_1d * threadIdx.y :
-                threadIdx.x % n_points_1d +
-                    n_points_1d * (threadIdx.y + n_points_1d * threadIdx.z));
+      return (dim == 1 ? threadIdx.x % n_points_1d :
+              dim == 2 ? threadIdx.x % n_points_1d + n_points_1d * threadIdx.y :
+                         threadIdx.x % n_points_1d +
+                           n_points_1d *
+                             (threadIdx.y + n_points_1d * threadIdx.z));
     }
   } // namespace internal
 
@@ -176,47 +175,18 @@ namespace CUDAWrappers
     integrate(const bool integrate_val, const bool integrate_grad);
 
     /**
-     * Return the value of a finite element function at quadrature point
-     * number @p q_point after a call to @p evaluate(true,...).
-     *
-     * @deprecated Use the version without parameters instead.
-     */
-    DEAL_II_DEPRECATED __device__ value_type
-                                  get_value(const unsigned int q_point) const;
-
-    /**
      * Same as above, except that the quadrature point is computed from thread
      * id.
      */
     __device__ value_type
-               get_value() const;
-
-    /**
-     * Return the value of a finite element function at degree of freedom
-     * @p dof after a call to integrate() or before a call to evaluate().
-     *
-     * @deprecated Use the version without parameters instead.
-     */
-    DEAL_II_DEPRECATED __device__ value_type
-                                  get_dof_value(const unsigned int dof) const;
+    get_value() const;
 
     /**
      * Same as above, except that the local dof index is computed from the
      * thread id.
      */
     __device__ value_type
-               get_dof_value() const;
-
-    /**
-     * Write a value to the field containing the values on quadrature points
-     * with component @p q_point. Access to the same fields as through @p
-     * get_value(). This specifies the value which is tested by all basis
-     * function on the current cell and integrated over.
-     *
-     * @deprecated Use the version without parameters instead.
-     */
-    DEAL_II_DEPRECATED __device__ void
-                       submit_value(const value_type &val_in, const unsigned int q_point);
+    get_dof_value() const;
 
     /**
      * Same as above, except that the quadrature point is computed from the
@@ -226,17 +196,6 @@ namespace CUDAWrappers
     submit_value(const value_type &val_in);
 
     /**
-     * Write a value to the field containing the values for the degree of
-     * freedom with index @p dof after a call to integrate() or before
-     * calling evaluate(). Access through the same fields as through
-     * get_dof_value().
-     *
-     * @deprecated Use the version without parameters instead.
-     */
-    DEAL_II_DEPRECATED __device__ void
-                       submit_dof_value(const value_type &val_in, const unsigned int dof);
-
-    /**
      * Same as above, except that the local dof index is computed from the
      * thread id.
      */
@@ -244,30 +203,11 @@ namespace CUDAWrappers
     submit_dof_value(const value_type &val_in);
 
     /**
-     * Return the gradient of a finite element function at quadrature point
-     * number @p q_point after a call to @p evaluate(...,true).
-     *
-     * @deprecated Use the version without parameters instead.
-     */
-    DEAL_II_DEPRECATED __device__ gradient_type
-                                  get_gradient(const unsigned int q_point) const;
-
-    /**
      * Same as above, except that the quadrature point is computed from the
      * thread id.
      */
     __device__ gradient_type
-               get_gradient() const;
-
-    /**
-     * Write a contribution that is tested by the gradient to the field
-     * containing the values on quadrature points with component @p q_point.
-     *
-     * @deprecated Use the version without parameters instead.
-     */
-    DEAL_II_DEPRECATED __device__ void
-                       submit_gradient(const gradient_type &grad_in, const unsigned int q_point);
-
+    get_gradient() const;
 
     /**
      * Same as above, except that the quadrature point is computed from the
@@ -275,24 +215,6 @@ namespace CUDAWrappers
      */
     __device__ void
     submit_gradient(const gradient_type &grad_in);
-
-    // clang-format off
-    /**
-     * Apply the functor @p func on every quadrature point.
-     *
-     * @p func needs to define
-     * \code
-     * __device__ void operator()(
-     *   CUDAWrappers::FEEvaluation<dim, fe_degree, n_q_points_1d, n_components, Number> *fe_eval,
-     *   const unsigned int                                                               q_point) const;
-     * \endcode
-     *
-     * @deprecated Use apply_for_each_quad_point() instead.
-     */
-    // clang-format on
-    template <typename Functor>
-    DEAL_II_DEPRECATED __device__ void
-                       apply_quad_point_operations(const Functor &func);
 
     // clang-format off
     /**
@@ -316,7 +238,8 @@ namespace CUDAWrappers
     unsigned int             padding_length;
     const unsigned int       mf_object_id;
 
-    const unsigned int constraint_mask;
+    const dealii::internal::MatrixFreeFunctions::ConstraintKinds
+      constraint_mask;
 
     const bool use_coloring;
 
@@ -493,47 +416,11 @@ namespace CUDAWrappers
                                    n_q_points_1d,
                                    n_components_,
                                    Number>::value_type
-  FEEvaluation<dim, fe_degree, n_q_points_1d, n_components_, Number>::get_value(
-    const unsigned int q_point) const
-  {
-    return values[q_point];
-  }
-
-
-
-  template <int dim,
-            int fe_degree,
-            int n_q_points_1d,
-            int n_components_,
-            typename Number>
-  __device__ typename FEEvaluation<dim,
-                                   fe_degree,
-                                   n_q_points_1d,
-                                   n_components_,
-                                   Number>::value_type
   FEEvaluation<dim, fe_degree, n_q_points_1d, n_components_, Number>::
     get_value() const
   {
     const unsigned int q_point = internal::compute_index<dim, n_q_points_1d>();
     return values[q_point];
-  }
-
-
-
-  template <int dim,
-            int fe_degree,
-            int n_q_points_1d,
-            int n_components_,
-            typename Number>
-  __device__ typename FEEvaluation<dim,
-                                   fe_degree,
-                                   n_q_points_1d,
-                                   n_components_,
-                                   Number>::value_type
-  FEEvaluation<dim, fe_degree, n_q_points_1d, n_components_, Number>::
-    get_dof_value(const unsigned int dof) const
-  {
-    return values[dof];
   }
 
 
@@ -564,38 +451,10 @@ namespace CUDAWrappers
             typename Number>
   __device__ void
   FEEvaluation<dim, fe_degree, n_q_points_1d, n_components_, Number>::
-    submit_value(const value_type &val_in, const unsigned int q_point)
-  {
-    values[q_point] = val_in * JxW[q_point];
-  }
-
-
-
-  template <int dim,
-            int fe_degree,
-            int n_q_points_1d,
-            int n_components_,
-            typename Number>
-  __device__ void
-  FEEvaluation<dim, fe_degree, n_q_points_1d, n_components_, Number>::
     submit_value(const value_type &val_in)
   {
     const unsigned int q_point = internal::compute_index<dim, n_q_points_1d>();
     values[q_point]            = val_in * JxW[q_point];
-  }
-
-
-
-  template <int dim,
-            int fe_degree,
-            int n_q_points_1d,
-            int n_components_,
-            typename Number>
-  __device__ void
-  FEEvaluation<dim, fe_degree, n_q_points_1d, n_components_, Number>::
-    submit_dof_value(const value_type &val_in, const unsigned int dof)
-  {
-    values[dof] = val_in;
   }
 
 
@@ -626,38 +485,6 @@ namespace CUDAWrappers
                                    n_components_,
                                    Number>::gradient_type
   FEEvaluation<dim, fe_degree, n_q_points_1d, n_components_, Number>::
-    get_gradient(const unsigned int q_point) const
-  {
-    static_assert(n_components_ == 1, "This function only supports FE with one \
-                  components");
-    // TODO optimize if the mesh is uniform
-    const Number *inv_jacobian = &inv_jac[q_point];
-    gradient_type grad;
-    for (int d_1 = 0; d_1 < dim; ++d_1)
-      {
-        Number tmp = 0.;
-        for (int d_2 = 0; d_2 < dim; ++d_2)
-          tmp += inv_jacobian[padding_length * n_cells * (dim * d_2 + d_1)] *
-                 gradients[d_2][q_point];
-        grad[d_1] = tmp;
-      }
-
-    return grad;
-  }
-
-
-
-  template <int dim,
-            int fe_degree,
-            int n_q_points_1d,
-            int n_components_,
-            typename Number>
-  __device__ typename FEEvaluation<dim,
-                                   fe_degree,
-                                   n_q_points_1d,
-                                   n_components_,
-                                   Number>::gradient_type
-  FEEvaluation<dim, fe_degree, n_q_points_1d, n_components_, Number>::
     get_gradient() const
   {
     static_assert(n_components_ == 1, "This function only supports FE with one \
@@ -667,39 +494,16 @@ namespace CUDAWrappers
     const unsigned int q_point = internal::compute_index<dim, n_q_points_1d>();
     const Number *     inv_jacobian = &inv_jac[q_point];
     gradient_type      grad;
-    for (int d_1 = 0; d_1 < dim; ++d_1)
+    for (unsigned int d_1 = 0; d_1 < dim; ++d_1)
       {
         Number tmp = 0.;
-        for (int d_2 = 0; d_2 < dim; ++d_2)
+        for (unsigned int d_2 = 0; d_2 < dim; ++d_2)
           tmp += inv_jacobian[padding_length * n_cells * (dim * d_2 + d_1)] *
                  gradients[d_2][q_point];
         grad[d_1] = tmp;
       }
 
     return grad;
-  }
-
-
-
-  template <int dim,
-            int fe_degree,
-            int n_q_points_1d,
-            int n_components_,
-            typename Number>
-  __device__ void
-  FEEvaluation<dim, fe_degree, n_q_points_1d, n_components_, Number>::
-    submit_gradient(const gradient_type &grad_in, const unsigned int q_point)
-  {
-    // TODO optimize if the mesh is uniform
-    const Number *inv_jacobian = &inv_jac[q_point];
-    for (int d_1 = 0; d_1 < dim; ++d_1)
-      {
-        Number tmp = 0.;
-        for (int d_2 = 0; d_2 < dim; ++d_2)
-          tmp += inv_jacobian[n_cells * padding_length * (dim * d_1 + d_2)] *
-                 grad_in[d_2];
-        gradients[d_1][q_point] = tmp * JxW[q_point];
-      }
   }
 
 
@@ -716,31 +520,14 @@ namespace CUDAWrappers
     // TODO optimize if the mesh is uniform
     const unsigned int q_point = internal::compute_index<dim, n_q_points_1d>();
     const Number *     inv_jacobian = &inv_jac[q_point];
-    for (int d_1 = 0; d_1 < dim; ++d_1)
+    for (unsigned int d_1 = 0; d_1 < dim; ++d_1)
       {
         Number tmp = 0.;
-        for (int d_2 = 0; d_2 < dim; ++d_2)
+        for (unsigned int d_2 = 0; d_2 < dim; ++d_2)
           tmp += inv_jacobian[n_cells * padding_length * (dim * d_1 + d_2)] *
                  grad_in[d_2];
         gradients[d_1][q_point] = tmp * JxW[q_point];
       }
-  }
-
-
-
-  template <int dim,
-            int fe_degree,
-            int n_q_points_1d,
-            int n_components_,
-            typename Number>
-  template <typename Functor>
-  __device__ void
-  FEEvaluation<dim, fe_degree, n_q_points_1d, n_components_, Number>::
-    apply_quad_point_operations(const Functor &func)
-  {
-    func(this, internal::compute_index<dim, n_q_points_1d>());
-
-    __syncthreads();
   }
 
 

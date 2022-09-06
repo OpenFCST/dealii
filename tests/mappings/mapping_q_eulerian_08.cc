@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -207,6 +207,21 @@ test(const unsigned int n_ref = 0)
   const unsigned int min_level = 0;
   MGLevelObject<LinearAlgebra::distributed::Vector<LevelNumberType>>
     displacement_level(min_level, max_level);
+
+  // Important! This preallocation of the displacement vectors with
+  // all relevant ghost indices is required to certain meshes.
+  for (unsigned int level = min_level; level <= max_level; ++level)
+    {
+      IndexSet relevant_mg_dofs;
+      DoFTools::extract_locally_relevant_level_dofs(dof_handler_euler,
+                                                    level,
+                                                    relevant_mg_dofs);
+      displacement_level[level].reinit(dof_handler_euler.locally_owned_mg_dofs(
+                                         level),
+                                       relevant_mg_dofs,
+                                       mpi_communicator);
+    }
+
   mg_transfer_euler.interpolate_to_mg(dof_handler_euler,
                                       displacement_level,
                                       displacement);
@@ -228,7 +243,8 @@ test(const unsigned int n_ref = 0)
       euler_fine, dof_handler, constraints, quadrature_formula, data);
 
     MatrixFree<dim, NumberType> matrix_free;
-    matrix_free.reinit(dof_handler, constraints, quadrature_formula, data);
+    matrix_free.reinit(
+      MappingQ1<dim>{}, dof_handler, constraints, quadrature_formula, data);
 
 
     // test fine-level mapping:
@@ -261,9 +277,8 @@ test(const unsigned int n_ref = 0)
   }
 
   // now go through all GMG levels:
-  std::set<types::boundary_id> dirichlet_boundary_ids;
-  dirichlet_boundary_ids.insert(0);
-  MGConstrainedDoFs mg_constrained_dofs;
+  const std::set<types::boundary_id> dirichlet_boundary_ids = {0};
+  MGConstrainedDoFs                  mg_constrained_dofs;
   mg_constrained_dofs.initialize(dof_handler);
   mg_constrained_dofs.make_zero_boundary_constraints(dof_handler,
                                                      dirichlet_boundary_ids);
@@ -304,7 +319,8 @@ test(const unsigned int n_ref = 0)
                             mg_additional_data);
 
       MatrixFree<dim, LevelNumberType> mg_level;
-      mg_level.reinit(dof_handler,
+      mg_level.reinit(MappingQ1<dim>{},
+                      dof_handler,
                       level_constraints,
                       quadrature_formula,
                       mg_additional_data);

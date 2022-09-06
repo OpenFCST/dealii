@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2018 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -105,7 +105,7 @@ test()
           deallog << quad->vertex(2);
           deallog << " to ";
           deallog << quad->vertex(3);
-          deallog << ")" << std::endl;
+          deallog << ')' << std::endl;
 
           // now make sure that p is
           // indeed closer to

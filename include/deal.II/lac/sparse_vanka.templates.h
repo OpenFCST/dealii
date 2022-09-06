@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -39,14 +39,6 @@ SparseVanka<number>::SparseVanka()
   , inverses()
   , _m(0)
   , _n(0)
-{}
-
-template <typename number>
-SparseVanka<number>::SparseVanka(const SparseMatrix<number> &M,
-                                 const std::vector<bool> &   selected_dofs,
-                                 const bool /*conserve_mem*/,
-                                 const unsigned int /*n_threads*/)
-  : SparseVanka(M, selected_dofs)
 {}
 
 template <typename number>
@@ -106,9 +98,6 @@ SparseVanka<number>::compute_inverses()
   Assert(matrix != nullptr, ExcNotInitialized());
   Assert(selected != nullptr, ExcNotInitialized());
 
-#ifndef DEAL_II_WITH_THREADS
-  compute_inverses(0, matrix->m());
-#else
   const size_type n_inverses =
     std::count(selected->begin(), selected->end(), true);
   // somewhat arbitrarily set up an equal number of tasks as we have threads
@@ -161,7 +150,6 @@ SparseVanka<number>::compute_inverses()
       this->compute_inverses(blocking[i].first, blocking[i].second);
     });
   tasks.join_all();
-#endif
 }
 
 
@@ -391,16 +379,6 @@ SparseVanka<number>::AdditionalData::AdditionalData(
 {}
 
 
-
-template <typename number>
-SparseVanka<number>::AdditionalData::AdditionalData(
-  const std::vector<bool> &selected,
-  const bool /*conserve_mem*/,
-  const unsigned int /*n_threads*/)
-  : AdditionalData(selected)
-{}
-
-
 //---------------------------------------------------------------------------
 
 
@@ -416,18 +394,6 @@ SparseBlockVanka<number>::SparseBlockVanka(
 {
   compute_dof_masks(M, selected, blocking_strategy);
 }
-
-
-template <typename number>
-SparseBlockVanka<number>::SparseBlockVanka(
-  const SparseMatrix<number> &M,
-  const std::vector<bool> &   selected,
-  const unsigned int          n_blocks,
-  const BlockingStrategy      blocking_strategy,
-  const bool /*conserve_memory*/,
-  const unsigned int /*n_threads*/)
-  : SparseBlockVanka(M, selected, n_blocks, blocking_strategy)
-{}
 
 
 template <typename number>

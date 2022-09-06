@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2020 by the deal.II authors
+// Copyright (C) 2013 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -34,13 +34,15 @@
 
 #include "../tests.h"
 
-void create_reference_triangulation(Triangulation<3> &triangulation)
+void
+create_reference_triangulation(Triangulation<3> &triangulation)
 {
   GridGenerator::hyper_cube(triangulation, -1.0, 1.0);
   triangulation.refine_global(1);
 }
 
-void create_triangulation(Triangulation<3> &triangulation)
+void
+create_triangulation(Triangulation<3> &triangulation)
 {
   static const Point<3> vertices_parallelograms[] = {
     Point<3>(-1., -1., -1.), // 0

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,6 +18,7 @@
 
 
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/grid_tools.h>
 
@@ -103,7 +104,8 @@ namespace VectorTools
       cell_point =
         GridTools::find_active_cell_around_point(mapping, dof, point);
 
-    AssertThrow(cell_point.first->is_locally_owned(),
+    AssertThrow(cell_point.first.state() == IteratorState::valid &&
+                  cell_point.first->is_locally_owned(),
                 ExcPointNotAvailableHere());
     Assert(GeometryInfo<dim>::distance_to_unit_cell(cell_point.second) < 1e-10,
            ExcInternalError());
@@ -145,7 +147,8 @@ namespace VectorTools
       cell_point =
         GridTools::find_active_cell_around_point(mapping, dof, point);
 
-    AssertThrow(cell_point.first->is_locally_owned(),
+    AssertThrow(cell_point.first.state() == IteratorState::valid &&
+                  cell_point.first->is_locally_owned(),
                 ExcPointNotAvailableHere());
     Assert(GeometryInfo<dim>::distance_to_unit_cell(cell_point.second) < 1e-10,
            ExcInternalError());
@@ -247,7 +250,8 @@ namespace VectorTools
       cell_point =
         GridTools::find_active_cell_around_point(mapping, dof, point);
 
-    AssertThrow(cell_point.first->is_locally_owned(),
+    AssertThrow(cell_point.first.state() == IteratorState::valid &&
+                  cell_point.first->is_locally_owned(),
                 ExcPointNotAvailableHere());
     Assert(GeometryInfo<dim>::distance_to_unit_cell(cell_point.second) < 1e-10,
            ExcInternalError());
@@ -290,6 +294,9 @@ namespace VectorTools
       cell_point =
         GridTools::find_active_cell_around_point(mapping, dof_handler, p);
 
+    AssertThrow(cell_point.first.state() == IteratorState::valid,
+                ExcPointNotAvailableHere());
+
     Quadrature<dim> q(
       GeometryInfo<dim>::project_to_unit_cell(cell_point.second));
 
@@ -304,7 +311,7 @@ namespace VectorTools
     std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
     cell_point.first->get_dof_indices(local_dof_indices);
 
-    for (unsigned int i = 0; i < dofs_per_cell; i++)
+    for (unsigned int i = 0; i < dofs_per_cell; ++i)
       rhs_vector(local_dof_indices[i]) = fe_values.shape_value(i, 0);
   }
 
@@ -351,6 +358,9 @@ namespace VectorTools
       cell_point =
         GridTools::find_active_cell_around_point(mapping, dof_handler, p);
 
+    AssertThrow(cell_point.first.state() == IteratorState::valid,
+                ExcPointNotAvailableHere());
+
     Quadrature<dim> q(
       GeometryInfo<dim>::project_to_unit_cell(cell_point.second));
 
@@ -366,7 +376,7 @@ namespace VectorTools
     std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
     cell_point.first->get_dof_indices(local_dof_indices);
 
-    for (unsigned int i = 0; i < dofs_per_cell; i++)
+    for (unsigned int i = 0; i < dofs_per_cell; ++i)
       rhs_vector(local_dof_indices[i]) = fe_values.shape_value(i, 0);
   }
 
@@ -393,6 +403,9 @@ namespace VectorTools
       cell_point =
         GridTools::find_active_cell_around_point(mapping, dof_handler, p);
 
+    AssertThrow(cell_point.first.state() == IteratorState::valid,
+                ExcPointNotAvailableHere());
+
     const Quadrature<dim> q(
       GeometryInfo<dim>::project_to_unit_cell(cell_point.second));
 
@@ -408,7 +421,7 @@ namespace VectorTools
     std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
     cell_point.first->get_dof_indices(local_dof_indices);
 
-    for (unsigned int i = 0; i < dofs_per_cell; i++)
+    for (unsigned int i = 0; i < dofs_per_cell; ++i)
       rhs_vector(local_dof_indices[i]) =
         orientation * fe_values[vec].value(i, 0);
   }
@@ -461,6 +474,9 @@ namespace VectorTools
       cell_point =
         GridTools::find_active_cell_around_point(mapping, dof_handler, p);
 
+    AssertThrow(cell_point.first.state() == IteratorState::valid,
+                ExcPointNotAvailableHere());
+
     Quadrature<dim> q(
       GeometryInfo<dim>::project_to_unit_cell(cell_point.second));
 
@@ -477,7 +493,7 @@ namespace VectorTools
     std::vector<types::global_dof_index> local_dof_indices(dofs_per_cell);
     cell_point.first->get_dof_indices(local_dof_indices);
 
-    for (unsigned int i = 0; i < dofs_per_cell; i++)
+    for (unsigned int i = 0; i < dofs_per_cell; ++i)
       rhs_vector(local_dof_indices[i]) =
         orientation * fe_values[vec].value(i, 0);
   }

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -79,7 +79,7 @@ do_test()
 
 
   // loop over levels
-  for (unsigned int l = 0; l < std::numeric_limits<unsigned int>::max(); l++)
+  for (unsigned int l = 0; l < std::numeric_limits<unsigned int>::max(); ++l)
     {
       deallog.push("level" + std::to_string(l));
 
@@ -140,10 +140,10 @@ do_test()
       // setup transfer operator
       MGTwoLevelTransfer<dim, LinearAlgebra::distributed::Vector<Number>>
         transfer;
-      transfer.reinit_polynomial_transfer(dof_handler_fine,
-                                          dof_handler_coarse,
-                                          constraint_fine,
-                                          constraint_coarse);
+      transfer.reinit(dof_handler_fine,
+                      dof_handler_coarse,
+                      constraint_fine,
+                      constraint_coarse);
 
       test_transfer_operator(transfer, dof_handler_fine, dof_handler_coarse);
 

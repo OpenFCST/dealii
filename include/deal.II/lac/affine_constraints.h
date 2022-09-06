@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2019 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -30,6 +30,7 @@
 
 #include <boost/range/iterator_range.hpp>
 
+#include <algorithm>
 #include <set>
 #include <type_traits>
 #include <utility>
@@ -414,10 +415,6 @@ namespace internal
                  dealii::BlockVector<T> &                    vec);
   } // namespace AffineConstraintsImplementation
 } // namespace internal
-
-
-template <typename number>
-class AffineConstraints;
 #endif
 
 // TODO[WB]: We should have a function of the kind
@@ -774,6 +771,22 @@ public:
   close();
 
   /**
+   * Check if the function close() was called or there are no
+   * constraints locally, which is normally the case if a dummy
+   * AffineConstraints was created for the DG case.
+   */
+  bool
+  is_closed() const;
+
+  /**
+   * Check if the function close() was called or there are no
+   * constraints globally, which is normally the case if a dummy
+   * AffineConstraints was created for the DG case.
+   */
+  bool
+  is_closed(const MPI_Comm &comm) const;
+
+  /**
    * Merge the constraints represented by the object given as argument into
    * the constraints represented by this object. Both objects may or may not
    * be closed (by having their function close() called before). If this
@@ -842,6 +855,21 @@ public:
    */
   size_type
   n_constraints() const;
+
+  /**
+   * Return number of constraints stored in this matrix that are identities,
+   * i.e., those constraints with only one degree of freedom and weight one.
+   */
+  size_type
+  n_identities() const;
+
+  /**
+   * Return number of constraints stored in this matrix that have an
+   * inhomogenity, i.e., those constraints with a non-trivial inhomogeneous
+   * value.
+   */
+  size_type
+  n_inhomogeneities() const;
 
   /**
    * Return whether the degree of freedom with number @p line_n is a
@@ -1510,6 +1538,20 @@ public:
     const Table<2, bool> &        dof_mask = Table<2, bool>()) const;
 
   /**
+   * Similar to the other function, but for non-quadratic sparsity patterns, and
+   * for different constraints in the column space.
+   */
+  template <typename SparsityPatternType>
+  void
+  add_entries_local_to_global(
+    const std::vector<size_type> &   row_indices,
+    const AffineConstraints<number> &col_constraints,
+    const std::vector<size_type> &   col_indices,
+    SparsityPatternType &            sparsity_pattern,
+    const bool                       keep_constrained_entries = true,
+    const Table<2, bool> &           dof_mask = Table<2, bool>()) const;
+
+  /**
    * This function imports values from a global vector (@p global_vector) by
    * applying the constraints to a vector of local values, expressed in
    * iterator format.  In most cases, the local values will be identified by
@@ -1712,6 +1754,16 @@ public:
                             const bool                   verbose = false) const;
 
   /**
+   * Make the current object consistent on all processors
+   * in a distributed computation. One should call this function before
+   * calling close().
+   */
+  void
+  make_consistent_in_parallel(const IndexSet &locally_owned_dofs,
+                              const IndexSet &locally_relevant_dofs,
+                              const MPI_Comm  mpi_communicator);
+
+  /**
    * Exception
    *
    * @ingroup Exceptions
@@ -1744,7 +1796,7 @@ public:
                  << "The entry for the indices " << arg1 << " and " << arg2
                  << " already exists, but the values " << arg3 << " (old) and "
                  << arg4 << " (new) differ "
-                 << "by " << (arg4 - arg3) << ".");
+                 << "by " << (arg4 - arg3) << '.');
   /**
    * Exception
    *
@@ -2118,6 +2170,29 @@ AffineConstraints<number>::n_constraints() const
 }
 
 template <typename number>
+inline types::global_dof_index
+AffineConstraints<number>::n_identities() const
+{
+  return std::count_if(lines.begin(),
+                       lines.end(),
+                       [](const ConstraintLine &line) {
+                         return (line.entries.size() == 1) &&
+                                (line.entries[0].second == number(1.));
+                       });
+}
+
+template <typename number>
+inline types::global_dof_index
+AffineConstraints<number>::n_inhomogeneities() const
+{
+  return std::count_if(lines.begin(),
+                       lines.end(),
+                       [](const ConstraintLine &line) {
+                         return (line.inhomogeneity != number(0.));
+                       });
+}
+
+template <typename number>
 inline bool
 AffineConstraints<number>::is_constrained(const size_type index) const
 {
@@ -2140,7 +2215,7 @@ AffineConstraints<number>::is_inhomogeneously_constrained(
   else
     {
       Assert(lines_cache[line_index] < lines.size(), ExcInternalError());
-      return !(lines[lines_cache[line_index]].inhomogeneity == number(0.));
+      return (lines[lines_cache[line_index]].inhomogeneity != number(0.));
     }
 }
 
@@ -2177,7 +2252,7 @@ inline types::global_dof_index
 AffineConstraints<number>::calculate_line_index(const size_type line_n) const
 {
   // IndexSet is unused (serial case)
-  if (!local_lines.size())
+  if (local_lines.size() == 0)
     return line_n;
 
   Assert(local_lines.is_element(line_n), ExcRowNotStoredHere(line_n));
@@ -2189,7 +2264,7 @@ template <typename number>
 inline bool
 AffineConstraints<number>::can_store_line(size_type line_n) const
 {
-  return !local_lines.size() || local_lines.is_element(line_n);
+  return local_lines.size() == 0 || local_lines.is_element(line_n);
 }
 
 template <typename number>
@@ -2299,6 +2374,8 @@ AffineConstraints<number>::get_dof_values(
     }
 }
 
+// Forward declarations
+#ifndef DOXYGEN
 template <typename MatrixType>
 class BlockMatrixBase;
 template <typename SparsityPatternType>
@@ -2416,6 +2493,7 @@ namespace internal
 
   } // namespace AffineConstraints
 } // namespace internal
+#endif
 
 
 
@@ -2539,8 +2617,8 @@ inline AffineConstraints<number>::ConstraintLine::ConstraintLine(
 template <typename number>
 template <typename ConstraintLineType>
 inline typename AffineConstraints<number>::ConstraintLine &
-AffineConstraints<number>::ConstraintLine::
-operator=(const ConstraintLineType &other)
+AffineConstraints<number>::ConstraintLine::operator=(
+  const ConstraintLineType &other)
 {
   this->index = other.index;
 

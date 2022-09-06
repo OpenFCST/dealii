@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2020 by the deal.II authors
+// Copyright (C) 2001 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -24,8 +24,7 @@
 #include <deal.II/dofs/dof_accessor.h>
 #include <deal.II/dofs/dof_handler.h>
 
-#include <deal.II/fe/mapping_q1.h>
-#include <deal.II/fe/mapping_q_generic.h>
+#include <deal.II/fe/mapping_q.h>
 
 #include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_tools.h>
@@ -33,7 +32,6 @@
 #include <deal.II/grid/tria_accessor.h>
 #include <deal.II/grid/tria_iterator.h>
 
-#include <deal.II/hp/dof_handler.h>
 #include <deal.II/hp/mapping_collection.h>
 
 #include <deal.II/lac/full_matrix.h>
@@ -112,7 +110,7 @@ namespace GridTools
 
     // For all remaining vertices, test
     // whether they are any closer
-    for (unsigned int j = best_vertex + 1; j < vertices.size(); j++)
+    for (unsigned int j = best_vertex + 1; j < vertices.size(); ++j)
       if (used[j])
         {
           double dist = (p - vertices[j]).norm_square();
@@ -450,6 +448,9 @@ namespace GridTools
     int                                         best_level    = -1;
     std::pair<active_cell_iterator, Point<dim>> best_cell;
 
+    // Initialize best_cell.first to the end iterator
+    best_cell.first = mesh.end();
+
     // Find closest vertex and determine
     // all adjacent cells
     std::vector<active_cell_iterator> adjacent_cells_tmp =
@@ -509,8 +510,7 @@ namespace GridTools
                       }
                   }
                 catch (
-                  typename MappingQGeneric<dim,
-                                           spacedim>::ExcTransformationFailed &)
+                  typename MappingQ<dim, spacedim>::ExcTransformationFailed &)
                   {
                     // ok, the transformation
                     // failed presumably
@@ -550,9 +550,6 @@ namespace GridTools
           }
       }
 
-    AssertThrow(best_cell.first.state() == IteratorState::valid,
-                ExcPointNotFound<spacedim>(p));
-
     return best_cell;
   }
 
@@ -574,18 +571,14 @@ namespace GridTools
                                      const double                   tolerance,
                                      const std::vector<bool> &marked_vertices)
   {
-    try
-      {
-        const auto cell_and_point = find_active_cell_around_point(
-          mapping, mesh, p, marked_vertices, tolerance);
+    const auto cell_and_point = find_active_cell_around_point(
+      mapping, mesh, p, marked_vertices, tolerance);
 
-        return find_all_active_cells_around_point(
-          mapping, mesh, p, tolerance, cell_and_point);
-      }
-    catch (ExcPointNotFound<spacedim> &)
-      {}
+    if (cell_and_point.first == mesh.end())
+      return {};
 
-    return {};
+    return find_all_active_cells_around_point(
+      mapping, mesh, p, tolerance, cell_and_point);
   }
 
 
@@ -616,7 +609,7 @@ namespace GridTools
     // insert the fist cell and point into the vector
     cells_and_points.push_back(first_cell);
 
-    // check if the given point is on the surface of the unit cell. if yes,
+    // check if the given point is on the surface of the unit cell. If yes,
     // need to find all neighbors
     const Point<dim> unit_point = cells_and_points.front().second;
     const auto       my_cell    = cells_and_points.front().first;
@@ -886,7 +879,7 @@ namespace GridTools
     const double layer_thickness)
   {
     std::vector<typename MeshType::active_cell_iterator>
-                      subdomain_boundary_cells, active_cell_layer_within_distance;
+      subdomain_boundary_cells, active_cell_layer_within_distance;
     std::vector<bool> vertices_outside_subdomain(
       mesh.get_triangulation().n_vertices(), false);
 
@@ -1351,8 +1344,7 @@ namespace GridTools
                       }
                   }
                 catch (
-                  typename MappingQGeneric<dim,
-                                           spacedim>::ExcTransformationFailed &)
+                  typename MappingQ<dim, spacedim>::ExcTransformationFailed &)
                   {
                     // ok, the transformation
                     // failed presumably
@@ -1383,9 +1375,6 @@ namespace GridTools
               }
           }
       }
-
-    AssertThrow(best_cell.first.state() == IteratorState::valid,
-                ExcPointNotFound<spacedim>(p));
 
     return best_cell;
   }
@@ -1467,7 +1456,7 @@ namespace GridTools
         else
           // If not, it asks for the parent of the cell, until it finds the
           // parent cell with the refinement level equal to the min_level and
-          // inserts that parent cell into the the set of uniform_cells, as the
+          // inserts that parent cell into the set of uniform_cells, as the
           // set of cells with the coarsest common refinement level.
           {
             typename Container::cell_iterator parent = *patch_cell;
@@ -2022,7 +2011,7 @@ namespace GridTools
     std::set<std::pair<CellIterator, unsigned int>> &pairs1,
     std::set<std::pair<typename identity<CellIterator>::type, unsigned int>>
       &                                          pairs2,
-    const int                                    direction,
+    const unsigned int                           direction,
     std::vector<PeriodicFacePair<CellIterator>> &matched_pairs,
     const dealii::Tensor<1, CellIterator::AccessorType::space_dimension>
       &                       offset,
@@ -2115,7 +2104,7 @@ namespace GridTools
   collect_periodic_faces(
     const MeshType &         mesh,
     const types::boundary_id b_id,
-    const int                direction,
+    const unsigned int       direction,
     std::vector<PeriodicFacePair<typename MeshType::cell_iterator>>
       &                                         matched_pairs,
     const Tensor<1, MeshType::space_dimension> &offset,
@@ -2197,7 +2186,7 @@ namespace GridTools
     const MeshType &         mesh,
     const types::boundary_id b_id1,
     const types::boundary_id b_id2,
-    const int                direction,
+    const unsigned int       direction,
     std::vector<PeriodicFacePair<typename MeshType::cell_iterator>>
       &                                         matched_pairs,
     const Tensor<1, MeshType::space_dimension> &offset,
@@ -2284,7 +2273,7 @@ namespace GridTools
   inline bool
   orthogonal_equality(const Point<spacedim> &    point1,
                       const Point<spacedim> &    point2,
-                      const int                  direction,
+                      const unsigned int         direction,
                       const Tensor<1, spacedim> &offset,
                       const FullMatrix<double> & matrix)
   {
@@ -2295,15 +2284,15 @@ namespace GridTools
     Point<spacedim> distance;
 
     if (matrix.m() == spacedim)
-      for (int i = 0; i < spacedim; ++i)
-        for (int j = 0; j < spacedim; ++j)
+      for (unsigned int i = 0; i < spacedim; ++i)
+        for (unsigned int j = 0; j < spacedim; ++j)
           distance(i) += matrix(i, j) * point1(j);
     else
       distance = point1;
 
     distance += offset - point2;
 
-    for (int i = 0; i < spacedim; ++i)
+    for (unsigned int i = 0; i < spacedim; ++i)
       {
         // Only compare coordinate-components != direction:
         if (i == direction)
@@ -2418,11 +2407,12 @@ namespace GridTools
 
 
   template <typename FaceIterator>
-  inline bool orthogonal_equality(
+  inline bool
+  orthogonal_equality(
     std::bitset<3> &                                              orientation,
     const FaceIterator &                                          face1,
     const FaceIterator &                                          face2,
-    const int                                                     direction,
+    const unsigned int                                            direction,
     const Tensor<1, FaceIterator::AccessorType::space_dimension> &offset,
     const FullMatrix<double> &                                    matrix)
   {
@@ -2474,7 +2464,7 @@ namespace GridTools
   orthogonal_equality(
     const FaceIterator &                                          face1,
     const FaceIterator &                                          face2,
-    const int                                                     direction,
+    const unsigned int                                            direction,
     const Tensor<1, FaceIterator::AccessorType::space_dimension> &offset,
     const FullMatrix<double> &                                    matrix)
   {

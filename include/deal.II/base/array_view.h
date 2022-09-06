@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2020 by the deal.II authors
+// Copyright (C) 2004 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -322,7 +322,8 @@ public:
    * This function is only allowed to be called if the underlying data is indeed
    * stored in CPU memory.
    */
-  value_type &operator[](const std::size_t i) const;
+  value_type &
+  operator[](const std::size_t i) const;
 
 private:
   /**
@@ -413,7 +414,8 @@ inline void
 ArrayView<ElementType, MemorySpaceType>::reinit(value_type *starting_element,
                                                 const std::size_t n_elements)
 {
-  *this = ArrayView(starting_element, n_elements);
+  this->starting_element = starting_element;
+  this->n_elements       = n_elements;
 }
 
 
@@ -515,8 +517,8 @@ inline ArrayView<ElementType, MemorySpaceType>::ArrayView(
 
 template <typename ElementType, typename MemorySpaceType>
 inline bool
-ArrayView<ElementType, MemorySpaceType>::
-operator==(const ArrayView<const value_type, MemorySpaceType> &other_view) const
+ArrayView<ElementType, MemorySpaceType>::operator==(
+  const ArrayView<const value_type, MemorySpaceType> &other_view) const
 {
   return (other_view.data() == starting_element) &&
          (other_view.size() == n_elements);
@@ -526,9 +528,9 @@ operator==(const ArrayView<const value_type, MemorySpaceType> &other_view) const
 
 template <typename ElementType, typename MemorySpaceType>
 inline bool
-ArrayView<ElementType, MemorySpaceType>::
-operator==(const ArrayView<typename std::remove_cv<value_type>::type,
-                           MemorySpaceType> &other_view) const
+ArrayView<ElementType, MemorySpaceType>::operator==(
+  const ArrayView<typename std::remove_cv<value_type>::type, MemorySpaceType>
+    &other_view) const
 {
   return (other_view.data() == starting_element) &&
          (other_view.size() == n_elements);
@@ -538,8 +540,8 @@ operator==(const ArrayView<typename std::remove_cv<value_type>::type,
 
 template <typename ElementType, typename MemorySpaceType>
 inline bool
-ArrayView<ElementType, MemorySpaceType>::
-operator!=(const ArrayView<const value_type, MemorySpaceType> &other_view) const
+ArrayView<ElementType, MemorySpaceType>::operator!=(
+  const ArrayView<const value_type, MemorySpaceType> &other_view) const
 {
   return !(*this == other_view);
 }
@@ -560,9 +562,9 @@ ArrayView<ElementType, MemorySpaceType>::data() const noexcept
 
 template <typename ElementType, typename MemorySpaceType>
 inline bool
-ArrayView<ElementType, MemorySpaceType>::
-operator!=(const ArrayView<typename std::remove_cv<value_type>::type,
-                           MemorySpaceType> &other_view) const
+ArrayView<ElementType, MemorySpaceType>::operator!=(
+  const ArrayView<typename std::remove_cv<value_type>::type, MemorySpaceType>
+    &other_view) const
 {
   return !(*this == other_view);
 }
@@ -616,7 +618,7 @@ ArrayView<ElementType, MemorySpaceType>::cend() const
 
 template <typename ElementType, typename MemorySpaceType>
 inline typename ArrayView<ElementType, MemorySpaceType>::value_type &
-  ArrayView<ElementType, MemorySpaceType>::operator[](const std::size_t i) const
+ArrayView<ElementType, MemorySpaceType>::operator[](const std::size_t i) const
 {
   AssertIndexRange(i, n_elements);
   Assert(
@@ -786,10 +788,15 @@ make_array_view(ArrayView<Number, MemorySpaceType> &array_view)
  * order in which the entries are presented in the array is an implementation
  * detail and should not be relied upon.
  *
+ * @deprecated This function suggests that the elements of a Tensor
+ *   object are stored as a contiguous array, but this is not in fact true
+ *   and one should not pretend that this so. As a consequence, this function
+ *   is deprecated.
+ *
  * @relatesalso ArrayView
  */
 template <int rank, int dim, typename Number>
-inline ArrayView<const Number>
+DEAL_II_DEPRECATED inline ArrayView<const Number>
 make_array_view(const Tensor<rank, dim, Number> &tensor)
 {
   return make_array_view(tensor.begin_raw(), tensor.end_raw());
@@ -811,10 +818,15 @@ make_array_view(const Tensor<rank, dim, Number> &tensor)
  * order in which the entries are presented in the array is an implementation
  * detail and should not be relied upon.
  *
+ * @deprecated This function suggests that the elements of a Tensor
+ *   object are stored as a contiguous array, but this is not in fact true
+ *   and one should not pretend that this so. As a consequence, this function
+ *   is deprecated.
+ *
  * @relatesalso ArrayView
  */
 template <int rank, int dim, typename Number>
-inline ArrayView<Number>
+DEAL_II_DEPRECATED inline ArrayView<Number>
 make_array_view(Tensor<rank, dim, Number> &tensor)
 {
   return make_array_view(tensor.begin_raw(), tensor.end_raw());
@@ -836,10 +848,15 @@ make_array_view(Tensor<rank, dim, Number> &tensor)
  * the order in which the entries are presented in the array is an
  * implementation detail and should not be relied upon.
  *
+ * @deprecated This function suggests that the elements of a SymmetricTensor
+ *   object are stored as a contiguous array, but this is not in fact true
+ *   and one should not pretend that this so. As a consequence, this function
+ *   is deprecated.
+ *
  * @relatesalso ArrayView
  */
 template <int rank, int dim, typename Number>
-inline ArrayView<const Number>
+DEAL_II_DEPRECATED inline ArrayView<const Number>
 make_array_view(const SymmetricTensor<rank, dim, Number> &tensor)
 {
   return make_array_view(tensor.begin_raw(), tensor.end_raw());
@@ -862,10 +879,15 @@ make_array_view(const SymmetricTensor<rank, dim, Number> &tensor)
  * the order in which the entries are presented in the array is an
  * implementation detail and should not be relied upon.
  *
+ * @deprecated This function suggests that the elements of a SymmetricTensor
+ *   object are stored as a contiguous array, but this is not in fact true
+ *   and one should not pretend that this so. As a consequence, this function
+ *   is deprecated.
+ *
  * @relatesalso ArrayView
  */
 template <int rank, int dim, typename Number>
-inline ArrayView<Number>
+DEAL_II_DEPRECATED inline ArrayView<Number>
 make_array_view(SymmetricTensor<rank, dim, Number> &tensor)
 {
   return make_array_view(tensor.begin_raw(), tensor.end_raw());
@@ -1072,8 +1094,8 @@ make_array_view(const std::vector<ElementType> &vector,
  */
 template <typename ElementType>
 inline ArrayView<ElementType>
-  make_array_view(Table<2, ElementType> &                         table,
-                  const typename Table<2, ElementType>::size_type row)
+make_array_view(Table<2, ElementType> &                         table,
+                const typename Table<2, ElementType>::size_type row)
 {
   AssertIndexRange(row, table.size()[0]);
   return ArrayView<ElementType>(&table[row][0], table.size()[1]);
@@ -1098,7 +1120,8 @@ inline ArrayView<ElementType>
  * @relatesalso ArrayView
  */
 template <typename ElementType>
-inline ArrayView<ElementType> make_array_view(Table<2, ElementType> &table)
+inline ArrayView<ElementType>
+make_array_view(Table<2, ElementType> &table)
 {
   return ArrayView<ElementType>(&table[0][0], table.n_elements());
 }
@@ -1227,11 +1250,11 @@ make_array_view(const Table<2, ElementType> &                   table,
  * @relatesalso ArrayView
  */
 template <typename ElementType>
-inline ArrayView<ElementType> make_array_view(
-  Table<2, ElementType> &                         table,
-  const typename Table<2, ElementType>::size_type row,
-  const typename Table<2, ElementType>::size_type starting_column,
-  const std::size_t                               size_of_view)
+inline ArrayView<ElementType>
+make_array_view(Table<2, ElementType> &                         table,
+                const typename Table<2, ElementType>::size_type row,
+                const typename Table<2, ElementType>::size_type starting_column,
+                const std::size_t                               size_of_view)
 {
   AssertIndexRange(row, table.size()[0]);
   AssertIndexRange(starting_column, table.size()[1]);

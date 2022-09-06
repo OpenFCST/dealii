@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2018 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -32,7 +32,7 @@ test_bounding_box()
 
 
   std::pair<Point<spacedim>, Point<spacedim>> unit;
-  for (int i = 0; i < spacedim; i++)
+  for (int i = 0; i < spacedim; ++i)
     {
       unit.first[i]  = 0.0;
       unit.second[i] = 1.0;
@@ -50,7 +50,7 @@ test_bounding_box()
   deallog << b.get_boundary_points().second << std::endl;
 
   std::pair<Point<spacedim>, Point<spacedim>> boundaries;
-  for (int i = 0; i < spacedim; i++)
+  for (int i = 0; i < spacedim; ++i)
     {
       unit.first[i]  = 1.0;
       unit.second[i] = 2.0 + i;

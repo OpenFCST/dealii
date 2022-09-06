@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -119,15 +119,15 @@ namespace internal
  * region of the domain (for example only in the fluid part of the domain in
  * step-46), or for some other reason.
  *
- * For this, internally build_patches() does not generate the sequence of
- * cells to be converted into patches itself, but relies on the two function
- * that we'll call first_cell() and next_cell(). By default, they return the
- * first active cell, and the next active cell, respectively. But this can
- * be changed using the set_cell_selection() function that allows you to
- * replace this behavior. What set_cell_selection() wants to know is how
- * you want to pick out the first cell on which output should be generated,
- * and how given one cell on which output is generated you want to pick the
- * next cell.
+ * For this, internally build_patches() does not generate the sequence of cells
+ * to be converted into patches itself, but relies on the two private
+ * std::function objects first_cell_function() and next_cell_function(). By
+ * default, they return the first active cell, and the next active cell,
+ * respectively. But this can be changed using the set_cell_selection() function
+ * that allows you to replace this behavior. What set_cell_selection() wants to
+ * know is how you want to pick out the first cell on which output should be
+ * generated, and how given one cell on which output is generated you want to
+ * pick the next cell.
  *
  * This may,
  * for example, include only cells that are in parts of a domain (e.g., if you
@@ -143,26 +143,16 @@ namespace internal
  *
  * @ingroup output
  */
-template <int dim, typename DoFHandlerType = DoFHandler<dim>>
-class DataOut : public DataOut_DoFData<DoFHandlerType,
-                                       DoFHandlerType::dimension,
-                                       DoFHandlerType::space_dimension>
+template <int dim, int spacedim = dim>
+class DataOut : public DataOut_DoFData<dim, dim, spacedim, spacedim>
 {
 public:
-  static_assert(dim == DoFHandlerType::dimension,
-                "The dimension given explicitly as a template argument to "
-                "this class must match the dimension of the DoFHandler "
-                "template argument");
-  static constexpr unsigned int spacedim = DoFHandlerType::space_dimension;
-
   /**
    * Typedef to the iterator type of the dof handler class under
    * consideration.
    */
   using cell_iterator =
-    typename DataOut_DoFData<DoFHandlerType,
-                             DoFHandlerType::dimension,
-                             DoFHandlerType::space_dimension>::cell_iterator;
+    typename DataOut_DoFData<dim, dim, spacedim, spacedim>::cell_iterator;
 
   /**
    * The type of the function object returning the first cell as used in
@@ -317,20 +307,17 @@ public:
    * deformation of each vertex.
    */
   virtual void
-  build_patches(const Mapping<DoFHandlerType::dimension,
-                              DoFHandlerType::space_dimension> &mapping,
-                const unsigned int     n_subdivisions = 0,
-                const CurvedCellRegion curved_region  = curved_boundary);
+  build_patches(const Mapping<dim, spacedim> &mapping,
+                const unsigned int            n_subdivisions = 0,
+                const CurvedCellRegion        curved_region  = curved_boundary);
 
   /**
    * Same as above, but for hp::MappingCollection.
    */
   virtual void
-  build_patches(
-    const hp::MappingCollection<DoFHandlerType::dimension,
-                                DoFHandlerType::space_dimension> &mapping,
-    const unsigned int     n_subdivisions = 0,
-    const CurvedCellRegion curved_region  = curved_boundary);
+  build_patches(const hp::MappingCollection<dim, spacedim> &mapping,
+                const unsigned int                          n_subdivisions = 0,
+                const CurvedCellRegion curved_region = curved_boundary);
 
   /**
    * A function that allows selecting for which cells output should be
@@ -429,35 +416,6 @@ public:
   const std::pair<FirstCellFunctionType, NextCellFunctionType>
   get_cell_selection() const;
 
-  /**
-   * Return the first cell which we want output for. The default
-   * implementation returns the first active cell, but you might want to
-   * return other cells in a derived class.
-   *
-   * @deprecated Use the set_cell_selection() function instead.
-   */
-  DEAL_II_DEPRECATED
-  virtual cell_iterator
-  first_cell();
-
-  /**
-   * Return the next cell after @p cell which we want output for.  If there
-   * are no more cells, any implementation of this function should return
-   * <tt>dof_handler->end()</tt>.
-   *
-   * The default implementation returns the next active cell, but you might
-   * want to return other cells in a derived class. Note that the default
-   * implementation assumes that the given @p cell is active, which is
-   * guaranteed as long as first_cell() is also used from the default
-   * implementation. Overloading only one of the two functions might not be a
-   * good idea.
-   *
-   * @deprecated Use the set_cell_selection() function instead.
-   */
-  DEAL_II_DEPRECATED
-  virtual cell_iterator
-  next_cell(const cell_iterator &cell);
-
 private:
   /**
    * A function object that is used to select what the first cell is going to
@@ -477,28 +435,6 @@ private:
     next_cell_function;
 
   /**
-   * Return the first cell produced by the first_cell()/next_cell() function
-   * pair that is locally owned. If this object operates on a non-distributed
-   * triangulation, the result equals what first_cell() returns.
-   *
-   * @deprecated Use the set_cell_selection() function instead.
-   */
-  DEAL_II_DEPRECATED
-  virtual cell_iterator
-  first_locally_owned_cell();
-
-  /**
-   * Return the next cell produced by the next_cell() function that is locally
-   * owned. If this object operates on a non-distributed triangulation, the
-   * result equals what first_cell() returns.
-   *
-   * @deprecated Use the set_cell_selection() function instead.
-   */
-  DEAL_II_DEPRECATED
-  virtual cell_iterator
-  next_locally_owned_cell(const cell_iterator &cell);
-
-  /**
    * Build one patch. This function is called in a WorkStream context.
    *
    * The first argument here is the iterator, the second the scratch data
@@ -508,25 +444,12 @@ private:
    * reasons.
    */
   void
-  build_one_patch(const std::pair<cell_iterator, unsigned int> *cell_and_index,
-                  internal::DataOutImplementation::ParallelData<
-                    DoFHandlerType::dimension,
-                    DoFHandlerType::space_dimension> &scratch_data,
-                  const unsigned int                  n_subdivisions,
-                  const CurvedCellRegion              curved_cell_region);
+  build_one_patch(
+    const std::pair<cell_iterator, unsigned int> *cell_and_index,
+    internal::DataOutImplementation::ParallelData<dim, spacedim> &scratch_data,
+    const unsigned int     n_subdivisions,
+    const CurvedCellRegion curved_cell_region);
 };
-
-namespace Legacy
-{
-  /**
-   * The template arguments of the original dealii::DataOut class will
-   * change in a future release. If for some reason, you need a code that is
-   * compatible with deal.II 9.3 and the subsequent release, use this alias
-   * instead.
-   */
-  template <int dim, typename DoFHandlerType = DoFHandler<dim>>
-  using DataOut = dealii::DataOut<dim, DoFHandlerType>;
-} // namespace Legacy
 
 
 DEAL_II_NAMESPACE_CLOSE

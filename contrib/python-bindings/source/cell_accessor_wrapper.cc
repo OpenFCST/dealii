@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -679,11 +679,11 @@ namespace python
   CellAccessorWrapper::active() const
   {
     if ((dim == 2) && (spacedim == 2))
-      return internal::cell_cast<2, 2>(cell_accessor)->active();
+      return internal::cell_cast<2, 2>(cell_accessor)->is_active();
     else if ((dim == 2) && (spacedim == 3))
-      return internal::cell_cast<2, 3>(cell_accessor)->active();
+      return internal::cell_cast<2, 3>(cell_accessor)->is_active();
     else
-      return internal::cell_cast<3, 3>(cell_accessor)->active();
+      return internal::cell_cast<3, 3>(cell_accessor)->is_active();
   }
 
 
@@ -798,7 +798,7 @@ namespace python
 
 
 
-  CellTypeWrapper
+  ReferenceCellWrapper
   CellAccessorWrapper::reference_cell() const
   {
     if ((dim == 2) && (spacedim == 2))

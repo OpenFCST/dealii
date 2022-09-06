@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -22,6 +22,7 @@
 #include <deal.II/base/tensor_product_polynomials.h>
 #include <deal.II/base/tensor_product_polynomials_bubbles.h>
 #include <deal.II/base/tensor_product_polynomials_const.h>
+#include <deal.II/base/thread_management.h>
 
 #include <deal.II/fe/fe_dgp.h>
 #include <deal.II/fe/fe_dgq.h>
@@ -67,7 +68,7 @@ namespace internal
       increment_indices(unsigned int (&indices)[dim], const unsigned int dofs1d)
       {
         ++indices[0];
-        for (int d = 0; d < dim - 1; ++d)
+        for (unsigned int d = 0; d < dim - 1; ++d)
           if (indices[d] == dofs1d)
             {
               indices[d] = 0;
@@ -568,6 +569,7 @@ FE_Q_Base<dim, spacedim>::get_interpolation_matrix(
           if (std::fabs(interpolation_matrix(i, j)) < eps)
             interpolation_matrix(i, j) = 0.;
 
+#ifdef DEBUG
       // make sure that the row sum of each of the matrices is 1 at this
       // point. this must be so since the shape functions sum up to 1
       for (unsigned int i = 0; i < this->n_dofs_per_cell(); ++i)
@@ -578,6 +580,7 @@ FE_Q_Base<dim, spacedim>::get_interpolation_matrix(
 
           Assert(std::fabs(sum - 1) < eps, ExcInternalError());
         }
+#endif
     }
   else if (dynamic_cast<const FE_Nothing<dim> *>(&x_source_fe))
     {
@@ -611,7 +614,6 @@ FE_Q_Base<dim, spacedim>::get_face_interpolation_matrix(
   FullMatrix<double> &                interpolation_matrix,
   const unsigned int                  face_no) const
 {
-  Assert(dim > 1, ExcImpossibleInDim(1));
   get_subface_interpolation_matrix(source_fe,
                                    numbers::invalid_unsigned_int,
                                    interpolation_matrix,
@@ -632,10 +634,10 @@ FE_Q_Base<dim, spacedim>::get_subface_interpolation_matrix(
          ExcDimensionMismatch(interpolation_matrix.m(),
                               source_fe.n_dofs_per_face(face_no)));
 
-  // see if source is a Q or P element
-  if ((dynamic_cast<const FE_Q_Base<dim, spacedim> *>(&source_fe) != nullptr) ||
-      (dynamic_cast<const FE_SimplexPoly<dim, spacedim> *>(&source_fe) !=
-       nullptr))
+  Assert(source_fe.n_components() == this->n_components(),
+         ExcDimensionMismatch(source_fe.n_components(), this->n_components()));
+
+  if (source_fe.has_face_support_points(face_no))
     {
       // have this test in here since a table of size 2x0 reports its size as
       // 0x0
@@ -660,7 +662,7 @@ FE_Q_Base<dim, spacedim>::get_subface_interpolation_matrix(
       // Rule of thumb for FP accuracy, that can be expected for a given
       // polynomial degree.  This value is used to cut off values close to
       // zero.
-      double eps = 2e-13 * this->q_degree * (dim - 1);
+      const double eps = 2e-13 * this->q_degree * std::max(dim - 1, 1);
 
       // compute the interpolation matrix by simply taking the value at the
       // support points.
@@ -978,10 +980,6 @@ void
 FE_Q_Base<dim, spacedim>::initialize_unit_face_support_points(
   const std::vector<Point<1>> &points)
 {
-  // no faces in 1d, so nothing to do
-  if (dim == 1)
-    return;
-
   // TODO: the implementation makes the assumption that all faces have the
   // same number of dofs
   AssertDimension(this->n_unique_faces(), 1);
@@ -989,6 +987,11 @@ FE_Q_Base<dim, spacedim>::initialize_unit_face_support_points(
 
   this->unit_face_support_points[face_no].resize(
     Utilities::fixed_power<dim - 1>(q_degree + 1));
+
+  // In 1D, there is only one 0-dimensional support point, so there is nothing
+  // more to be done.
+  if (dim == 1)
+    return;
 
   // find renumbering of faces and assign from values of quadrature
   const std::vector<unsigned int> face_index_map =
@@ -1518,7 +1521,9 @@ FE_Q_Base<dim, spacedim>::get_restriction_matrix(
                   }
               unsigned int j_indices[dim];
               internal::FE_Q_Base::zero_indices<dim>(j_indices);
+#ifdef DEBUG
               double sum_check = 0;
+#endif
               for (unsigned int j = 0; j < q_dofs_per_cell; j += dofs1d)
                 {
                   double val_extra_dim = 1.;
@@ -1538,7 +1543,9 @@ FE_Q_Base<dim, spacedim>::get_restriction_matrix(
                         my_restriction(mother_dof, child_dof) = 1.;
                       else if (std::fabs(val) > eps)
                         my_restriction(mother_dof, child_dof) = val;
+#ifdef DEBUG
                       sum_check += val;
+#endif
                     }
                   internal::FE_Q_Base::increment_indices<dim>(j_indices,
                                                               dofs1d);

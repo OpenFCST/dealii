@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2019 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -76,7 +76,7 @@ test_block_list(const Triangulation<dim> &tr, const FiniteElement<dim> &fe)
     print_patches(bl);
     deallog.push("vertex mapping");
     for (unsigned int i = 0; i < vm.size(); ++i)
-      deallog << " " << vm[i];
+      deallog << ' ' << vm[i];
     deallog << std::endl;
     deallog.pop();
     deallog.pop();
@@ -95,7 +95,7 @@ test_block_list(const Triangulation<dim> &tr, const FiniteElement<dim> &fe)
     print_patches(bl);
     deallog.push("vertex mapping");
     for (unsigned int i = 0; i < vm.size(); ++i)
-      deallog << " " << vm[i];
+      deallog << ' ' << vm[i];
     deallog << std::endl;
     deallog.pop();
     deallog.pop();
@@ -114,7 +114,7 @@ test_block_list(const Triangulation<dim> &tr, const FiniteElement<dim> &fe)
     print_patches(bl);
     deallog.push("vertex mapping");
     for (unsigned int i = 0; i < vm.size(); ++i)
-      deallog << " " << vm[i];
+      deallog << ' ' << vm[i];
     deallog << std::endl;
     deallog.pop();
     deallog.pop();
@@ -132,7 +132,7 @@ test_block_list(const Triangulation<dim> &tr, const FiniteElement<dim> &fe)
     print_patches(bl);
     deallog.push("vertex mapping");
     for (unsigned int i = 0; i < vm.size(); ++i)
-      deallog << " " << vm[i];
+      deallog << ' ' << vm[i];
     deallog << std::endl;
     deallog.pop();
     deallog.pop();

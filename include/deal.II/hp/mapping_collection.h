@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2020 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -21,7 +21,7 @@
 #include <deal.II/base/subscriptor.h>
 
 #include <deal.II/fe/fe.h>
-#include <deal.II/fe/mapping_q1.h>
+#include <deal.II/fe/mapping.h>
 
 #include <deal.II/hp/collection.h>
 
@@ -71,19 +71,41 @@ namespace hp
     explicit MappingCollection(const Mapping<dim, spacedim> &mapping);
 
     /**
-     * Copy constructor.
-     */
-    MappingCollection(
-      const MappingCollection<dim, spacedim> &mapping_collection);
-
-    /**
      * Constructor. This constructor creates a MappingCollection from one or
      * more mapping objects passed to the constructor. For this
      * call to be valid, all arguments need to be of types derived
      * from class Mapping<dim,spacedim>.
      */
     template <class... MappingTypes>
-    explicit MappingCollection(const MappingTypes &... mappings);
+    explicit MappingCollection(const MappingTypes &...mappings);
+
+    /**
+     * Copy constructor.
+     */
+    MappingCollection(
+      const MappingCollection<dim, spacedim> &mapping_collection);
+
+    /**
+     * Move constructor.
+     *
+     * @note The implementation of standard datatypes may change with different
+     * libraries, so their move members may or may not be flagged non-throwing.
+     * We need to explicitly set the noexcept specifier according to its
+     * member variables to still get the performance benefits (and to satisfy
+     * clang-tidy).
+     */
+    MappingCollection(MappingCollection<dim, spacedim> &&) noexcept(
+      std::is_nothrow_move_constructible<
+        std::vector<std::shared_ptr<const Mapping<dim, spacedim>>>>::value
+        &&std::is_nothrow_move_constructible<std::function<
+          unsigned int(const typename hp::MappingCollection<dim, spacedim> &,
+                       const unsigned int)>>::value) = default;
+
+    /**
+     * Move assignment operator.
+     */
+    MappingCollection<dim, spacedim> &
+    operator=(MappingCollection<dim, spacedim> &&) = default; // NOLINT
 
     /**
      * Add a new mapping to the MappingCollection. Generally, you will
@@ -106,7 +128,7 @@ namespace hp
    * Many places in the library by default use (bi-,tri-)linear mappings
    * unless users explicitly provide a different mapping to use. In these
    * cases, the called function has to create a $Q_1$ mapping object, i.e., an
-   * object of kind MappingQGeneric(1). This is costly. It would also be
+   * object of kind MappingQ(1). This is costly. It would also be
    * costly to create such objects as static objects in the affected
    * functions, because static objects are never destroyed throughout the
    * lifetime of a program, even though they only have to be created once the
@@ -134,7 +156,7 @@ namespace hp
   template <int dim, int spacedim>
   template <class... MappingTypes>
   MappingCollection<dim, spacedim>::MappingCollection(
-    const MappingTypes &... mappings)
+    const MappingTypes &...mappings)
   {
     static_assert(
       is_base_of_all<Mapping<dim, spacedim>, MappingTypes...>::value,

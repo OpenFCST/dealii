@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -35,27 +35,45 @@ namespace
   std::vector<unsigned int>
   get_dpo_vector_fe_p(const unsigned int dim, const unsigned int degree)
   {
-    std::vector<unsigned int> dpo(dim + 1, 0U);
+    switch (dim)
+      {
+        case 1:
+          switch (degree)
+            {
+              case 1:
+                return {1, 0};
+              case 2:
+                return {1, 1};
+              default:
+                Assert(false, ExcNotImplemented());
+            }
+        case 2:
+          switch (degree)
+            {
+              case 1:
+                return {1, 0, 0};
+              case 2:
+                return {1, 1, 0};
+              default:
+                Assert(false, ExcNotImplemented());
+            }
+        case 3:
+          switch (degree)
+            {
+              case 1:
+                return {1, 0, 0, 0};
+              case 2:
+                return {1, 1, 0, 0};
+              default:
+                Assert(false, ExcNotImplemented());
+            }
+      }
 
-    if (degree == 1)
-      {
-        // one dof at each vertex
-        dpo[0] = 1;
-      }
-    else if (degree == 2)
-      {
-        // one dof at each vertex and in the middle of each line
-        dpo[0] = 1;
-        dpo[1] = 1;
-        dpo[2] = 0;
-      }
-    else
-      {
-        Assert(false, ExcNotImplemented());
-      }
-
-    return dpo;
+    Assert(false, ExcNotImplemented());
+    return {};
   }
+
+
 
   /**
    * Set up a vector that contains the unit (reference) cell support points
@@ -63,9 +81,15 @@ namespace
    */
   template <int dim>
   std::vector<Point<dim>>
-  unit_support_points_fe_poly(const unsigned int degree)
+  unit_support_points_fe_p(const unsigned int degree)
   {
     std::vector<Point<dim>> unit_points;
+    // If we do dim - 1 we can get here in dim = 0:
+    if (dim == 0)
+      {
+        unit_points.emplace_back();
+        return unit_points;
+      }
 
     // Piecewise constants are a special case: use a support point at the
     // centroid and only the centroid
@@ -141,12 +165,18 @@ namespace
 
   /**
    * Set up a vector that contains the unit (reference) cell's faces support
-   * points for FE_SimplexPoly and sufficiently similar elements.
+   * points for FE_SimplexP and sufficiently similar elements.
    */
   template <int dim>
   std::vector<std::vector<Point<dim - 1>>>
-  unit_face_support_points_fe_poly(const unsigned int degree)
+  unit_face_support_points_fe_p(
+    const unsigned int                          degree,
+    typename FiniteElementData<dim>::Conformity conformity)
   {
+    // Discontinuous elements don't have face support points
+    if (conformity == FiniteElementData<dim>::Conformity::L2)
+      return {};
+
     // this concept doesn't exist in 1D so just return an empty vector
     if (dim == 1)
       return {};
@@ -154,13 +184,11 @@ namespace
     std::vector<std::vector<Point<dim - 1>>> unit_face_points;
 
     // all faces have the same support points
-    for (auto face_n :
-         (dim == 2 ? ReferenceCells::Triangle : ReferenceCells::Tetrahedron)
-           .face_indices())
+    for (auto face_n : ReferenceCells::get_simplex<dim>().face_indices())
       {
         (void)face_n;
         unit_face_points.emplace_back(
-          unit_support_points_fe_poly<dim - 1>(degree));
+          unit_support_points_fe_p<dim - 1>(degree));
       }
 
     return unit_face_points;
@@ -173,7 +201,7 @@ namespace
    */
   template <int dim>
   FullMatrix<double>
-  constraints_fe_poly(const unsigned int /*degree*/)
+  constraints_fe_p(const unsigned int /*degree*/)
   {
     // no constraints in 1d
     // constraints in 3d not implemented yet
@@ -182,7 +210,7 @@ namespace
 
   template <>
   FullMatrix<double>
-  constraints_fe_poly<2>(const unsigned int degree)
+  constraints_fe_p<2>(const unsigned int degree)
   {
     const unsigned int dim = 2;
 
@@ -231,30 +259,60 @@ namespace
     return interface_constraints;
   }
 
+
+
   /**
-   * Helper function to set up the dpo vector of FE_SimplexDGP for a given @p dim and
-   * @p degree.
+   * Helper function to set up the dpo vector of FE_SimplexDGP for a given
+   * @p dim and @p degree.
    */
   std::vector<unsigned int>
   get_dpo_vector_fe_dgp(const unsigned int dim, const unsigned int degree)
   {
-    std::vector<unsigned int> dpo(dim + 1, 0U);
-
-    // all dofs are internal
-    if (dim == 2 && degree == 1)
-      dpo[dim] = 3;
-    else if (dim == 2 && degree == 2)
-      dpo[dim] = 6;
-    else if (dim == 3 && degree == 1)
-      dpo[dim] = 4;
-    else if (dim == 3 && degree == 2)
-      dpo[dim] = 10;
+    // First treat the case of piecewise constant elements:
+    if (degree == 0)
+      {
+        std::vector<unsigned int> dpo(dim + 1, 0U);
+        dpo[dim] = 1;
+        return dpo;
+      }
     else
       {
-        Assert(false, ExcNotImplemented());
-      }
+        // This element has the same degrees of freedom as the continuous one,
+        // but they are all counted for the interior of the cell because
+        // it is continuous. Rather than hard-code how many DoFs the element
+        // has, we just get the numbers from the continuous case and add them
+        // up
+        const auto continuous_dpo = get_dpo_vector_fe_p(dim, degree);
 
-    return dpo;
+        switch (dim)
+          {
+            case 1:
+              return {0U,
+                      ReferenceCells::Line.n_vertices() * continuous_dpo[0] +
+                        continuous_dpo[dim]};
+
+            case 2:
+              return {0U,
+                      0U,
+                      ReferenceCells::Triangle.n_vertices() *
+                          continuous_dpo[0] +
+                        ReferenceCells::Triangle.n_lines() * continuous_dpo[1] +
+                        continuous_dpo[dim]};
+
+            case 3:
+              return {
+                0U,
+                0U,
+                0U,
+                ReferenceCells::Tetrahedron.n_vertices() * continuous_dpo[0] +
+                  ReferenceCells::Tetrahedron.n_lines() * continuous_dpo[1] +
+                  ReferenceCells::Tetrahedron.n_faces() * continuous_dpo[2] +
+                  continuous_dpo[dim]};
+          }
+
+        Assert(false, ExcNotImplemented());
+        return {};
+      }
   }
 } // namespace
 
@@ -262,40 +320,21 @@ namespace
 
 template <int dim, int spacedim>
 FE_SimplexPoly<dim, spacedim>::FE_SimplexPoly(
-  const unsigned int                                degree,
-  const std::vector<unsigned int> &                 dpo_vector,
-  const typename FiniteElementData<dim>::Conformity conformity)
+  const BarycentricPolynomials<dim>              polynomials,
+  const FiniteElementData<dim> &                 fe_data,
+  const std::vector<Point<dim>> &                unit_support_points,
+  const std::vector<std::vector<Point<dim - 1>>> unit_face_support_points,
+  const FullMatrix<double> &                     interface_constraints)
   : dealii::FE_Poly<dim, spacedim>(
-      BarycentricPolynomials<dim>::get_fe_p_basis(degree),
-      FiniteElementData<dim>(dpo_vector,
-                             dim == 2 ? ReferenceCells::Triangle :
-                                        ReferenceCells::Tetrahedron,
-                             1,
-                             degree,
-                             conformity),
-      std::vector<bool>(FiniteElementData<dim>(dpo_vector,
-                                               dim == 2 ?
-                                                 ReferenceCells::Triangle :
-                                                 ReferenceCells::Tetrahedron,
-                                               1,
-                                               degree)
-                          .dofs_per_cell,
-                        true),
-      std::vector<ComponentMask>(
-        FiniteElementData<dim>(dpo_vector,
-                               dim == 2 ? ReferenceCells::Triangle :
-                                          ReferenceCells::Tetrahedron,
-                               1,
-                               degree)
-          .dofs_per_cell,
-        std::vector<bool>(1, true)))
+      polynomials,
+      fe_data,
+      std::vector<bool>(fe_data.dofs_per_cell),
+      std::vector<ComponentMask>(fe_data.dofs_per_cell,
+                                 std::vector<bool>(1, true)))
 {
-  this->unit_support_points = unit_support_points_fe_poly<dim>(degree);
-  // Discontinuous elements don't have face support points
-  if (conformity == FiniteElementData<dim>::Conformity::H1)
-    this->unit_face_support_points =
-      unit_face_support_points_fe_poly<dim>(degree);
-  this->interface_constraints = constraints_fe_poly<dim>(degree);
+  this->unit_support_points      = unit_support_points;
+  this->unit_face_support_points = unit_face_support_points;
+  this->interface_constraints    = interface_constraints;
 }
 
 
@@ -572,9 +611,16 @@ FE_SimplexPoly<dim, spacedim>::
 
 template <int dim, int spacedim>
 FE_SimplexP<dim, spacedim>::FE_SimplexP(const unsigned int degree)
-  : FE_SimplexPoly<dim, spacedim>(degree,
-                                  get_dpo_vector_fe_p(dim, degree),
-                                  FiniteElementData<dim>::H1)
+  : FE_SimplexPoly<dim, spacedim>(
+      BarycentricPolynomials<dim>::get_fe_p_basis(degree),
+      FiniteElementData<dim>(get_dpo_vector_fe_p(dim, degree),
+                             ReferenceCells::get_simplex<dim>(),
+                             1,
+                             degree,
+                             FiniteElementData<dim>::H1),
+      unit_support_points_fe_p<dim>(degree),
+      unit_face_support_points_fe_p<dim>(degree, FiniteElementData<dim>::H1),
+      constraints_fe_p<dim>(degree))
 {}
 
 
@@ -792,9 +838,16 @@ FE_SimplexP<dim, spacedim>::hp_line_dof_identities(
 
 template <int dim, int spacedim>
 FE_SimplexDGP<dim, spacedim>::FE_SimplexDGP(const unsigned int degree)
-  : FE_SimplexPoly<dim, spacedim>(degree,
-                                  get_dpo_vector_fe_dgp(dim, degree),
-                                  FiniteElementData<dim>::L2)
+  : FE_SimplexPoly<dim, spacedim>(
+      BarycentricPolynomials<dim>::get_fe_p_basis(degree),
+      FiniteElementData<dim>(get_dpo_vector_fe_dgp(dim, degree),
+                             ReferenceCells::get_simplex<dim>(),
+                             1,
+                             degree,
+                             FiniteElementData<dim>::L2),
+      unit_support_points_fe_p<dim>(degree),
+      unit_face_support_points_fe_p<dim>(degree, FiniteElementData<dim>::H1),
+      constraints_fe_p<dim>(degree))
 {}
 
 

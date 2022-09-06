@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2021 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -93,7 +93,7 @@ namespace hp
    * @p future_fe_indices will be used to update the data accordingly.
    * </ol>
    *
-   * As an example, a realisation of pure p-adaptive methods would look like the
+   * As an example, a realization of pure p-adaptive methods would look like the
    * following:
    * @code
    * // step 1: flag cells for refinement or coarsening
@@ -148,13 +148,13 @@ namespace hp
      * The same applies to coarsening.
      *
      * @note Triangulation::prepare_coarsening_and_refinement() and
-     *   DoFHandler::prepare_coarsening_and_refinement() may change
+     *   hp::Refinement::limit_p_level_difference() may change
      *   refine and coarsen flags as well as future finite element indices.
      *   Avoid calling them before this particular function.
      */
     template <int dim, int spacedim>
     void
-    full_p_adaptivity(const dealii::DoFHandler<dim, spacedim> &dof_handler);
+    full_p_adaptivity(const DoFHandler<dim, spacedim> &dof_handler);
 
     /**
      * Adapt which finite element to use on cells that have been specifically
@@ -166,15 +166,14 @@ namespace hp
      * cell.
      *
      * @note Triangulation::prepare_coarsening_and_refinement() and
-     *   DoFHandler::prepare_coarsening_and_refinement() may change
+     *   hp::Refinement::limit_p_level_difference() may change
      *   refine and coarsen flags as well as future finite element indices.
      *   Avoid calling them before this particular function.
      */
     template <int dim, int spacedim>
     void
-    p_adaptivity_from_flags(
-      const dealii::DoFHandler<dim, spacedim> &dof_handler,
-      const std::vector<bool> &                p_flags);
+    p_adaptivity_from_flags(const DoFHandler<dim, spacedim> &dof_handler,
+                            const std::vector<bool> &        p_flags);
 
     /**
      * Adapt which finite element to use on cells whose criteria meet a certain
@@ -197,17 +196,17 @@ namespace hp
      * cell.
      *
      * @note Triangulation::prepare_coarsening_and_refinement() and
-     *   DoFHandler::prepare_coarsening_and_refinement() may change
+     *   hp::Refinement::limit_p_level_difference() may change
      *   refine and coarsen flags as well as future finite element indices.
      *   Avoid calling them before this particular function.
      */
     template <int dim, typename Number, int spacedim>
     void
     p_adaptivity_from_absolute_threshold(
-      const dealii::DoFHandler<dim, spacedim> &dof_handler,
-      const Vector<Number> &                   criteria,
-      const Number                             p_refine_threshold,
-      const Number                             p_coarsen_threshold,
+      const DoFHandler<dim, spacedim> &dof_handler,
+      const Vector<Number> &           criteria,
+      const Number                     p_refine_threshold,
+      const Number                     p_coarsen_threshold,
       const ComparisonFunction<typename identity<Number>::type>
         &compare_refine = std::greater_equal<Number>(),
       const ComparisonFunction<typename identity<Number>::type>
@@ -240,17 +239,17 @@ namespace hp
      * in the interval $[0,1]$.
      *
      * @note Triangulation::prepare_coarsening_and_refinement() and
-     *   DoFHandler::prepare_coarsening_and_refinement() may change
+     *   hp::Refinement::limit_p_level_difference() may change
      *   refine and coarsen flags as well as future finite element indices.
      *   Avoid calling them before this particular function.
      */
     template <int dim, typename Number, int spacedim>
     void
     p_adaptivity_from_relative_threshold(
-      const dealii::DoFHandler<dim, spacedim> &dof_handler,
-      const Vector<Number> &                   criteria,
-      const double                             p_refine_fraction  = 0.5,
-      const double                             p_coarsen_fraction = 0.5,
+      const DoFHandler<dim, spacedim> &dof_handler,
+      const Vector<Number> &           criteria,
+      const double                     p_refine_fraction  = 0.5,
+      const double                     p_coarsen_fraction = 0.5,
       const ComparisonFunction<typename identity<Number>::type>
         &compare_refine = std::greater_equal<Number>(),
       const ComparisonFunction<typename identity<Number>::type>
@@ -284,17 +283,17 @@ namespace hp
      * in the interval $[0,1]$.
      *
      * @note Triangulation::prepare_coarsening_and_refinement() and
-     *   DoFHandler::prepare_coarsening_and_refinement() may change
+     *   hp::Refinement::limit_p_level_difference() may change
      *   refine and coarsen flags as well as future finite element indices.
      *   Avoid calling them before this particular function.
      */
     template <int dim, typename Number, int spacedim>
     void
     p_adaptivity_fixed_number(
-      const dealii::DoFHandler<dim, spacedim> &dof_handler,
-      const Vector<Number> &                   criteria,
-      const double                             p_refine_fraction  = 0.5,
-      const double                             p_coarsen_fraction = 0.5,
+      const DoFHandler<dim, spacedim> &dof_handler,
+      const Vector<Number> &           criteria,
+      const double                     p_refine_fraction  = 0.5,
+      const double                     p_coarsen_fraction = 0.5,
       const ComparisonFunction<typename identity<Number>::type>
         &compare_refine = std::greater_equal<Number>(),
       const ComparisonFunction<typename identity<Number>::type>
@@ -322,15 +321,14 @@ namespace hp
      * For more theoretical details see @cite ainsworth1998hp .
      *
      * @note Triangulation::prepare_coarsening_and_refinement() and
-     *   DoFHandler::prepare_coarsening_and_refinement() may change
+     *   hp::Refinement::limit_p_level_difference() may change
      *   refine and coarsen flags as well as future finite element indices.
      *   Avoid calling them before this particular function.
      */
     template <int dim, typename Number, int spacedim>
     void
-    p_adaptivity_from_regularity(
-      const dealii::DoFHandler<dim, spacedim> &dof_handler,
-      const Vector<Number> &                   sobolev_indices);
+    p_adaptivity_from_regularity(const DoFHandler<dim, spacedim> &dof_handler,
+                                 const Vector<Number> &sobolev_indices);
 
     /**
      * Adapt which finite element to use on each cell based on how its criterion
@@ -348,14 +346,14 @@ namespace hp
      * correspond to an active cell.
      *
      * @note Triangulation::prepare_coarsening_and_refinement() and
-     *   DoFHandler::prepare_coarsening_and_refinement() may change
+     *   hp::Refinement::limit_p_level_difference() may change
      *   refine and coarsen flags as well as future finite element indices.
      *   Avoid calling them before this particular function.
      */
     template <int dim, typename Number, int spacedim>
     void
     p_adaptivity_from_reference(
-      const dealii::DoFHandler<dim, spacedim> &                  dof_handler,
+      const DoFHandler<dim, spacedim> &                          dof_handler,
       const Vector<Number> &                                     criteria,
       const Vector<Number> &                                     references,
       const ComparisonFunction<typename identity<Number>::type> &compare_refine,
@@ -408,7 +406,7 @@ namespace hp
      * or decrease of the degree will thus change its value by a user-defined
      * control parameter @p gamma_p. The assumption of exponential convergence
      * is only valid if both h- and p-adaptive methods are combined in a sense
-     * that they are both utilitzed throughout a mesh, but do not have to be
+     * that they are both utilized throughout a mesh, but do not have to be
      * applied both on a cell simultaneously.
      *
      * The prediction algorithm is formulated as follows with control parameters
@@ -513,7 +511,7 @@ namespace hp
      * The following code snippet demonstrates how to impose hp-adaptivity based
      * on refinement history in an application:
      * @code
-     * // [initialisation...]
+     * // [initialization...]
      * Vector<float> predicted_error_per_cell(triangulation.n_active_cells());
      * for(unsigned int i = 0; i < triangulation.n_active_cells(); ++i)
      *   predicted_error_per_cell[i] = std::numeric_limits<float>::infinity();
@@ -559,19 +557,45 @@ namespace hp
      * $\gamma_\text{p}^2 = 0.4$, $\gamma_\text{h}^2 = 4$,
      * $\gamma_\text{n}^2 = 1$.
      *
+     * If you are working with parallel::distributed::Triangulation objects, you
+     * need to pay special attention. Here, p4est determines the details of grid
+     * refinement, and consequently, it yields more reliable and trustworthy
+     * results when we determine the predicted errors during the adaptation
+     * process. We can do exactly this by attaching this function to the signal
+     * Triangulation::Signals::post_p4est_refinement, which is triggered after
+     * p4est got refined, but before data is prepared for transfer. Refinement
+     * and coarsening flags of the Triangulation object need to be matched with
+     * the already refined p4est oracle using
+     * parallel::distributed::TemporarilyMatchRefineFlags. Thus, a construct
+     * like the following is necessary to correctly predict errors in parallel
+     * distributed applications.
+     * @code
+     * Vector<float> predicted_errors;
+     * triangulation.signals.post_p4est_refinement.connect([&]() {
+     *   const parallel::distributed::TemporarilyMatchRefineFlags<dim>
+     *     refine_modifier(triangulation);
+     *   predicted_errors.reinit(triangulation.n_active_cells());
+     *   hp::Refinement::predict_error(dof_handler,
+     *                                 error_indicators,
+     *                                 predicted_errors);
+     * });
+     * @endcode
+     * The container <code>predicted_errors</code> then needs to follow the
+     * usual parallel::distributed::CellDataTransfer workflow.
+     *
      * @note We want to predict the error by how adaptation will actually happen.
      *   Thus, this function needs to be called after
      *   Triangulation::prepare_coarsening_and_refinement() and
-     *   DoFHandler::prepare_coarsening_and_refinement().
+     *   hp::Refinement::limit_p_level_difference().
      */
     template <int dim, typename Number, int spacedim>
     void
-    predict_error(const dealii::DoFHandler<dim, spacedim> &dof_handler,
-                  const Vector<Number> &                   error_indicators,
-                  Vector<Number> &                         predicted_errors,
-                  const double gamma_p = std::sqrt(0.4),
-                  const double gamma_h = 2.,
-                  const double gamma_n = 1.);
+    predict_error(const DoFHandler<dim, spacedim> &dof_handler,
+                  const Vector<Number> &           error_indicators,
+                  Vector<Number> &                 predicted_errors,
+                  const double                     gamma_p = std::sqrt(0.4),
+                  const double                     gamma_h = 2.,
+                  const double                     gamma_n = 1.);
 
     /**
      * @}
@@ -589,13 +613,13 @@ namespace hp
      * @p future_fe_index assigned.
      *
      * @note Triangulation::prepare_coarsening_and_refinement() and
-     *   DoFHandler::prepare_coarsening_and_refinement() may change
+     *   hp::Refinement::limit_p_level_difference() may change
      *   refine and coarsen flags as well as future finite element indices.
      *   Avoid calling them before this particular function.
      */
     template <int dim, int spacedim>
     void
-    force_p_over_h(const dealii::DoFHandler<dim, spacedim> &dof_handler);
+    force_p_over_h(const DoFHandler<dim, spacedim> &dof_handler);
 
     /**
      * Choose p-adaptivity over h-adaptivity whenever it is invoked on all
@@ -637,20 +661,20 @@ namespace hp
      *   would have made later on.
      *
      * @note Triangulation::prepare_coarsening_and_refinement() and
-     *   DoFHandler::prepare_coarsening_and_refinement() may change
+     *   hp::Refinement::limit_p_level_difference() may change
      *   refine and coarsen flags as well as future finite element indices.
      *   Avoid calling them before this particular function.
      */
     template <int dim, int spacedim>
     void
-    choose_p_over_h(const dealii::DoFHandler<dim, spacedim> &dof_handler);
+    choose_p_over_h(const DoFHandler<dim, spacedim> &dof_handler);
 
     /**
      * @}
      */
 
     /**
-     * @name Optimiize p-level distribution
+     * @name Optimize p-level distribution
      * @{
      */
 
@@ -662,7 +686,7 @@ namespace hp
      * flags.
      *
      * In detail, this function limits the level difference of neighboring cells
-     * and thus smoothes the overall function space. Future FE indices will be
+     * and thus smooths the overall function space. Future FE indices will be
      * raised (and never lowered) so that the level difference to neighboring
      * cells is never larger than @p max_difference.
      *
@@ -680,7 +704,7 @@ namespace hp
      * On cells that will be h-coarsened, we enforce the difference criterion as
      * if it is already a parent cell. That means, we set the level of all
      * siblings to the highest one among them. In that case, all sibling cells
-     * need to have the h-coarsenening flags set terminally via
+     * need to have the h-coarsening flags set terminally via
      * Triangulation::prepare_coarsening_and_refinement() beforehand. Otherwise
      * an assertion will be triggered.
      *
@@ -688,10 +712,9 @@ namespace hp
      */
     template <int dim, int spacedim>
     bool
-    limit_p_level_difference(
-      const dealii::DoFHandler<dim, spacedim> &dof_handler,
-      const unsigned int                       max_difference    = 1,
-      const unsigned int                       contains_fe_index = 0);
+    limit_p_level_difference(const DoFHandler<dim, spacedim> &dof_handler,
+                             const unsigned int max_difference    = 1,
+                             const unsigned int contains_fe_index = 0);
 
     /**
      * @}

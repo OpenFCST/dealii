@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2011 - 2020 by the deal.II authors
+// Copyright (C) 2011 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -30,11 +30,7 @@
 
 #include <deal.II/fe/fe.h>
 #include <deal.II/fe/mapping.h>
-#include <deal.II/fe/mapping_q1.h>
 
-#include <deal.II/grid/grid_tools.h>
-
-#include <deal.II/hp/dof_handler.h>
 #include <deal.II/hp/mapping_collection.h>
 #include <deal.II/hp/q_collection.h>
 
@@ -130,7 +126,7 @@ public:
   /**
    * The dimension set by the template argument `dim`.
    */
-  static const unsigned int dimension = dim;
+  static constexpr unsigned int dimension = dim;
 
   /**
    * Collects the options for initialization of the MatrixFree class. The
@@ -181,6 +177,11 @@ public:
   struct AdditionalData
   {
     /**
+     * Provide the type of the surrounding MatrixFree class.
+     */
+    using MatrixFreeType = MatrixFree<dim, Number, VectorizedArrayType>;
+
+    /**
      * Collects options for task parallelism. See the documentation of the
      * member variable MatrixFree::AdditionalData::tasks_parallel_scheme for a
      * thorough description.
@@ -208,9 +209,6 @@ public:
       color = internal::MatrixFreeFunctions::TaskInfo::color
     };
 
-    // remove with level_mg_handler
-    DEAL_II_DISABLE_EXTRA_DIAGNOSTICS
-
     /**
      * Constructor for AdditionalData.
      */
@@ -228,7 +226,8 @@ public:
       const bool         initialize_mapping  = true,
       const bool         overlap_communication_computation    = true,
       const bool         hold_all_faces_to_owned_cells        = false,
-      const bool         cell_vectorization_categories_strict = false)
+      const bool         cell_vectorization_categories_strict = false,
+      const bool         allow_ghosted_vectors_in_loops       = true)
       : tasks_parallel_scheme(tasks_parallel_scheme)
       , tasks_block_size(tasks_block_size)
       , mapping_update_flags(mapping_update_flags)
@@ -236,7 +235,6 @@ public:
       , mapping_update_flags_inner_faces(mapping_update_flags_inner_faces)
       , mapping_update_flags_faces_by_cells(mapping_update_flags_faces_by_cells)
       , mg_level(mg_level)
-      , level_mg_handler(this->mg_level)
       , store_plain_indices(store_plain_indices)
       , initialize_indices(initialize_indices)
       , initialize_mapping(initialize_mapping)
@@ -244,6 +242,7 @@ public:
       , hold_all_faces_to_owned_cells(hold_all_faces_to_owned_cells)
       , cell_vectorization_categories_strict(
           cell_vectorization_categories_strict)
+      , allow_ghosted_vectors_in_loops(allow_ghosted_vectors_in_loops)
       , communicator_sm(MPI_COMM_SELF)
     {}
 
@@ -260,7 +259,6 @@ public:
       , mapping_update_flags_faces_by_cells(
           other.mapping_update_flags_faces_by_cells)
       , mg_level(other.mg_level)
-      , level_mg_handler(this->mg_level)
       , store_plain_indices(other.store_plain_indices)
       , initialize_indices(other.initialize_indices)
       , initialize_mapping(other.initialize_mapping)
@@ -270,11 +268,9 @@ public:
       , cell_vectorization_category(other.cell_vectorization_category)
       , cell_vectorization_categories_strict(
           other.cell_vectorization_categories_strict)
+      , allow_ghosted_vectors_in_loops(other.allow_ghosted_vectors_in_loops)
       , communicator_sm(other.communicator_sm)
     {}
-
-    // remove with level_mg_handler
-    DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
 
     /**
      * Copy assignment.
@@ -300,7 +296,8 @@ public:
       cell_vectorization_category   = other.cell_vectorization_category;
       cell_vectorization_categories_strict =
         other.cell_vectorization_categories_strict;
-      communicator_sm = other.communicator_sm;
+      allow_ghosted_vectors_in_loops = other.allow_ghosted_vectors_in_loops;
+      communicator_sm                = other.communicator_sm;
 
       return *this;
     }
@@ -381,10 +378,9 @@ public:
      * determinants (JxW), quadrature points, data for Hessians (derivative of
      * Jacobians), and normal vectors.
      *
-     * @note In order to be able to perform a `face_operation` or
-     * `boundary_operation` in the MatrixFree::loop()`, either this field or
-     * @p mapping_update_flags_inner_faces must be set to a value different
-     * from UpdateFlags::update_default.
+     * @note In order to be able to perform a `boundary_operation` in the
+     * MatrixFree::loop(), this field must be set to a value different from
+     * UpdateFlags::update_default.
      */
     UpdateFlags mapping_update_flags_boundary_faces;
 
@@ -402,9 +398,8 @@ public:
      * determinants (JxW), quadrature points, data for Hessians (derivative of
      * Jacobians), and normal vectors.
      *
-     * @note In order to be able to perform a `face_operation` or
-     * `boundary_operation` in the MatrixFree::loop()`, either this field or
-     * @p mapping_update_flags_boundary_faces must be set to a value different
+     * @note In order to be able to perform a `face_operation`
+     * in the MatrixFree::loop(), this field must be set to a value different
      * from UpdateFlags::update_default.
      */
     UpdateFlags mapping_update_flags_inner_faces;
@@ -446,13 +441,6 @@ public:
      * <code>dof_handler.distribute_mg_dofs(fe);</code>.
      */
     unsigned int mg_level;
-
-    /**
-     * Alias for mg_level
-     *
-     * @deprecated Use mg_level instead.
-     */
-    DEAL_II_DEPRECATED unsigned int &level_mg_handler;
 
     /**
      * Controls whether to enable reading from vectors without resolving
@@ -508,13 +496,18 @@ public:
     /**
      * This data structure allows to assign a fraction of cells to different
      * categories when building the information for vectorization. It is used
-     * implicitly when working with hp-adaptivity but can also be useful in
-     * other contexts, such as in local time stepping where one would like to
-     * control which elements together form a batch of cells.
+     * implicitly when working with hp-adaptivity (with each active index
+     * being a category) but can also be useful in other contexts where one
+     * would like to control which cells together can form a batch of cells.
+     * Such an example is "local time stepping", where cells of different
+     * caterogries progress with different time-step sizes and, as a
+     * consequence, can only processed together with cells with the same
+     * category.
      *
      * This array is accessed by the number given by cell->active_cell_index()
-     * when working on the active cells with @p mg_level set to numbers::invalid_unsigned_int and
-     * by cell->index() for the level cells.
+     * when working on the active cells (with
+     * @p mg_level set to numbers::invalid_unsigned_int) and by cell->index()
+     * for the level cells.
      *
      * @note This field is empty upon construction of AdditionalData. It is
      * the responsibility of the user to resize this field to
@@ -535,6 +528,18 @@ public:
     bool cell_vectorization_categories_strict;
 
     /**
+     * Assert that vectors passed to the MatrixFree loops are not ghosted.
+     * This variable is primarily intended to reveal bugs or performance
+     * problems caused by vectors that are involuntarily in ghosted mode,
+     * by adding a check that this is not the case. In terms of correctness,
+     * the MatrixFree::loop() and MatrixFree::cell_loop() methods support
+     * both cases and perform similar operations. In particular, ghost values
+     * are always updated on the source vector within the loop, and the
+     * difference is only in whether the initial non-ghosted state is restored.
+     */
+    bool allow_ghosted_vectors_in_loops;
+
+    /**
      * Shared-memory MPI communicator. Default: MPI_COMM_SELF.
      */
     MPI_Comm communicator_sm;
@@ -543,7 +548,7 @@ public:
   /**
    * @name 1: Construction and initialization
    */
-  //@{
+  /** @{ */
   /**
    * Default empty constructor. Does nothing.
    */
@@ -580,19 +585,6 @@ public:
          const AdditionalData &            additional_data = AdditionalData());
 
   /**
-   * Initializes the data structures. Same as above, but using a $Q_1$
-   * mapping.
-   *
-   * @deprecated Use the overload taking a Mapping object instead.
-   */
-  template <typename QuadratureType, typename number2>
-  DEAL_II_DEPRECATED void
-  reinit(const DoFHandler<dim> &           dof_handler,
-         const AffineConstraints<number2> &constraint,
-         const QuadratureType &            quad,
-         const AdditionalData &            additional_data = AdditionalData());
-
-  /**
    * Extracts the information needed to perform loops over cells. The
    * DoFHandler and AffineConstraints objects describe the layout of degrees of
    * freedom, the DoFHandler and the mapping describe the transformations from
@@ -622,47 +614,6 @@ public:
          const AdditionalData &additional_data = AdditionalData());
 
   /**
-   * Initializes the data structures. Same as above, but  using DoFHandlerType.
-   *
-   * @deprecated Use the overload taking a DoFHandler object instead.
-   */
-  template <typename QuadratureType,
-            typename number2,
-            typename DoFHandlerType,
-            typename MappingType>
-  DEAL_II_DEPRECATED void
-  reinit(const MappingType &                                    mapping,
-         const std::vector<const DoFHandlerType *> &            dof_handler,
-         const std::vector<const AffineConstraints<number2> *> &constraint,
-         const std::vector<QuadratureType> &                    quad,
-         const AdditionalData &additional_data = AdditionalData());
-
-  /**
-   * Initializes the data structures. Same as above, but  using a $Q_1$
-   * mapping.
-   *
-   * @deprecated Use the overload taking a Mapping object instead.
-   */
-  template <typename QuadratureType, typename number2>
-  DEAL_II_DEPRECATED void
-  reinit(const std::vector<const DoFHandler<dim> *> &           dof_handler,
-         const std::vector<const AffineConstraints<number2> *> &constraint,
-         const std::vector<QuadratureType> &                    quad,
-         const AdditionalData &additional_data = AdditionalData());
-
-  /**
-   * Initializes the data structures. Same as above, but  using DoFHandlerType.
-   *
-   * @deprecated Use the overload taking a DoFHandler object instead.
-   */
-  template <typename QuadratureType, typename number2, typename DoFHandlerType>
-  DEAL_II_DEPRECATED void
-  reinit(const std::vector<const DoFHandlerType *> &            dof_handler,
-         const std::vector<const AffineConstraints<number2> *> &constraint,
-         const std::vector<QuadratureType> &                    quad,
-         const AdditionalData &additional_data = AdditionalData());
-
-  /**
    * Initializes the data structures. Same as before, but now the index set
    * description of the locally owned range of degrees of freedom is taken
    * from the DoFHandler. Moreover, only a single quadrature formula is used,
@@ -673,47 +624,6 @@ public:
   void
   reinit(const MappingType &                                    mapping,
          const std::vector<const DoFHandler<dim> *> &           dof_handler,
-         const std::vector<const AffineConstraints<number2> *> &constraint,
-         const QuadratureType &                                 quad,
-         const AdditionalData &additional_data = AdditionalData());
-
-  /**
-   * Initializes the data structures. Same as above, but  using DoFHandlerType.
-   *
-   * @deprecated Use the overload taking a DoFHandler object instead.
-   */
-  template <typename QuadratureType,
-            typename number2,
-            typename DoFHandlerType,
-            typename MappingType>
-  DEAL_II_DEPRECATED void
-  reinit(const MappingType &                                    mapping,
-         const std::vector<const DoFHandlerType *> &            dof_handler,
-         const std::vector<const AffineConstraints<number2> *> &constraint,
-         const QuadratureType &                                 quad,
-         const AdditionalData &additional_data = AdditionalData());
-
-  /**
-   * Initializes the data structures. Same as above, but  using a $Q_1$
-   * mapping.
-   *
-   * @deprecated Use the overload taking a Mapping object instead.
-   */
-  template <typename QuadratureType, typename number2>
-  DEAL_II_DEPRECATED void
-  reinit(const std::vector<const DoFHandler<dim> *> &           dof_handler,
-         const std::vector<const AffineConstraints<number2> *> &constraint,
-         const QuadratureType &                                 quad,
-         const AdditionalData &additional_data = AdditionalData());
-
-  /**
-   * Initializes the data structures. Same as above, but  using DoFHandlerType.
-   *
-   * @deprecated Use the overload taking a DoFHandler object instead.
-   */
-  template <typename QuadratureType, typename number2, typename DoFHandlerType>
-  DEAL_II_DEPRECATED void
-  reinit(const std::vector<const DoFHandlerType *> &            dof_handler,
          const std::vector<const AffineConstraints<number2> *> &constraint,
          const QuadratureType &                                 quad,
          const AdditionalData &additional_data = AdditionalData());
@@ -752,7 +662,7 @@ public:
   void
   clear();
 
-  //@}
+  /** @} */
 
   /**
    * This class defines the type of data access for face integrals in loop ()
@@ -831,7 +741,7 @@ public:
   /**
    * @name 2: Matrix-free loops
    */
-  //@{
+  /** @{ */
   /**
    * This method runs the loop over all cells (in parallel) and performs the
    * MPI data exchange on the source vector and destination vector.
@@ -977,7 +887,7 @@ public:
    * (including the MPI data exchange), allowing to execute some vector update
    * that the `src` vector depends upon. The `operation_after_loop` is similar
    * - it starts to execute on a range of DoFs once all DoFs in that range
-   * have been touched for the last time time by the `cell_operation`
+   * have been touched for the last time by the `cell_operation`
    * (including the MPI data exchange), allowing e.g. to compute some vector
    * operations that depend on the result of the current cell loop in `dst` or
    * want to modify `src`. The efficiency of caching depends on the numbering
@@ -1029,7 +939,7 @@ public:
    *
    * @param dof_handler_index_pre_post Since MatrixFree can be initialized
    * with a vector of DoFHandler objects, each of them will in general have
-   * vector sizes and thus different ranges returned to
+   * different vector sizes and thus different ranges returned to
    * `operation_before_loop` and `operation_after_loop`. Use this variable to
    * specify which one of the DoFHandler objects the index range should be
    * associated to. Defaults to the `dof_handler_index` 0.
@@ -1472,50 +1382,61 @@ public:
     const unsigned int                           dof_handler_index = 0) const;
 
   /**
-   * In the hp adaptive case, return number of active_fe_indices.
+   * In the hp-adaptive case, return number of active FE indices.
    */
   unsigned int
   n_active_fe_indices() const;
 
   /**
-   * In the hp-adaptive case, return the active_fe_index of a cell range.
+   * In the hp-adaptive case, return the active FE index of a cell range.
    */
   unsigned int
   get_cell_active_fe_index(
     const std::pair<unsigned int, unsigned int> range) const;
 
   /**
-   * In the hp-adaptive case, return the active_fe_index of a face range.
+   * In the hp-adaptive case, return the active FE index of a face range.
    */
   unsigned int
   get_face_active_fe_index(const std::pair<unsigned int, unsigned int> range,
                            const bool is_interior_face = true) const;
 
-  //@}
+  /** @} */
 
   /**
    * @name 3: Initialization of vectors
    */
-  //@{
+  /** @{ */
   /**
-   * Initialize function for a general vector. The length of the vector is
-   * equal to the total number of degrees in the DoFHandler. If the vector is
-   * of class LinearAlgebra::distributed::Vector@<Number@>, the ghost entries
-   * are set accordingly. For vector-valued problems with several DoFHandlers
-   * underlying this class, the parameter @p vector_component defines which
-   * component is to be used.
+   * Initialize function for a vector with each entry associated with a cell
+   * batch (cell data). For reading and writing the vector use:
+   * FEEvaluationBase::read_cell_data() and FEEvaluationBase::write_cell_data().
+   */
+  template <typename T>
+  void
+  initialize_cell_data_vector(AlignedVector<T> &vec) const;
+
+  /**
+   * Initialize function for a vector with each entry associated with a face
+   * batch (face data). For reading and writing the vector use:
+   * FEEvaluationBase::read_face_data() and FEEvaluationBase::write_face_data().
+   */
+  template <typename T>
+  void
+  initialize_face_data_vector(AlignedVector<T> &vec) const;
+
+  /**
+   * Initialize function for a general serial non-block vector.
+   * After a call to this function, the length of the vector is equal to the
+   * total number of degrees of freedom in the DoFHandler. Vector entries are
+   * initialized with zero.
    *
-   * For the vectors used with MatrixFree and in FEEvaluation, a vector needs
-   * to hold all
-   * @ref GlossLocallyActiveDof "locally active DoFs"
-   * and also some of the
-   * @ref GlossLocallyRelevantDof "locally relevant DoFs".
-   * The selection of DoFs is such that one can read all degrees of freedom on
-   * all locally relevant elements (locally active) plus the degrees of freedom
-   * that constraints expand into from the locally owned cells. However, not
-   * all locally relevant DoFs are stored because most of them would never be
-   * accessed in matrix-vector products and result in too much data sent
-   * around which impacts the performance.
+   * If MatrixFree was set up with several DoFHandler objects, the parameter
+   * @p dof_handler_index defines which component is to be used.
+   *
+   * @note Serial vectors also include Trilinos and PETSc vectors; however
+   * in these cases, MatrixFree has to be used in a serial context, i.e., the
+   * size of the communicator has to be exactly one.
    */
   template <typename VectorType>
   void
@@ -1523,15 +1444,12 @@ public:
                         const unsigned int dof_handler_index = 0) const;
 
   /**
-   * Initialize function for a distributed vector. The length of the vector is
-   * equal to the total number of degrees in the DoFHandler. If the vector is
-   * of class LinearAlgebra::distributed::Vector@<Number@>, the ghost entries
-   * are set accordingly. For vector-valued problems with several DoFHandlers
-   * underlying this class, the parameter @p vector_component defines which
-   * component is to be used.
+   * Specialization of the method initialize_dof_vector() for the
+   * class LinearAlgebra::distributed::Vector@<Number@>.
+   * See the other function with the same name for the general descriptions.
    *
-   * For the vectors used with MatrixFree and in FEEvaluation, a vector needs
-   * to hold all
+   * @note For the parallel vectors used with MatrixFree and in FEEvaluation, a
+   * vector needs to hold all
    * @ref GlossLocallyActiveDof "locally active DoFs"
    * and also some of the
    * @ref GlossLocallyRelevantDof "locally relevant DoFs".
@@ -1598,12 +1516,12 @@ public:
   renumber_dofs(std::vector<types::global_dof_index> &renumbering,
                 const unsigned int                    dof_handler_index = 0);
 
-  //@}
+  /** @} */
 
   /**
    * @name 4: General information
    */
-  //@{
+  /** @{ */
   /**
    * Return whether a given FiniteElement @p fe is supported by this class.
    */
@@ -1635,12 +1553,6 @@ public:
   n_physical_cells() const;
 
   /**
-   * @deprecated Use n_cell_batches() instead.
-   */
-  DEAL_II_DEPRECATED unsigned int
-  n_macro_cells() const;
-
-  /**
    * Return the number of cell batches that this structure works on. The
    * batches are formed by application of vectorization over several cells in
    * general. The cell range in @p cell_loop runs from zero to
@@ -1667,6 +1579,8 @@ public:
    * in general. The face range in @p loop runs from zero to
    * n_inner_face_batches() (exclusive), so this is the appropriate size if
    * you want to store arrays of data for all interior faces to be worked on.
+   * Note that it returns 0 unless mapping_update_flags_inner_faces is set
+   * to a value different from  UpdateFlags::update_default.
    */
   unsigned int
   n_inner_face_batches() const;
@@ -1678,6 +1592,8 @@ public:
    * n_inner_face_batches()+n_boundary_face_batches() (exclusive), so if you
    * need to store arrays that hold data for all boundary faces but not the
    * interior ones, this number gives the appropriate size.
+   * Note that it returns 0 unless mapping_update_flags_boundary_faces is set
+   * to a value different from UpdateFlags::update_default.
    */
   unsigned int
   n_boundary_face_batches() const;
@@ -1694,9 +1610,13 @@ public:
    * this method can be used to query the boundary id of a given face in the
    * faces' own sorting by lanes in a VectorizedArray. Only valid for an index
    * indicating a boundary face.
+   *
+   * @note Alternatively to this function, you can use
+   * FEFaceEvaluation::boundary_id() to get the same information if a
+   * FEFaceEvaluation object has been set up already.
    */
   types::boundary_id
-  get_boundary_id(const unsigned int macro_face) const;
+  get_boundary_id(const unsigned int face_batch_index) const;
 
   /**
    * Return the boundary ids for the faces within a cell, using the cells'
@@ -1714,18 +1634,13 @@ public:
   get_dof_handler(const unsigned int dof_handler_index = 0) const;
 
   /**
-   * Return the DoFHandler with the index as given to the respective
-   * `std::vector` argument in the reinit() function. Note that if you want to
-   * call this function with a template parameter different than the default
-   * one, you will need to use the `template` before the function call, i.e.,
-   * you will have something like `matrix_free.template
-   * get_dof_handler<hp::DoFHandler<dim>>()`.
-   *
-   * @deprecated Use the non-templated equivalent of this function.
+   * Return the AffineConstraints with the index as given to the
+   * respective `std::vector` argument in the reinit() function. Only available
+   * if the AffineConstraints objects have the same template parameter Number as
+   * MatrixFree. Throws an exception otherwise.
    */
-  template <typename DoFHandlerType>
-  DEAL_II_DEPRECATED const DoFHandlerType &
-                           get_dof_handler(const unsigned int dof_handler_index = 0) const;
+  const AffineConstraints<Number> &
+  get_affine_constraints(const unsigned int dof_handler_index = 0) const;
 
   /**
    * Return the cell iterator in deal.II speak to a given cell batch
@@ -1754,10 +1669,20 @@ public:
                            const unsigned int lane_index) const;
 
   /**
+   * Get MatrixFree index associated to a deal.II @p cell. To get
+   * the actual cell batch index and lane, do the postprocessing
+   * `index / VectorizedArrayType::size()` and `index %
+   * VectorizedArrayType::size()`.
+   */
+  unsigned int
+  get_matrix_free_cell_index(
+    const typename Triangulation<dim>::cell_iterator &cell) const;
+
+  /**
    * Return the cell iterator in deal.II speak to an interior/exterior cell of
    * a face in a pair of a face batch and lane index. The second element of
    * the pair is the face number so that the face iterator can be accessed:
-   * `pair.first()->face(pair.second());`
+   * `pair.first->face(pair.second);`
    *
    * Note that the face iterators in deal.II go through cells differently to
    * what the face/boundary loop of this class does. This is because several
@@ -1770,16 +1695,6 @@ public:
                     const unsigned int lane_index,
                     const bool         interior     = true,
                     const unsigned int fe_component = 0) const;
-
-  /**
-   * @copydoc MatrixFree::get_cell_iterator()
-   *
-   * @deprecated Use get_cell_iterator() instead.
-   */
-  DEAL_II_DEPRECATED typename DoFHandler<dim>::active_cell_iterator
-  get_hp_cell_iterator(const unsigned int cell_batch_index,
-                       const unsigned int lane_index,
-                       const unsigned int dof_handler_index = 0) const;
 
   /**
    * Since this class uses vectorized data types with usually more than one
@@ -1795,12 +1710,6 @@ public:
    */
   bool
   at_irregular_cell(const unsigned int cell_batch_index) const;
-
-  /**
-   * @deprecated Use n_active_entries_per_cell_batch() instead.
-   */
-  DEAL_II_DEPRECATED unsigned int
-  n_components_filled(const unsigned int cell_batch_number) const;
 
   /**
    * This query returns how many cells among the `VectorizedArrayType::size()`
@@ -1871,20 +1780,49 @@ public:
                       const unsigned int hp_active_fe_index = 0) const;
 
   /**
+   * Return the category the current batch range of cells was assigned to.
+   * Categories run between the given values in the field
+   * AdditionalData::cell_vectorization_category for the non-hp case
+   * and return the active FE index in the hp-adaptive case.
+   *
+   * @note Following the behaviour of get_cell_category(), we return the
+   * maximum category of any cell batch. In the hp case, it is
+   * guaranteed that all cells and as a consequence all cell batches in a range
+   * have the same category. Otherwise, there may be different categories in
+   * different cell batches.
+   */
+  unsigned int
+  get_cell_range_category(
+    const std::pair<unsigned int, unsigned int> cell_batch_range) const;
+
+  /**
+   * Return the category of the cells on the two sides of the current batch
+   * range of faces.
+   */
+  std::pair<unsigned int, unsigned int>
+  get_face_range_category(
+    const std::pair<unsigned int, unsigned int> face_batch_range) const;
+
+  /**
    * Return the category the current batch of cells was assigned to. Categories
    * run between the given values in the field
-   * AdditionalData::cell_vectorization_category for non-hp-DoFHandler types
+   * AdditionalData::cell_vectorization_category for the non-hp case
    * and return the active FE index in the hp-adaptive case.
+   *
+   * @note In the non-hp case, a category of a cell batch is given
+   * as the maximum category of any of its cell. In the hp case or the case that
+   * MatrixFree::AdditionalData::cell_vectorization_categories_strict was
+   * enabled, it is guaranteed that all cells have the same category.
    */
   unsigned int
   get_cell_category(const unsigned int cell_batch_index) const;
 
   /**
-   * Return the category on the cells on the two sides of the current batch of
+   * Return the category of the cells on the two sides of the current batch of
    * faces.
    */
   std::pair<unsigned int, unsigned int>
-  get_face_category(const unsigned int macro_face) const;
+  get_face_category(const unsigned int face_batch_index) const;
 
   /**
    * Queries whether or not the indexation has been set.
@@ -1928,14 +1866,14 @@ public:
   void
   print(std::ostream &out) const;
 
-  //@}
+  /** @} */
 
   /**
    * @name 5: Access of internal data structure
    *
    * Note: Expert mode, interface not stable between releases.
    */
-  //@{
+  /** @{ */
   /**
    * Return information on task graph.
    */
@@ -2043,7 +1981,7 @@ public:
   release_scratch_data_non_threadsafe(
     const AlignedVector<Number> *memory) const;
 
-  //@}
+  /** @} */
 
 private:
   /**
@@ -2087,6 +2025,14 @@ private:
   std::vector<SmartPointer<const DoFHandler<dim>>> dof_handlers;
 
   /**
+   * Pointers to the AffineConstraints underlying the current problem. Only
+   * filled with an AffineConstraints object if objects of the same `Number`
+   * template parameter as the `Number` template of MatrixFree is passed to
+   * reinit(). Filled with nullptr otherwise.
+   */
+  std::vector<SmartPointer<const AffineConstraints<Number>>> affine_constraints;
+
+  /**
    * Contains the information about degrees of freedom on the individual cells
    * and constraints.
    */
@@ -2127,6 +2073,11 @@ private:
    */
   std::vector<std::pair<unsigned int, unsigned int>> cell_level_index;
 
+  /**
+   * Conversion from deal.II index (active or level index) to MatrixFree index
+   * (inverse of cell_level_index).
+   */
+  std::vector<unsigned int> mf_cell_indices;
 
   /**
    * For discontinuous Galerkin, the cell_level_index includes cells that are
@@ -2193,12 +2144,41 @@ private:
 
 
 template <int dim, typename Number, typename VectorizedArrayType>
+template <typename T>
+inline void
+MatrixFree<dim, Number, VectorizedArrayType>::initialize_cell_data_vector(
+  AlignedVector<T> &vec) const
+{
+  vec.resize(this->n_cell_batches() + this->n_ghost_cell_batches());
+}
+
+
+
+template <int dim, typename Number, typename VectorizedArrayType>
+template <typename T>
+inline void
+MatrixFree<dim, Number, VectorizedArrayType>::initialize_face_data_vector(
+  AlignedVector<T> &vec) const
+{
+  vec.resize(this->n_inner_face_batches() + this->n_boundary_face_batches() +
+             this->n_ghost_inner_face_batches());
+}
+
+
+
+template <int dim, typename Number, typename VectorizedArrayType>
 template <typename VectorType>
 inline void
 MatrixFree<dim, Number, VectorizedArrayType>::initialize_dof_vector(
   VectorType &       vec,
   const unsigned int comp) const
 {
+  static_assert(IsBlockVector<VectorType>::value == false,
+                "This function is not supported for block vectors.");
+
+  Assert(task_info.n_procs == 1,
+         ExcMessage("This function can only be used in serial."));
+
   AssertIndexRange(comp, n_components());
   vec.reinit(dof_info[comp].vector_partitioner->size());
 }
@@ -2273,15 +2253,6 @@ MatrixFree<dim, Number, VectorizedArrayType>::get_task_info() const
 
 template <int dim, typename Number, typename VectorizedArrayType>
 inline unsigned int
-MatrixFree<dim, Number, VectorizedArrayType>::n_macro_cells() const
-{
-  return *(task_info.cell_partition_data.end() - 2);
-}
-
-
-
-template <int dim, typename Number, typename VectorizedArrayType>
-inline unsigned int
 MatrixFree<dim, Number, VectorizedArrayType>::n_physical_cells() const
 {
   return task_info.n_active_cells;
@@ -2345,14 +2316,14 @@ MatrixFree<dim, Number, VectorizedArrayType>::n_ghost_inner_face_batches() const
 template <int dim, typename Number, typename VectorizedArrayType>
 inline types::boundary_id
 MatrixFree<dim, Number, VectorizedArrayType>::get_boundary_id(
-  const unsigned int macro_face) const
+  const unsigned int face_batch_index) const
 {
-  Assert(macro_face >= task_info.boundary_partition_data[0] &&
-           macro_face < task_info.boundary_partition_data.back(),
-         ExcIndexRange(macro_face,
+  Assert(face_batch_index >= task_info.boundary_partition_data[0] &&
+           face_batch_index < task_info.boundary_partition_data.back(),
+         ExcIndexRange(face_batch_index,
                        task_info.boundary_partition_data[0],
                        task_info.boundary_partition_data.back()));
-  return types::boundary_id(face_info.faces[macro_face].exterior_face_no);
+  return types::boundary_id(face_info.faces[face_batch_index].exterior_face_no);
 }
 
 
@@ -2552,29 +2523,17 @@ MatrixFree<dim, Number, VectorizedArrayType>::get_face_active_fe_index(
 
 template <int dim, typename Number, typename VectorizedArrayType>
 inline unsigned int
-MatrixFree<dim, Number, VectorizedArrayType>::n_components_filled(
-  const unsigned int cell_batch_index) const
-{
-  return n_active_entries_per_cell_batch(cell_batch_index);
-}
-
-
-
-template <int dim, typename Number, typename VectorizedArrayType>
-inline unsigned int
 MatrixFree<dim, Number, VectorizedArrayType>::n_active_entries_per_cell_batch(
   const unsigned int cell_batch_index) const
 {
+  Assert(!dof_info.empty(), ExcNotInitialized());
   AssertIndexRange(cell_batch_index, task_info.cell_partition_data.back());
-  unsigned int n_lanes = VectorizedArrayType::size();
-  while (n_lanes > 1 &&
-         cell_level_index[cell_batch_index * VectorizedArrayType::size() +
-                          n_lanes - 1] ==
-           cell_level_index[cell_batch_index * VectorizedArrayType::size() +
-                            n_lanes - 2])
-    --n_lanes;
-  AssertIndexRange(n_lanes - 1, VectorizedArrayType::size());
-  return n_lanes;
+  const std::vector<unsigned char> &n_lanes_filled =
+    dof_info[0].n_vectorization_lanes_filled
+      [internal::MatrixFreeFunctions::DoFInfo::dof_access_cell];
+  AssertIndexRange(cell_batch_index, n_lanes_filled.size());
+
+  return n_lanes_filled[cell_batch_index];
 }
 
 
@@ -2585,13 +2544,12 @@ MatrixFree<dim, Number, VectorizedArrayType>::n_active_entries_per_face_batch(
   const unsigned int face_batch_index) const
 {
   AssertIndexRange(face_batch_index, face_info.faces.size());
-  unsigned int n_lanes = VectorizedArrayType::size();
-  while (n_lanes > 1 &&
-         face_info.faces[face_batch_index].cells_interior[n_lanes - 1] ==
-           numbers::invalid_unsigned_int)
-    --n_lanes;
-  AssertIndexRange(n_lanes - 1, VectorizedArrayType::size());
-  return n_lanes;
+  Assert(!dof_info.empty(), ExcNotInitialized());
+  const std::vector<unsigned char> &n_lanes_filled =
+    dof_info[0].n_vectorization_lanes_filled
+      [internal::MatrixFreeFunctions::DoFInfo::dof_access_face_interior];
+  AssertIndexRange(face_batch_index, n_lanes_filled.size());
+  return n_lanes_filled[face_batch_index];
 }
 
 
@@ -2691,10 +2649,10 @@ template <int dim, typename Number, typename VectorizedArrayType>
 inline const internal::MatrixFreeFunctions::FaceToCellTopology<
   VectorizedArrayType::size()> &
 MatrixFree<dim, Number, VectorizedArrayType>::get_face_info(
-  const unsigned int macro_face) const
+  const unsigned int face_batch_index) const
 {
-  AssertIndexRange(macro_face, face_info.faces.size());
-  return face_info.faces[macro_face];
+  AssertIndexRange(face_batch_index, face_info.faces.size());
+  return face_info.faces[face_batch_index];
 }
 
 
@@ -2739,6 +2697,39 @@ MatrixFree<dim, Number, VectorizedArrayType>::get_face_quadrature(
 
 template <int dim, typename Number, typename VectorizedArrayType>
 inline unsigned int
+MatrixFree<dim, Number, VectorizedArrayType>::get_cell_range_category(
+  const std::pair<unsigned int, unsigned int> range) const
+{
+  auto result = get_cell_category(range.first);
+
+  for (unsigned int i = range.first; i < range.second; ++i)
+    result = std::max(result, get_cell_category(i));
+
+  return result;
+}
+
+
+
+template <int dim, typename Number, typename VectorizedArrayType>
+inline std::pair<unsigned int, unsigned int>
+MatrixFree<dim, Number, VectorizedArrayType>::get_face_range_category(
+  const std::pair<unsigned int, unsigned int> range) const
+{
+  auto result = get_face_category(range.first);
+
+  for (unsigned int i = range.first; i < range.second; ++i)
+    {
+      result.first  = std::max(result.first, get_face_category(i).first);
+      result.second = std::max(result.second, get_face_category(i).second);
+    }
+
+  return result;
+}
+
+
+
+template <int dim, typename Number, typename VectorizedArrayType>
+inline unsigned int
 MatrixFree<dim, Number, VectorizedArrayType>::get_cell_category(
   const unsigned int cell_batch_index) const
 {
@@ -2755,31 +2746,35 @@ MatrixFree<dim, Number, VectorizedArrayType>::get_cell_category(
 template <int dim, typename Number, typename VectorizedArrayType>
 inline std::pair<unsigned int, unsigned int>
 MatrixFree<dim, Number, VectorizedArrayType>::get_face_category(
-  const unsigned int macro_face) const
+  const unsigned int face_batch_index) const
 {
-  AssertIndexRange(macro_face, face_info.faces.size());
+  AssertIndexRange(face_batch_index, face_info.faces.size());
   if (dof_info[0].cell_active_fe_index.empty())
     return std::make_pair(0U, 0U);
 
-  std::pair<unsigned int, unsigned int> result;
-  for (unsigned int v = 0; v < VectorizedArrayType::size() &&
-                           face_info.faces[macro_face].cells_interior[v] !=
-                             numbers::invalid_unsigned_int;
+  std::pair<unsigned int, unsigned int> result = std::make_pair(0U, 0U);
+  for (unsigned int v = 0;
+       v < VectorizedArrayType::size() &&
+       face_info.faces[face_batch_index].cells_interior[v] !=
+         numbers::invalid_unsigned_int;
        ++v)
     result.first = std::max(
       result.first,
-      dof_info[0]
-        .cell_active_fe_index[face_info.faces[macro_face].cells_interior[v]]);
-  if (face_info.faces[macro_face].cells_exterior[0] !=
+      dof_info[0].cell_active_fe_index[face_info.faces[face_batch_index]
+                                         .cells_interior[v] /
+                                       VectorizedArrayType::size()]);
+  if (face_info.faces[face_batch_index].cells_exterior[0] !=
       numbers::invalid_unsigned_int)
-    for (unsigned int v = 0; v < VectorizedArrayType::size() &&
-                             face_info.faces[macro_face].cells_exterior[v] !=
-                               numbers::invalid_unsigned_int;
+    for (unsigned int v = 0;
+         v < VectorizedArrayType::size() &&
+         face_info.faces[face_batch_index].cells_exterior[v] !=
+           numbers::invalid_unsigned_int;
          ++v)
       result.second = std::max(
-        result.first,
-        dof_info[0]
-          .cell_active_fe_index[face_info.faces[macro_face].cells_exterior[v]]);
+        result.second,
+        dof_info[0].cell_active_fe_index[face_info.faces[face_batch_index]
+                                           .cells_exterior[v] /
+                                         VectorizedArrayType::size()]);
   else
     result.second = numbers::invalid_unsigned_int;
   return result;
@@ -2908,7 +2903,7 @@ namespace internal
     {
       std::vector<IndexSet> locally_owned_set;
       locally_owned_set.reserve(dofh.size());
-      for (unsigned int j = 0; j < dofh.size(); j++)
+      for (unsigned int j = 0; j < dofh.size(); ++j)
         if (level == numbers::invalid_unsigned_int)
           locally_owned_set.push_back(dofh[j]->locally_owned_dofs());
         else
@@ -2917,42 +2912,6 @@ namespace internal
     }
   } // namespace MatrixFreeImplementation
 } // namespace internal
-
-
-
-template <int dim, typename Number, typename VectorizedArrayType>
-template <typename QuadratureType, typename number2>
-void
-MatrixFree<dim, Number, VectorizedArrayType>::reinit(
-  const DoFHandler<dim> &           dof_handler,
-  const AffineConstraints<number2> &constraints_in,
-  const QuadratureType &            quad,
-  const typename MatrixFree<dim, Number, VectorizedArrayType>::AdditionalData
-    &additional_data)
-{
-  std::vector<const DoFHandler<dim, dim> *>       dof_handlers;
-  std::vector<const AffineConstraints<number2> *> constraints;
-  std::vector<QuadratureType>                     quads;
-
-  dof_handlers.push_back(&dof_handler);
-  constraints.push_back(&constraints_in);
-  quads.push_back(quad);
-
-  std::vector<IndexSet> locally_owned_sets =
-    internal::MatrixFreeImplementation::extract_locally_owned_index_sets(
-      dof_handlers, additional_data.mg_level);
-
-  std::vector<hp::QCollection<dim>> quad_hp;
-  quad_hp.emplace_back(quad);
-
-  internal_reinit(std::make_shared<hp::MappingCollection<dim>>(
-                    StaticMappingQ1<dim>::mapping),
-                  dof_handlers,
-                  constraints,
-                  locally_owned_sets,
-                  quad_hp,
-                  additional_data);
-}
 
 
 
@@ -2991,109 +2950,6 @@ MatrixFree<dim, Number, VectorizedArrayType>::reinit(
 
 
 template <int dim, typename Number, typename VectorizedArrayType>
-template <typename QuadratureType, typename number2>
-void
-MatrixFree<dim, Number, VectorizedArrayType>::reinit(
-  const std::vector<const DoFHandler<dim> *> &           dof_handler,
-  const std::vector<const AffineConstraints<number2> *> &constraint,
-  const std::vector<QuadratureType> &                    quad,
-  const typename MatrixFree<dim, Number, VectorizedArrayType>::AdditionalData
-    &additional_data)
-{
-  std::vector<IndexSet> locally_owned_set =
-    internal::MatrixFreeImplementation::extract_locally_owned_index_sets(
-      dof_handler, additional_data.mg_level);
-  std::vector<hp::QCollection<dim>> quad_hp;
-  for (unsigned int q = 0; q < quad.size(); ++q)
-    quad_hp.emplace_back(quad[q]);
-
-  internal_reinit(std::make_shared<hp::MappingCollection<dim>>(
-                    StaticMappingQ1<dim>::mapping),
-                  dof_handler,
-                  constraint,
-                  locally_owned_set,
-                  quad_hp,
-                  additional_data);
-}
-
-
-
-template <int dim, typename Number, typename VectorizedArrayType>
-template <typename QuadratureType,
-          typename number2,
-          typename DoFHandlerType,
-          typename MappingType>
-void
-MatrixFree<dim, Number, VectorizedArrayType>::reinit(
-  const MappingType &                                    mapping,
-  const std::vector<const DoFHandlerType *> &            dof_handler,
-  const std::vector<const AffineConstraints<number2> *> &constraint,
-  const std::vector<QuadratureType> &                    quad,
-  const AdditionalData &                                 additional_data)
-{
-  static_assert(dim == DoFHandlerType::dimension,
-                "Dimension dim not equal to DoFHandlerType::dimension.");
-
-  std::vector<const DoFHandler<dim> *> dof_handlers;
-
-  for (const auto dh : dof_handler)
-    dof_handlers.push_back(dh);
-
-  this->reinit(mapping, dof_handlers, constraint, quad, additional_data);
-}
-
-
-
-template <int dim, typename Number, typename VectorizedArrayType>
-template <typename QuadratureType, typename number2>
-void
-MatrixFree<dim, Number, VectorizedArrayType>::reinit(
-  const std::vector<const DoFHandler<dim> *> &           dof_handler,
-  const std::vector<const AffineConstraints<number2> *> &constraint,
-  const QuadratureType &                                 quad,
-  const typename MatrixFree<dim, Number, VectorizedArrayType>::AdditionalData
-    &additional_data)
-{
-  std::vector<IndexSet> locally_owned_set =
-    internal::MatrixFreeImplementation::extract_locally_owned_index_sets(
-      dof_handler, additional_data.mg_level);
-  std::vector<hp::QCollection<dim>> quad_hp;
-  quad_hp.emplace_back(quad);
-
-  internal_reinit(std::make_shared<hp::MappingCollection<dim>>(
-                    StaticMappingQ1<dim>::mapping),
-                  dof_handler,
-                  constraint,
-                  locally_owned_set,
-                  quad_hp,
-                  additional_data);
-}
-
-
-
-template <int dim, typename Number, typename VectorizedArrayType>
-template <typename QuadratureType, typename number2, typename DoFHandlerType>
-void
-MatrixFree<dim, Number, VectorizedArrayType>::reinit(
-  const std::vector<const DoFHandlerType *> &            dof_handler,
-  const std::vector<const AffineConstraints<number2> *> &constraint,
-  const std::vector<QuadratureType> &                    quad,
-  const AdditionalData &                                 additional_data)
-{
-  static_assert(dim == DoFHandlerType::dimension,
-                "Dimension dim not equal to DoFHandlerType::dimension.");
-
-  std::vector<const DoFHandler<dim> *> dof_handlers;
-
-  for (const auto dh : dof_handler)
-    dof_handlers.push_back(dof_handler);
-
-  this->reinit(dof_handlers, constraint, quad, additional_data);
-}
-
-
-
-template <int dim, typename Number, typename VectorizedArrayType>
 template <typename QuadratureType, typename number2, typename MappingType>
 void
 MatrixFree<dim, Number, VectorizedArrayType>::reinit(
@@ -3144,54 +3000,6 @@ MatrixFree<dim, Number, VectorizedArrayType>::reinit(
                   locally_owned_set,
                   quad_hp,
                   additional_data);
-}
-
-
-
-template <int dim, typename Number, typename VectorizedArrayType>
-template <typename QuadratureType,
-          typename number2,
-          typename DoFHandlerType,
-          typename MappingType>
-void
-MatrixFree<dim, Number, VectorizedArrayType>::reinit(
-  const MappingType &                                    mapping,
-  const std::vector<const DoFHandlerType *> &            dof_handler,
-  const std::vector<const AffineConstraints<number2> *> &constraint,
-  const QuadratureType &                                 quad,
-  const AdditionalData &                                 additional_data)
-{
-  static_assert(dim == DoFHandlerType::dimension,
-                "Dimension dim not equal to DoFHandlerType::dimension.");
-
-  std::vector<const DoFHandler<dim> *> dof_handlers;
-
-  for (const auto dh : dof_handler)
-    dof_handlers.push_back(dof_handler);
-
-  this->reinit(mapping, dof_handlers, constraint, quad, additional_data);
-}
-
-
-
-template <int dim, typename Number, typename VectorizedArrayType>
-template <typename QuadratureType, typename number2, typename DoFHandlerType>
-void
-MatrixFree<dim, Number, VectorizedArrayType>::reinit(
-  const std::vector<const DoFHandlerType *> &            dof_handler,
-  const std::vector<const AffineConstraints<number2> *> &constraint,
-  const QuadratureType &                                 quad,
-  const AdditionalData &                                 additional_data)
-{
-  static_assert(dim == DoFHandlerType::dimension,
-                "Dimension dim not equal to DoFHandlerType::dimension.");
-
-  std::vector<const DoFHandler<dim> *> dof_handlers;
-
-  for (const auto dh : dof_handler)
-    dof_handlers.push_back(dof_handler);
-
-  this->reinit(dof_handlers, constraint, quad, additional_data);
 }
 
 
@@ -3347,8 +3155,8 @@ namespace internal
      * Start update_ghost_value for serial vectors
      */
     template <typename VectorType,
-              typename std::enable_if<is_serial_or_dummy<VectorType>::value,
-                                      VectorType>::type * = nullptr>
+              std::enable_if_t<is_not_parallel_vector<VectorType>, VectorType>
+                * = nullptr>
     void
     update_ghost_values_start(const unsigned int /*component_in_block_vector*/,
                               const VectorType & /*vec*/)
@@ -3360,16 +3168,20 @@ namespace internal
      * the split into _start() and finish() stages
      */
     template <typename VectorType,
-              typename std::enable_if<
-                !has_update_ghost_values_start<VectorType>::value &&
-                  !is_serial_or_dummy<VectorType>::value,
-                VectorType>::type * = nullptr>
+              std::enable_if_t<!has_update_ghost_values_start<VectorType> &&
+                                 !is_not_parallel_vector<VectorType>,
+                               VectorType> * = nullptr>
     void
     update_ghost_values_start(const unsigned int component_in_block_vector,
                               const VectorType & vec)
     {
       (void)component_in_block_vector;
       bool ghosts_set = vec.has_ghost_elements();
+
+      Assert(matrix_free.get_task_info().allow_ghosted_vectors_in_loops ||
+               ghosts_set == false,
+             ExcNotImplemented());
+
       if (ghosts_set)
         ghosts_were_set = true;
 
@@ -3384,16 +3196,20 @@ namespace internal
      * exchange on a subset of DoFs
      */
     template <typename VectorType,
-              typename std::enable_if<
-                has_update_ghost_values_start<VectorType>::value &&
-                  !has_exchange_on_subset<VectorType>::value,
-                VectorType>::type * = nullptr>
+              std::enable_if_t<has_update_ghost_values_start<VectorType> &&
+                                 !has_exchange_on_subset<VectorType>,
+                               VectorType> * = nullptr>
     void
     update_ghost_values_start(const unsigned int component_in_block_vector,
                               const VectorType & vec)
     {
       (void)component_in_block_vector;
       bool ghosts_set = vec.has_ghost_elements();
+
+      Assert(matrix_free.get_task_info().allow_ghosted_vectors_in_loops ||
+               ghosts_set == false,
+             ExcNotImplemented());
+
       if (ghosts_set)
         ghosts_were_set = true;
 
@@ -3409,10 +3225,9 @@ namespace internal
      * i.e. LinearAlgebra::distributed::Vector
      */
     template <typename VectorType,
-              typename std::enable_if<
-                has_update_ghost_values_start<VectorType>::value &&
-                  has_exchange_on_subset<VectorType>::value,
-                VectorType>::type * = nullptr>
+              std::enable_if_t<has_update_ghost_values_start<VectorType> &&
+                                 has_exchange_on_subset<VectorType>,
+                               VectorType> * = nullptr>
     void
     update_ghost_values_start(const unsigned int component_in_block_vector,
                               const VectorType & vec)
@@ -3422,6 +3237,11 @@ namespace internal
         "Type mismatch between VectorType and VectorDataExchange");
       (void)component_in_block_vector;
       bool ghosts_set = vec.has_ghost_elements();
+
+      Assert(matrix_free.get_task_info().allow_ghosted_vectors_in_loops ||
+               ghosts_set == false,
+             ExcNotImplemented());
+
       if (ghosts_set)
         ghosts_were_set = true;
 
@@ -3463,10 +3283,9 @@ namespace internal
      * Finish update_ghost_value for vectors that do not support
      * the split into _start() and finish() stages and serial vectors
      */
-    template <
-      typename VectorType,
-      typename std::enable_if<!has_update_ghost_values_start<VectorType>::value,
-                              VectorType>::type * = nullptr>
+    template <typename VectorType,
+              std::enable_if_t<!has_update_ghost_values_start<VectorType>,
+                               VectorType> * = nullptr>
     void
     update_ghost_values_finish(const unsigned int /*component_in_block_vector*/,
                                const VectorType & /*vec*/)
@@ -3480,10 +3299,9 @@ namespace internal
      * exchange on a subset of DoFs
      */
     template <typename VectorType,
-              typename std::enable_if<
-                has_update_ghost_values_start<VectorType>::value &&
-                  !has_exchange_on_subset<VectorType>::value,
-                VectorType>::type * = nullptr>
+              std::enable_if_t<has_update_ghost_values_start<VectorType> &&
+                                 !has_exchange_on_subset<VectorType>,
+                               VectorType> * = nullptr>
     void
     update_ghost_values_finish(const unsigned int component_in_block_vector,
                                const VectorType & vec)
@@ -3501,10 +3319,9 @@ namespace internal
      * i.e. LinearAlgebra::distributed::Vector
      */
     template <typename VectorType,
-              typename std::enable_if<
-                has_update_ghost_values_start<VectorType>::value &&
-                  has_exchange_on_subset<VectorType>::value,
-                VectorType>::type * = nullptr>
+              std::enable_if_t<has_update_ghost_values_start<VectorType> &&
+                                 has_exchange_on_subset<VectorType>,
+                               VectorType> * = nullptr>
     void
     update_ghost_values_finish(const unsigned int component_in_block_vector,
                                const VectorType & vec)
@@ -3553,8 +3370,8 @@ namespace internal
      * Start compress for serial vectors
      */
     template <typename VectorType,
-              typename std::enable_if<is_serial_or_dummy<VectorType>::value,
-                                      VectorType>::type * = nullptr>
+              std::enable_if_t<is_not_parallel_vector<VectorType>, VectorType>
+                * = nullptr>
     void
     compress_start(const unsigned int /*component_in_block_vector*/,
                    VectorType & /*vec*/)
@@ -3567,9 +3384,9 @@ namespace internal
      * the split into _start() and finish() stages
      */
     template <typename VectorType,
-              typename std::enable_if<!has_compress_start<VectorType>::value &&
-                                        !is_serial_or_dummy<VectorType>::value,
-                                      VectorType>::type * = nullptr>
+              std::enable_if_t<!has_compress_start<VectorType> &&
+                                 !is_not_parallel_vector<VectorType>,
+                               VectorType> * = nullptr>
     void
     compress_start(const unsigned int component_in_block_vector,
                    VectorType &       vec)
@@ -3586,11 +3403,10 @@ namespace internal
      * the split into _start() and finish() stages, but don't support
      * exchange on a subset of DoFs
      */
-    template <
-      typename VectorType,
-      typename std::enable_if<has_compress_start<VectorType>::value &&
-                                !has_exchange_on_subset<VectorType>::value,
-                              VectorType>::type * = nullptr>
+    template <typename VectorType,
+              std::enable_if_t<has_compress_start<VectorType> &&
+                                 !has_exchange_on_subset<VectorType>,
+                               VectorType> * = nullptr>
     void
     compress_start(const unsigned int component_in_block_vector,
                    VectorType &       vec)
@@ -3608,11 +3424,10 @@ namespace internal
      * exchange on a subset of DoFs,
      * i.e. LinearAlgebra::distributed::Vector
      */
-    template <
-      typename VectorType,
-      typename std::enable_if<has_compress_start<VectorType>::value &&
-                                has_exchange_on_subset<VectorType>::value,
-                              VectorType>::type * = nullptr>
+    template <typename VectorType,
+              std::enable_if_t<has_compress_start<VectorType> &&
+                                 has_exchange_on_subset<VectorType>,
+                               VectorType> * = nullptr>
     void
     compress_start(const unsigned int component_in_block_vector,
                    VectorType &       vec)
@@ -3661,9 +3476,9 @@ namespace internal
      * Finish compress for vectors that do not support
      * the split into _start() and finish() stages and serial vectors
      */
-    template <typename VectorType,
-              typename std::enable_if<!has_compress_start<VectorType>::value,
-                                      VectorType>::type * = nullptr>
+    template <
+      typename VectorType,
+      std::enable_if_t<!has_compress_start<VectorType>, VectorType> * = nullptr>
     void
     compress_finish(const unsigned int /*component_in_block_vector*/,
                     VectorType & /*vec*/)
@@ -3676,11 +3491,10 @@ namespace internal
      * the split into _start() and finish() stages, but don't support
      * exchange on a subset of DoFs
      */
-    template <
-      typename VectorType,
-      typename std::enable_if<has_compress_start<VectorType>::value &&
-                                !has_exchange_on_subset<VectorType>::value,
-                              VectorType>::type * = nullptr>
+    template <typename VectorType,
+              std::enable_if_t<has_compress_start<VectorType> &&
+                                 !has_exchange_on_subset<VectorType>,
+                               VectorType> * = nullptr>
     void
     compress_finish(const unsigned int component_in_block_vector,
                     VectorType &       vec)
@@ -3697,11 +3511,10 @@ namespace internal
      * exchange on a subset of DoFs,
      * i.e. LinearAlgebra::distributed::Vector
      */
-    template <
-      typename VectorType,
-      typename std::enable_if<has_compress_start<VectorType>::value &&
-                                has_exchange_on_subset<VectorType>::value,
-                              VectorType>::type * = nullptr>
+    template <typename VectorType,
+              std::enable_if_t<has_compress_start<VectorType> &&
+                                 has_exchange_on_subset<VectorType>,
+                               VectorType> * = nullptr>
     void
     compress_finish(const unsigned int component_in_block_vector,
                     VectorType &       vec)
@@ -3741,7 +3554,11 @@ namespace internal
             }
 
           if (Utilities::MPI::job_supports_mpi())
-            MPI_Barrier(matrix_free.get_task_info().communicator_sm);
+            {
+              const int ierr =
+                MPI_Barrier(matrix_free.get_task_info().communicator_sm);
+              AssertThrowMPI(ierr);
+            }
 #  endif
         }
     }
@@ -3752,8 +3569,8 @@ namespace internal
      * Reset all ghost values for serial vectors
      */
     template <typename VectorType,
-              typename std::enable_if<is_serial_or_dummy<VectorType>::value,
-                                      VectorType>::type * = nullptr>
+              std::enable_if_t<is_not_parallel_vector<VectorType>, VectorType>
+                * = nullptr>
     void
     reset_ghost_values(const VectorType & /*vec*/) const
     {}
@@ -3764,11 +3581,10 @@ namespace internal
      * Reset all ghost values for vector that don't support
      * exchange on a subset of DoFs
      */
-    template <
-      typename VectorType,
-      typename std::enable_if<!has_exchange_on_subset<VectorType>::value &&
-                                !is_serial_or_dummy<VectorType>::value,
-                              VectorType>::type * = nullptr>
+    template <typename VectorType,
+              std::enable_if_t<!has_exchange_on_subset<VectorType> &&
+                                 !is_not_parallel_vector<VectorType>,
+                               VectorType> * = nullptr>
     void
     reset_ghost_values(const VectorType &vec) const
     {
@@ -3786,8 +3602,8 @@ namespace internal
      * LinearAlgebra::distributed::Vector
      */
     template <typename VectorType,
-              typename std::enable_if<has_exchange_on_subset<VectorType>::value,
-                                      VectorType>::type * = nullptr>
+              std::enable_if_t<has_exchange_on_subset<VectorType>, VectorType>
+                * = nullptr>
     void
     reset_ghost_values(const VectorType &vec) const
     {
@@ -3830,8 +3646,8 @@ namespace internal
      * i.e. LinearAlgebra::distributed::Vector
      */
     template <typename VectorType,
-              typename std::enable_if<has_exchange_on_subset<VectorType>::value,
-                                      VectorType>::type * = nullptr>
+              std::enable_if_t<has_exchange_on_subset<VectorType>, VectorType>
+                * = nullptr>
     void
     zero_vector_region(const unsigned int range_index, VectorType &vec) const
     {
@@ -3871,11 +3687,10 @@ namespace internal
      * subset of DoFs <==> begin() + ind == local_element(ind) but are still a
      * vector type
      */
-    template <
-      typename VectorType,
-      typename std::enable_if<!has_exchange_on_subset<VectorType>::value,
-                              VectorType>::type * = nullptr,
-      typename VectorType::value_type *           = nullptr>
+    template <typename VectorType,
+              std::enable_if_t<!has_exchange_on_subset<VectorType>, VectorType>
+                *                               = nullptr,
+              typename VectorType::value_type * = nullptr>
     void
     zero_vector_region(const unsigned int range_index, VectorType &vec) const
     {
@@ -3944,7 +3759,7 @@ namespace internal
   n_components(const std::vector<VectorStruct> &vec)
   {
     unsigned int components = 0;
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       components += n_components_block(
         vec[comp],
         std::integral_constant<bool, IsBlockVector<VectorStruct>::value>());
@@ -3956,7 +3771,7 @@ namespace internal
   n_components(const std::vector<VectorStruct *> &vec)
   {
     unsigned int components = 0;
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       components += n_components_block(
         *vec[comp],
         std::integral_constant<bool, IsBlockVector<VectorStruct>::value>());
@@ -3970,10 +3785,9 @@ namespace internal
   // would be too many outstanding communication requests.
 
   // default value for vectors that do not have communication_block_size
-  template <
-    typename VectorStruct,
-    typename std::enable_if<!has_communication_block_size<VectorStruct>::value,
-                            VectorStruct>::type * = nullptr>
+  template <typename VectorStruct,
+            std::enable_if_t<!has_communication_block_size<VectorStruct>,
+                             VectorStruct> * = nullptr>
   constexpr unsigned int
   get_communication_block_size(const VectorStruct &)
   {
@@ -3982,10 +3796,9 @@ namespace internal
 
 
 
-  template <
-    typename VectorStruct,
-    typename std::enable_if<has_communication_block_size<VectorStruct>::value,
-                            VectorStruct>::type * = nullptr>
+  template <typename VectorStruct,
+            std::enable_if_t<has_communication_block_size<VectorStruct>,
+                             VectorStruct> * = nullptr>
   constexpr unsigned int
   get_communication_block_size(const VectorStruct &)
   {
@@ -4007,8 +3820,8 @@ namespace internal
             typename VectorStruct,
             typename Number,
             typename VectorizedArrayType,
-            typename std::enable_if<IsBlockVector<VectorStruct>::value,
-                                    VectorStruct>::type * = nullptr>
+            std::enable_if_t<IsBlockVector<VectorStruct>::value, VectorStruct>
+              * = nullptr>
   void
   update_ghost_values_start(
     const VectorStruct &                                  vec,
@@ -4036,8 +3849,8 @@ namespace internal
             typename VectorStruct,
             typename Number,
             typename VectorizedArrayType,
-            typename std::enable_if<!IsBlockVector<VectorStruct>::value,
-                                    VectorStruct>::type * = nullptr>
+            std::enable_if_t<!IsBlockVector<VectorStruct>::value, VectorStruct>
+              * = nullptr>
   void
   update_ghost_values_start(
     const VectorStruct &                                  vec,
@@ -4060,7 +3873,7 @@ namespace internal
     VectorDataExchange<dim, Number, VectorizedArrayType> &exchanger)
   {
     unsigned int component_index = 0;
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       {
         update_ghost_values_start(vec[comp], exchanger, component_index);
         component_index += n_components(vec[comp]);
@@ -4080,7 +3893,7 @@ namespace internal
     VectorDataExchange<dim, Number, VectorizedArrayType> &exchanger)
   {
     unsigned int component_index = 0;
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       {
         update_ghost_values_start(*vec[comp], exchanger, component_index);
         component_index += n_components(*vec[comp]);
@@ -4098,8 +3911,8 @@ namespace internal
             typename VectorStruct,
             typename Number,
             typename VectorizedArrayType,
-            typename std::enable_if<IsBlockVector<VectorStruct>::value,
-                                    VectorStruct>::type * = nullptr>
+            std::enable_if_t<IsBlockVector<VectorStruct>::value, VectorStruct>
+              * = nullptr>
   void
   update_ghost_values_finish(
     const VectorStruct &                                  vec,
@@ -4123,8 +3936,8 @@ namespace internal
             typename VectorStruct,
             typename Number,
             typename VectorizedArrayType,
-            typename std::enable_if<!IsBlockVector<VectorStruct>::value,
-                                    VectorStruct>::type * = nullptr>
+            std::enable_if_t<!IsBlockVector<VectorStruct>::value, VectorStruct>
+              * = nullptr>
   void
   update_ghost_values_finish(
     const VectorStruct &                                  vec,
@@ -4147,7 +3960,7 @@ namespace internal
     VectorDataExchange<dim, Number, VectorizedArrayType> &exchanger)
   {
     unsigned int component_index = 0;
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       {
         update_ghost_values_finish(vec[comp], exchanger, component_index);
         component_index += n_components(vec[comp]);
@@ -4167,7 +3980,7 @@ namespace internal
     VectorDataExchange<dim, Number, VectorizedArrayType> &exchanger)
   {
     unsigned int component_index = 0;
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       {
         update_ghost_values_finish(*vec[comp], exchanger, component_index);
         component_index += n_components(*vec[comp]);
@@ -4185,8 +3998,8 @@ namespace internal
             typename VectorStruct,
             typename Number,
             typename VectorizedArrayType,
-            typename std::enable_if<IsBlockVector<VectorStruct>::value,
-                                    VectorStruct>::type * = nullptr>
+            std::enable_if_t<IsBlockVector<VectorStruct>::value, VectorStruct>
+              * = nullptr>
   inline void
   compress_start(
     VectorStruct &                                        vec,
@@ -4207,8 +4020,8 @@ namespace internal
             typename VectorStruct,
             typename Number,
             typename VectorizedArrayType,
-            typename std::enable_if<!IsBlockVector<VectorStruct>::value,
-                                    VectorStruct>::type * = nullptr>
+            std::enable_if_t<!IsBlockVector<VectorStruct>::value, VectorStruct>
+              * = nullptr>
   inline void
   compress_start(
     VectorStruct &                                        vec,
@@ -4231,7 +4044,7 @@ namespace internal
     VectorDataExchange<dim, Number, VectorizedArrayType> &exchanger)
   {
     unsigned int component_index = 0;
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       {
         compress_start(vec[comp], exchanger, component_index);
         component_index += n_components(vec[comp]);
@@ -4251,7 +4064,7 @@ namespace internal
     VectorDataExchange<dim, Number, VectorizedArrayType> &exchanger)
   {
     unsigned int component_index = 0;
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       {
         compress_start(*vec[comp], exchanger, component_index);
         component_index += n_components(*vec[comp]);
@@ -4269,8 +4082,8 @@ namespace internal
             typename VectorStruct,
             typename Number,
             typename VectorizedArrayType,
-            typename std::enable_if<IsBlockVector<VectorStruct>::value,
-                                    VectorStruct>::type * = nullptr>
+            std::enable_if_t<IsBlockVector<VectorStruct>::value, VectorStruct>
+              * = nullptr>
   inline void
   compress_finish(
     VectorStruct &                                        vec,
@@ -4294,8 +4107,8 @@ namespace internal
             typename VectorStruct,
             typename Number,
             typename VectorizedArrayType,
-            typename std::enable_if<!IsBlockVector<VectorStruct>::value,
-                                    VectorStruct>::type * = nullptr>
+            std::enable_if_t<!IsBlockVector<VectorStruct>::value, VectorStruct>
+              * = nullptr>
   inline void
   compress_finish(
     VectorStruct &                                        vec,
@@ -4318,7 +4131,7 @@ namespace internal
     VectorDataExchange<dim, Number, VectorizedArrayType> &exchanger)
   {
     unsigned int component_index = 0;
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       {
         compress_finish(vec[comp], exchanger, component_index);
         component_index += n_components(vec[comp]);
@@ -4338,7 +4151,7 @@ namespace internal
     VectorDataExchange<dim, Number, VectorizedArrayType> &exchanger)
   {
     unsigned int component_index = 0;
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       {
         compress_finish(*vec[comp], exchanger, component_index);
         component_index += n_components(*vec[comp]);
@@ -4360,8 +4173,8 @@ namespace internal
             typename VectorStruct,
             typename Number,
             typename VectorizedArrayType,
-            typename std::enable_if<IsBlockVector<VectorStruct>::value,
-                                    VectorStruct>::type * = nullptr>
+            std::enable_if_t<IsBlockVector<VectorStruct>::value, VectorStruct>
+              * = nullptr>
   inline void
   reset_ghost_values(
     const VectorStruct &                                  vec,
@@ -4382,8 +4195,8 @@ namespace internal
             typename VectorStruct,
             typename Number,
             typename VectorizedArrayType,
-            typename std::enable_if<!IsBlockVector<VectorStruct>::value,
-                                    VectorStruct>::type * = nullptr>
+            std::enable_if_t<!IsBlockVector<VectorStruct>::value, VectorStruct>
+              * = nullptr>
   inline void
   reset_ghost_values(
     const VectorStruct &                                  vec,
@@ -4408,7 +4221,7 @@ namespace internal
     if (exchanger.ghosts_were_set == true)
       return;
 
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       reset_ghost_values(vec[comp], exchanger);
   }
 
@@ -4428,7 +4241,7 @@ namespace internal
     if (exchanger.ghosts_were_set == true)
       return;
 
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       reset_ghost_values(*vec[comp], exchanger);
   }
 
@@ -4443,8 +4256,8 @@ namespace internal
             typename VectorStruct,
             typename Number,
             typename VectorizedArrayType,
-            typename std::enable_if<IsBlockVector<VectorStruct>::value,
-                                    VectorStruct>::type * = nullptr>
+            std::enable_if_t<IsBlockVector<VectorStruct>::value, VectorStruct>
+              * = nullptr>
   inline void
   zero_vector_region(
     const unsigned int                                    range_index,
@@ -4462,8 +4275,8 @@ namespace internal
             typename VectorStruct,
             typename Number,
             typename VectorizedArrayType,
-            typename std::enable_if<!IsBlockVector<VectorStruct>::value,
-                                    VectorStruct>::type * = nullptr>
+            std::enable_if_t<!IsBlockVector<VectorStruct>::value, VectorStruct>
+              * = nullptr>
   inline void
   zero_vector_region(
     const unsigned int                                    range_index,
@@ -4486,7 +4299,7 @@ namespace internal
     std::vector<VectorStruct> &                           vec,
     VectorDataExchange<dim, Number, VectorizedArrayType> &exchanger)
   {
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       zero_vector_region(range_index, vec[comp], exchanger);
   }
 
@@ -4503,10 +4316,32 @@ namespace internal
     std::vector<VectorStruct *> &                         vec,
     VectorDataExchange<dim, Number, VectorizedArrayType> &exchanger)
   {
-    for (unsigned int comp = 0; comp < vec.size(); comp++)
+    for (unsigned int comp = 0; comp < vec.size(); ++comp)
       zero_vector_region(range_index, *vec[comp], exchanger);
   }
 
+
+
+  // Apply a unit matrix operation to constrained DoFs: Default cases where we
+  // cannot detect a LinearAlgebra::distributed::Vector, we do not do
+  // anything, else we apply the constraints as a unit operation
+  template <typename VectorStruct1, typename VectorStruct2>
+  inline void
+  apply_operation_to_constrained_dofs(const std::vector<unsigned int> &,
+                                      const VectorStruct1 &,
+                                      VectorStruct2 &)
+  {}
+
+  template <typename Number>
+  inline void
+  apply_operation_to_constrained_dofs(
+    const std::vector<unsigned int> &                 constrained_dofs,
+    const LinearAlgebra::distributed::Vector<Number> &src,
+    LinearAlgebra::distributed::Vector<Number> &      dst)
+  {
+    for (const unsigned int i : constrained_dofs)
+      dst.local_element(i) = src.local_element(i);
+  }
 
 
   namespace MatrixFreeFunctions
@@ -4657,11 +4492,15 @@ namespace internal
       if (fu == nullptr)
         return;
 
+      AssertIndexRange(range_index + 1, ptr.size());
       for (unsigned int i = ptr[range_index]; i < ptr[range_index + 1]; ++i)
-        (container.*fu)(matrix_free,
-                        this->dst,
-                        this->src,
-                        std::make_pair(data[2 * i], data[2 * i + 1]));
+        {
+          AssertIndexRange(2 * i + 1, data.size());
+          (container.*fu)(matrix_free,
+                          this->dst,
+                          this->src,
+                          std::make_pair(data[2 * i], data[2 * i + 1]));
+        }
     }
 
   public:
@@ -4745,6 +4584,17 @@ namespace internal
     {
       if (operation_after_loop)
         {
+          // Run unit matrix operation on constrained dofs if we are at the
+          // last range
+          const std::vector<unsigned int> &partition_row_index =
+            matrix_free.get_task_info().partition_row_index;
+          if (range_index ==
+              partition_row_index[partition_row_index.size() - 2] - 1)
+            apply_operation_to_constrained_dofs(
+              matrix_free.get_constrained_dofs(dof_handler_index_pre_post),
+              src,
+              dst);
+
           const internal::MatrixFreeFunctions::DoFInfo &dof_info =
             matrix_free.get_dof_info(dof_handler_index_pre_post);
           if (range_index == numbers::invalid_unsigned_int)

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2018 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -83,7 +83,7 @@ main()
     //     for (unsigned int k = 0; k < 4; ++k)
     //       for (unsigned int l = 0; l < 4; ++l)
     //         {
-    //           deallog << "(" << i << "," << j << "," << k << "," << l << "):
+    //           deallog << '(' << i << ',' << j << ',' << k << ',' << l << "):
     //           "; deallog << result[i][j][k][l] << " = " << left2[i][j] << " *
     //           " << right2[k][l] << std::endl;
     //         }

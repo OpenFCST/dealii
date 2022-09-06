@@ -1,6 +1,6 @@
 ## ---------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2018 by the deal.II authors
+## Copyright (C) 2012 - 2022 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
@@ -56,6 +56,7 @@ ADD_SUBDIRECTORY(fe)
 ADD_SUBDIRECTORY(dofs)
 ADD_SUBDIRECTORY(lac)
 ADD_SUBDIRECTORY(base)
+ADD_SUBDIRECTORY(cgal)
 ADD_SUBDIRECTORY(gmsh)
 ADD_SUBDIRECTORY(grid)
 ADD_SUBDIRECTORY(hp)

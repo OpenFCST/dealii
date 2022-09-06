@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2018 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -45,7 +45,7 @@ test_mpi()
           unsigned int buf = numbers::invalid_unsigned_int;
           MPI_Status   status;
           MPI_Recv(&buf, 1, MPI_UNSIGNED, i, 1, MPI_COMM_WORLD, &status);
-          deallog << "got message '" << buf << "' from CPU " << i + 1 << "!"
+          deallog << "got message '" << buf << "' from CPU " << i + 1 << '!'
                   << std::endl;
           Assert(buf == i, ExcInternalError());
         }

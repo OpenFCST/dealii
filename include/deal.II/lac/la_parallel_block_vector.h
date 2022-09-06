@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -60,8 +60,9 @@ namespace LinearAlgebra
 {
   namespace distributed
   {
-    /*! @addtogroup Vectors
-     *@{
+    /**
+     * @addtogroup Vectors
+     * @{
      */
 
 
@@ -125,7 +126,7 @@ namespace LinearAlgebra
       /**
        * @name 1: Basic operations
        */
-      //@{
+      /** @{ */
 
       /**
        * Constructor. There are three ways to use this constructor. First,
@@ -151,12 +152,6 @@ namespace LinearAlgebra
        * fail if there is no conversion path from <tt>OtherNumber</tt> to
        * <tt>Number</tt>. Note that you may lose accuracy when copying to a
        * BlockVector with data elements with less accuracy.
-       *
-       * Older versions of gcc did not honor the @p explicit keyword on
-       * template constructors. In such cases, it is easy to accidentally
-       * write code that can be very inefficient, since the compiler starts
-       * performing hidden conversions. To avoid this, this function is
-       * disabled if we have detected a broken compiler during configuration.
        */
       template <typename OtherNumber>
       explicit BlockVector(const BlockVector<OtherNumber> &v);
@@ -282,7 +277,7 @@ namespace LinearAlgebra
        * be routed to the wrong block.
        */
       void
-      reinit(const std::vector<size_type> &N,
+      reinit(const std::vector<size_type> &block_sizes,
              const bool                    omit_zeroing_entries = false);
 
       /**
@@ -351,7 +346,7 @@ namespace LinearAlgebra
        *
        * @deprecated Use zero_out_ghost_values() instead.
        */
-      DEAL_II_DEPRECATED_EARLY void
+      DEAL_II_DEPRECATED void
       zero_out_ghosts() const;
 
 
@@ -367,10 +362,34 @@ namespace LinearAlgebra
       zero_out_ghost_values() const;
 
       /**
-       * Return if this Vector contains ghost elements.
+       * Return if any of the blocks in this vector contains ghost elements.
        */
       bool
       has_ghost_elements() const;
+
+      /**
+       * Change the ghost state of all blocks in this vector to @p ghosted.
+       */
+      void
+      set_ghost_state(const bool ghosted) const;
+
+      /**
+       * This method copies the data in the locally owned range from another
+       * distributed vector @p src into the calling vector. As opposed to
+       * operator= that also includes ghost entries, this operation ignores
+       * the ghost range. The only prerequisite is that the local range on the
+       * calling vector and the given vector @p src are the same on all
+       * processors. It is explicitly allowed that the two vectors have
+       * different ghost elements that might or might not be related to each
+       * other.
+       *
+       * Since no data exchange is performed, make sure that neither @p src
+       * nor the calling vector have pending communications in order to obtain
+       * correct results.
+       */
+      template <typename Number2>
+      void
+      copy_locally_owned_data_from(const BlockVector<Number2> &src);
 
       /**
        * This is a collective add operation that adds a whole set of values
@@ -428,12 +447,12 @@ namespace LinearAlgebra
        */
       void
       swap(BlockVector<Number> &v);
-      //@}
+      /** @} */
 
       /**
        * @name 2: Implementation of VectorSpaceVector
        */
-      //@{
+      /** @{ */
 
       /**
        * Change the dimension to that of the vector V. The elements of V are not
@@ -686,7 +705,7 @@ namespace LinearAlgebra
        */
       virtual std::size_t
       memory_consumption() const override;
-      //@}
+      /** @} */
 
       /**
        * @addtogroup Exceptions
@@ -704,10 +723,10 @@ namespace LinearAlgebra
        * Exception
        */
       DeclException0(ExcIteratorRangeDoesNotMatchVectorSize);
-      //@}
+      /** @} */
     };
 
-    /*@}*/
+    /** @} */
 
   } // end of namespace distributed
 

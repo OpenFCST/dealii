@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2021 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,8 +25,7 @@
 #include <deal.II/base/index_set.h>
 #include <deal.II/base/iterator_range.h>
 #include <deal.II/base/smartpointer.h>
-
-#include <deal.II/distributed/tria_base.h>
+#include <deal.II/base/types.h>
 
 #include <deal.II/dofs/block_info.h>
 #include <deal.II/dofs/dof_accessor.h>
@@ -506,12 +505,12 @@ public:
   /**
    * Make the dimension available in function templates.
    */
-  static const unsigned int dimension = dim;
+  static constexpr unsigned int dimension = dim;
 
   /**
    * Make the space dimension available in function templates.
    */
-  static const unsigned int space_dimension = spacedim;
+  static constexpr unsigned int space_dimension = spacedim;
 
   /**
    * The default index of the finite element to be used on a given cell.
@@ -520,13 +519,18 @@ public:
 
   /**
    * Invalid index of the finite element to be used on a given cell.
+   *
+   * @deprecated Use numbers::invalid_fe_index instead.
    */
-  static const unsigned int invalid_fe_index = numbers::invalid_unsigned_int;
+  static const unsigned int invalid_fe_index DEAL_II_DEPRECATED =
+    numbers::invalid_fe_index;
 
   /**
    * The type in which we store the active FE index.
+   *
+   * @deprecated Use types::fe_index instead.
    */
-  using active_fe_index_type = unsigned short int;
+  using active_fe_index_type DEAL_II_DEPRECATED = types::fe_index;
 
   /**
    * The type in which we store the offsets in the CRS data structures.
@@ -536,9 +540,11 @@ public:
   /**
    * Invalid active FE index which will be used as a default value to determine
    * whether a future FE index has been set or not.
+   *
+   * @deprecated Use numbers::invalid_fe_index instead.
    */
-  static const active_fe_index_type invalid_active_fe_index =
-    static_cast<active_fe_index_type>(-1);
+  static const types::fe_index invalid_active_fe_index DEAL_II_DEPRECATED =
+    numbers::invalid_fe_index;
 
   /**
    * Standard constructor, not initializing any data. After constructing an
@@ -574,76 +580,46 @@ public:
   operator=(const DoFHandler &) = delete;
 
   /**
-   * Assign a Triangulation and a FiniteElement to the DoFHandler and compute
-   * the distribution of degrees of freedom over the mesh.
-   *
-   * @deprecated Use reinit() and distribute_dofs() instead.
-   */
-  DEAL_II_DEPRECATED
-  void
-  initialize(const Triangulation<dim, spacedim> &tria,
-             const FiniteElement<dim, spacedim> &fe);
-
-  /**
-   * Same as above but taking an hp::FECollection object.
-   *
-   * @deprecated Use reinit() and distribute_dofs() instead.
-   */
-  DEAL_II_DEPRECATED
-  void
-  initialize(const Triangulation<dim, spacedim> &   tria,
-             const hp::FECollection<dim, spacedim> &fe);
-
-  /**
-   * Assign a FiniteElement @p fe to this object.
-   *
-   * @note This function makes a copy of the finite element given as
-   * argument, and stores it as a member variable. Consequently, it is
-   * possible to write code such as
-   * @code
-   *   dof_handler.set_fe(FE_Q<dim>(2));
-   * @endcode
-   * You can then access the finite element later on by calling
-   * DoFHandler::get_fe(). However, it is often more convenient to
-   * keep a named finite element object as a member variable in your
-   * main class and refer to it directly whenever you need to access
-   * properties of the finite element (such as
-   * FiniteElementData::dofs_per_cell). This is what all tutorial programs do.
-   *
-   * @warning This function only sets a FiniteElement. Degrees of freedom have
-   * either not been distributed yet, or are distributed using a previously set
-   * element. In both cases, accessing degrees of freedom will lead to invalid
-   * results. To restore consistency, call distribute_dofs().
-   *
-   * @deprecated Use distribute_dofs() instead.
-   */
-  DEAL_II_DEPRECATED
-  void
-  set_fe(const FiniteElement<dim, spacedim> &fe);
-
-  /**
-   * Same as above but taking an hp::FECollection object.
-   *
-   * @deprecated Use distribute_dofs() instead.
-   */
-  DEAL_II_DEPRECATED
-  void
-  set_fe(const hp::FECollection<dim, spacedim> &fe);
-
-  /**
    * Go through the triangulation and set the active FE indices of all
-   * active cells to the values given in @p active_fe_indices.
+   * locally owned cells to the values given in @p active_fe_indices.
    */
   void
   set_active_fe_indices(const std::vector<unsigned int> &active_fe_indices);
 
   /**
-   * Go through the triangulation and store the active FE indices of all
-   * active cells to the vector @p active_fe_indices. This vector is
-   * resized, if necessary.
+   * Go through the triangulation and return a vector of active FE indices of
+   * all locally relevant cells. Artificial cells will have the value
+   * numbers::invalid_fe_index assigned.
    */
+  std::vector<unsigned int>
+  get_active_fe_indices() const;
+
+  /**
+   * Go through the triangulation and store the active FE indices of all
+   * locally relevant cells to the vector @p active_fe_indices. This vector
+   * is resized, if necessary.
+   *
+   * @deprecated Use the function that returns the result vector.
+   */
+  DEAL_II_DEPRECATED_EARLY
   void
   get_active_fe_indices(std::vector<unsigned int> &active_fe_indices) const;
+
+  /**
+   * Go through the triangulation and set the future FE indices of all
+   * locally owned cells to the values given in @p future_fe_indices.
+   * Cells corresponding to numbers::invalid_fe_index will be skipped.
+   */
+  void
+  set_future_fe_indices(const std::vector<unsigned int> &future_fe_indices);
+
+  /**
+   * Go through the triangulation and return a vector of future FE indices of
+   * all locally owned cells. If no future FE index has been set on a cell,
+   * its value will be numbers::invalid_fe_index.
+   */
+  std::vector<unsigned int>
+  get_future_fe_indices() const;
 
   /**
    * Assign a Triangulation to the DoFHandler.
@@ -1193,58 +1169,6 @@ public:
   locally_owned_mg_dofs(const unsigned int level) const;
 
   /**
-   * Return a vector that stores the locally owned DoFs of each processor.
-   *
-   * @deprecated As of deal.II version 9.2, we do not populate a vector with
-   * the index sets of all processors by default any more due to a possibly
-   * large memory footprint on many processors. As a consequence, this
-   * function needs to call `Utilities::MPI::all_gather(comm,
-   * locally_owned_dofs())` upon the first invocation, including global
-   * communication. Use `Utilities::MPI::all_gather(comm,
-   * dof_handler.locally_owned_dofs())` instead if using up to a few thousands
-   * of MPI ranks or some variant involving local communication with more
-   * processors.
-   */
-  DEAL_II_DEPRECATED const std::vector<IndexSet> &
-                           locally_owned_dofs_per_processor() const;
-
-  /**
-   * Return a vector that stores the number of degrees of freedom each
-   * processor that participates in this triangulation owns locally. The sum
-   * of all these numbers equals the number of degrees of freedom that exist
-   * globally, i.e. what n_dofs() returns.
-   *
-   * @deprecated As of deal.II version 9.2, we do not populate a vector with
-   * the numbers of dofs of all processors by default any more due to a
-   * possibly large memory footprint on many processors. As a consequence,
-   * this function needs to call `Utilities::MPI::all_gather(comm,
-   * n_locally_owned_dofs()` upon the first invocation, including global
-   * communication. Use `Utilities::MPI::all_gather(comm,
-   * dof_handler.n_locally_owned_dofs()` instead if using up to a few thousands
-   * of MPI ranks or some variant involving local communication with more
-   * processors.
-   */
-  DEAL_II_DEPRECATED const std::vector<types::global_dof_index> &
-                           n_locally_owned_dofs_per_processor() const;
-
-  /**
-   * Return a vector that stores the locally owned DoFs of each processor on
-   * the given level @p level.
-   *
-   * @deprecated As of deal.II version 9.2, we do not populate a vector with
-   * the index sets of all processors by default any more due to a possibly
-   * large memory footprint on many processors. As a consequence, this
-   * function needs to call `Utilities::MPI::all_gather(comm,
-   * locally_owned_dofs_mg())` upon the first invocation, including global
-   * communication. Use `Utilities::MPI::all_gather(comm,
-   * dof_handler.locally_owned_dofs_mg())` instead if using up to a few
-   * thousands of MPI ranks or some variant involving local communication with
-   * more processors.
-   */
-  DEAL_II_DEPRECATED const std::vector<IndexSet> &
-                           locally_owned_mg_dofs_per_processor(const unsigned int level) const;
-
-  /**
    * Return a constant reference to the indexth finite element object that is
    * used by this object.
    */
@@ -1443,20 +1367,10 @@ private:
      * Return the index of the <code>dof_number</code>th degree of freedom for
      * the given level stored for the current vertex.
      */
-    types::global_dof_index
-    get_index(const unsigned int level,
-              const unsigned int dof_number,
-              const unsigned int dofs_per_vertex) const;
-
-    /**
-     * Set the index of the <code>dof_number</code>th degree of freedom for
-     * the given level stored for the current vertex to <code>index</code>.
-     */
-    void
-    set_index(const unsigned int            level,
-              const unsigned int            dof_number,
-              const unsigned int            dofs_per_vertex,
-              const types::global_dof_index index);
+    types::global_dof_index &
+    access_index(const unsigned int level,
+                 const unsigned int dof_number,
+                 const unsigned int dofs_per_vertex);
 
   private:
     /**
@@ -1598,7 +1512,7 @@ private:
    * Pointer to the first cached degree of freedom of a geometric object for all
    * relevant active finite elements.
    *
-   * @note In normal mode it is possible to access this data strucutre directly.
+   * @note In normal mode it is possible to access this data structure directly.
    *   In hp-mode, an indirection via hp_object_fe_indices/hp_object_fe_ptr is
    * necessary.
    */
@@ -1610,7 +1524,7 @@ private:
    * of the appropriate position of a cell in the vectors is done via
    * hp_object_fe_ptr (CRS scheme).
    */
-  mutable std::array<std::vector<active_fe_index_type>, dim + 1>
+  mutable std::array<std::vector<types::fe_index>, dim + 1>
     hp_object_fe_indices;
 
   /**
@@ -1622,15 +1536,13 @@ private:
    * Active FE index of an active cell (identified by level and level index).
    * This vector is only used in hp-mode.
    */
-  mutable std::vector<std::vector<active_fe_index_type>>
-    hp_cell_active_fe_indices;
+  mutable std::vector<std::vector<types::fe_index>> hp_cell_active_fe_indices;
 
   /**
    * Future FE index of an active cell (identified by level and level index).
    * This vector is only used in hp-mode.
    */
-  mutable std::vector<std::vector<active_fe_index_type>>
-    hp_cell_future_fe_indices;
+  mutable std::vector<std::vector<types::fe_index>> hp_cell_future_fe_indices;
 
   /**
    * An array to store the indices for level degrees of freedom located at
@@ -1665,7 +1577,7 @@ private:
 
   /**
    * A list of connections with which this object connects to the
-   * triangulation. They get triggered specifially when data needs to be
+   * triangulation. They get triggered specifically when data needs to be
    * transferred due to refinement or repartitioning. Only active in hp-mode.
    */
   std::vector<boost::signals2::connection> tria_listeners_for_transfer;
@@ -1681,27 +1593,6 @@ private:
    */
   void
   clear_mg_space();
-
-  /**
-   * Return dof index of specified object.
-   */
-  template <int structdim>
-  types::global_dof_index
-  get_dof_index(const unsigned int obj_level,
-                const unsigned int obj_index,
-                const unsigned int fe_index,
-                const unsigned int local_index) const;
-
-  /**
-   * Return dof index of specified object.
-   */
-  template <int structdim>
-  void
-  set_dof_index(const unsigned int            obj_level,
-                const unsigned int            obj_index,
-                const unsigned int            fe_index,
-                const unsigned int            local_index,
-                const types::global_dof_index global_index) const;
 
   /**
    * Set up DoFHandler policy.
@@ -1965,66 +1856,6 @@ DoFHandler<dim, spacedim>::locally_owned_mg_dofs(const unsigned int level) const
 
 
 template <int dim, int spacedim>
-const std::vector<types::global_dof_index> &
-DoFHandler<dim, spacedim>::n_locally_owned_dofs_per_processor() const
-{
-  if (number_cache.n_locally_owned_dofs_per_processor.empty() &&
-      number_cache.n_global_dofs > 0)
-    {
-      const_cast<dealii::internal::DoFHandlerImplementation::NumberCache &>(
-        number_cache)
-        .n_locally_owned_dofs_per_processor =
-        number_cache.get_n_locally_owned_dofs_per_processor(get_communicator());
-    }
-  return number_cache.n_locally_owned_dofs_per_processor;
-}
-
-
-
-template <int dim, int spacedim>
-const std::vector<IndexSet> &
-DoFHandler<dim, spacedim>::locally_owned_dofs_per_processor() const
-{
-  if (number_cache.locally_owned_dofs_per_processor.empty() &&
-      number_cache.n_global_dofs > 0)
-    {
-      const_cast<dealii::internal::DoFHandlerImplementation::NumberCache &>(
-        number_cache)
-        .locally_owned_dofs_per_processor =
-        number_cache.get_locally_owned_dofs_per_processor(get_communicator());
-    }
-  return number_cache.locally_owned_dofs_per_processor;
-}
-
-
-
-template <int dim, int spacedim>
-const std::vector<IndexSet> &
-DoFHandler<dim, spacedim>::locally_owned_mg_dofs_per_processor(
-  const unsigned int level) const
-{
-  Assert(level < this->get_triangulation().n_global_levels(),
-         ExcMessage("The given level index exceeds the number of levels "
-                    "present in the triangulation"));
-  Assert(
-    mg_number_cache.size() == this->get_triangulation().n_global_levels(),
-    ExcMessage(
-      "The level dofs are not set up properly! Did you call distribute_mg_dofs()?"));
-  if (mg_number_cache[level].locally_owned_dofs_per_processor.empty() &&
-      mg_number_cache[level].n_global_dofs > 0)
-    {
-      const_cast<dealii::internal::DoFHandlerImplementation::NumberCache &>(
-        mg_number_cache[level])
-        .locally_owned_dofs_per_processor =
-        mg_number_cache[level].get_locally_owned_dofs_per_processor(
-          get_communicator());
-    }
-  return mg_number_cache[level].locally_owned_dofs_per_processor;
-}
-
-
-
-template <int dim, int spacedim>
 inline const FiniteElement<dim, spacedim> &
 DoFHandler<dim, spacedim>::get_fe(const unsigned int number) const
 {
@@ -2130,14 +1961,14 @@ DoFHandler<dim, spacedim>::save(Archive &ar, const unsigned int) const
 {
   if (this->hp_capability_enabled)
     {
-      ar & this->object_dof_indices;
-      ar & this->object_dof_ptr;
+      ar &this->object_dof_indices;
+      ar &this->object_dof_ptr;
 
-      ar & this->cell_dof_cache_indices;
-      ar & this->cell_dof_cache_ptr;
+      ar &this->cell_dof_cache_indices;
+      ar &this->cell_dof_cache_ptr;
 
-      ar & this->hp_cell_active_fe_indices;
-      ar & this->hp_cell_future_fe_indices;
+      ar &this->hp_cell_active_fe_indices;
+      ar &this->hp_cell_future_fe_indices;
 
       ar &hp_object_fe_ptr;
       ar &hp_object_fe_indices;
@@ -2157,14 +1988,14 @@ DoFHandler<dim, spacedim>::save(Archive &ar, const unsigned int) const
     }
   else
     {
-      ar & this->block_info_object;
+      ar &this->block_info_object;
       ar &number_cache;
 
-      ar & this->object_dof_indices;
-      ar & this->object_dof_ptr;
+      ar &this->object_dof_indices;
+      ar &this->object_dof_ptr;
 
-      ar & this->cell_dof_cache_indices;
-      ar & this->cell_dof_cache_ptr;
+      ar &this->cell_dof_cache_indices;
+      ar &this->cell_dof_cache_ptr;
 
       // write out the number of triangulation cells and later check during
       // loading that this number is indeed correct; same with something that
@@ -2186,14 +2017,14 @@ DoFHandler<dim, spacedim>::load(Archive &ar, const unsigned int)
 {
   if (this->hp_capability_enabled)
     {
-      ar & this->object_dof_indices;
-      ar & this->object_dof_ptr;
+      ar &this->object_dof_indices;
+      ar &this->object_dof_ptr;
 
-      ar & this->cell_dof_cache_indices;
-      ar & this->cell_dof_cache_ptr;
+      ar &this->cell_dof_cache_indices;
+      ar &this->cell_dof_cache_ptr;
 
-      ar & this->hp_cell_active_fe_indices;
-      ar & this->hp_cell_future_fe_indices;
+      ar &this->hp_cell_active_fe_indices;
+      ar &this->hp_cell_future_fe_indices;
 
       ar &hp_object_fe_ptr;
       ar &hp_object_fe_indices;
@@ -2224,18 +2055,18 @@ DoFHandler<dim, spacedim>::load(Archive &ar, const unsigned int)
     }
   else
     {
-      ar & this->block_info_object;
+      ar &this->block_info_object;
       ar &number_cache;
 
       object_dof_indices.clear();
 
       object_dof_ptr.clear();
 
-      ar & this->object_dof_indices;
-      ar & this->object_dof_ptr;
+      ar &this->object_dof_indices;
+      ar &this->object_dof_ptr;
 
-      ar & this->cell_dof_cache_indices;
-      ar & this->cell_dof_cache_ptr;
+      ar &this->cell_dof_cache_indices;
+      ar &this->cell_dof_cache_ptr;
 
       // these are the checks that correspond to the last block in the save()
       // function
@@ -2268,30 +2099,15 @@ DoFHandler<dim, spacedim>::load(Archive &ar, const unsigned int)
 
 
 template <int dim, int spacedim>
-inline types::global_dof_index
-DoFHandler<dim, spacedim>::MGVertexDoFs::get_index(
+inline types::global_dof_index &
+DoFHandler<dim, spacedim>::MGVertexDoFs::access_index(
   const unsigned int level,
   const unsigned int dof_number,
-  const unsigned int dofs_per_vertex) const
+  const unsigned int dofs_per_vertex)
 {
   Assert((level >= coarsest_level) && (level <= finest_level),
          ExcInvalidLevel(level));
   return indices[dofs_per_vertex * (level - coarsest_level) + dof_number];
-}
-
-
-
-template <int dim, int spacedim>
-inline void
-DoFHandler<dim, spacedim>::MGVertexDoFs::set_index(
-  const unsigned int            level,
-  const unsigned int            dof_number,
-  const unsigned int            dofs_per_vertex,
-  const types::global_dof_index index)
-{
-  Assert((level >= coarsest_level) && (level <= finest_level),
-         ExcInvalidLevel(level));
-  indices[dofs_per_vertex * (level - coarsest_level) + dof_number] = index;
 }
 
 

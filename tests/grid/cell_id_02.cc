@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2010 - 2018 by the deal.II authors
+// Copyright (C) 2010 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -48,8 +48,8 @@ check(TRIA &tr)
       CellId             tmp;
       std::istringstream in(outb.str());
       in >> tmp;
-      deallog << cell->level() << " " << cell->index() << " " << cell->id()
-              << " " << tmp << std::endl;
+      deallog << cell->level() << ' ' << cell->index() << ' ' << cell->id()
+              << ' ' << tmp << std::endl;
     }
 
 

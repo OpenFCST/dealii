@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2011 - 2018 by the deal.II authors
+// Copyright (C) 2011 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -50,7 +50,7 @@ check_derivatives(const std::vector<Polynomial<double>> &p,
       q.value(x, values_ref);
       for (unsigned int i = 0; i < n_deriv; ++i)
         {
-          deallog << ".";
+          deallog << '.';
           if (std::fabs(values[i] - values_ref[i]) >
               std::max(1e-11, 1e-11 * std::fabs(values[i])))
             deallog << "Error deriv" << i << "  lg y="

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -144,7 +144,7 @@ private:
                                                  n_components,
                                                  number>::value_type;
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         phi_m.reinit(face);
         phi_m.read_dof_values(src);
@@ -189,7 +189,7 @@ private:
                                                  n_components,
                                                  number>::value_type;
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval.read_dof_values(src);
@@ -294,7 +294,7 @@ test(const unsigned int n_refine)
     (update_gradients | update_JxW_values);
 
   MatrixFree<dim, double> mf_data;
-  mf_data.reinit(dof, constraints, quad, data);
+  mf_data.reinit(MappingQ1<dim>{}, dof, constraints, quad, data);
 
   mf_data.initialize_dof_vector(in);
   mf_data.initialize_dof_vector(out);
@@ -314,7 +314,7 @@ test(const unsigned int n_refine)
   out -= in;
 
   double diff_norm = out.linfty_norm();
-  deallog << "Norm of difference:          " << diff_norm << " " << std::endl;
+  deallog << "Norm of difference:          " << diff_norm << ' ' << std::endl;
 }
 
 

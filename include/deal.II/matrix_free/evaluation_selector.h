@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,7 +19,9 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/matrix_free/evaluation_flags.h>
 #include <deal.II/matrix_free/evaluation_kernels.h>
+#include <deal.II/matrix_free/shape_info.h>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -43,12 +45,8 @@ struct SelectEvaluator
   static void
   evaluate(const unsigned int                     n_components,
            const EvaluationFlags::EvaluationFlags evaluation_flag,
-           const internal::MatrixFreeFunctions::ShapeInfo<Number> &shape_info,
-           Number *values_dofs_actual,
-           Number *values_quad,
-           Number *gradients_quad,
-           Number *hessians_quad,
-           Number *scratch_data);
+           const Number *                         values_dofs,
+           FEEvaluationData<dim, Number, false> & eval);
 
   /**
    * Chooses an appropriate evaluation strategy for the integrate function, i.e.
@@ -60,11 +58,8 @@ struct SelectEvaluator
   static void
   integrate(const unsigned int                     n_components,
             const EvaluationFlags::EvaluationFlags integration_flag,
-            const internal::MatrixFreeFunctions::ShapeInfo<Number> &shape_info,
-            Number *   values_dofs_actual,
-            Number *   values_quad,
-            Number *   gradients_quad,
-            Number *   scratch_data,
+            Number *                               values_dofs,
+            FEEvaluationData<dim, Number, false> & eval,
             const bool sum_into_values_array = false);
 };
 
@@ -74,26 +69,16 @@ struct SelectEvaluator
 template <int dim, int fe_degree, int n_q_points_1d, typename Number>
 inline void
 SelectEvaluator<dim, fe_degree, n_q_points_1d, Number>::evaluate(
-  const unsigned int                                      n_components,
-  const EvaluationFlags::EvaluationFlags                  evaluation_flag,
-  const internal::MatrixFreeFunctions::ShapeInfo<Number> &shape_info,
-  Number *                                                values_dofs_actual,
-  Number *                                                values_quad,
-  Number *                                                gradients_quad,
-  Number *                                                hessians_quad,
-  Number *                                                scratch_data)
+  const unsigned int                     n_components,
+  const EvaluationFlags::EvaluationFlags evaluation_flag,
+  const Number *                         values_dofs,
+  FEEvaluationData<dim, Number, false> & eval)
 {
   Assert(fe_degree >= 0 && n_q_points_1d > 0, ExcInternalError());
 
-  internal::FEEvaluationImplEvaluateSelector<dim, Number>::
-    template run<fe_degree, n_q_points_1d>(n_components,
-                                           evaluation_flag,
-                                           shape_info,
-                                           values_dofs_actual,
-                                           values_quad,
-                                           gradients_quad,
-                                           hessians_quad,
-                                           scratch_data);
+  internal::FEEvaluationImplEvaluateSelector<dim, Number>::template run<
+    fe_degree,
+    n_q_points_1d>(n_components, evaluation_flag, values_dofs, eval);
 }
 
 
@@ -101,26 +86,17 @@ SelectEvaluator<dim, fe_degree, n_q_points_1d, Number>::evaluate(
 template <int dim, int fe_degree, int n_q_points_1d, typename Number>
 inline void
 SelectEvaluator<dim, fe_degree, n_q_points_1d, Number>::integrate(
-  const unsigned int                                      n_components,
-  const EvaluationFlags::EvaluationFlags                  integration_flag,
-  const internal::MatrixFreeFunctions::ShapeInfo<Number> &shape_info,
-  Number *                                                values_dofs_actual,
-  Number *                                                values_quad,
-  Number *                                                gradients_quad,
-  Number *                                                scratch_data,
-  const bool                                              sum_into_values_array)
+  const unsigned int                     n_components,
+  const EvaluationFlags::EvaluationFlags integration_flag,
+  Number *                               values_dofs,
+  FEEvaluationData<dim, Number, false> & eval,
+  const bool                             sum_into_values_array)
 {
   Assert(fe_degree >= 0 && n_q_points_1d > 0, ExcInternalError());
 
   internal::FEEvaluationImplIntegrateSelector<dim, Number>::
-    template run<fe_degree, n_q_points_1d>(n_components,
-                                           integration_flag,
-                                           shape_info,
-                                           values_dofs_actual,
-                                           values_quad,
-                                           gradients_quad,
-                                           scratch_data,
-                                           sum_into_values_array);
+    template run<fe_degree, n_q_points_1d>(
+      n_components, integration_flag, values_dofs, eval, sum_into_values_array);
 }
 #endif // DOXYGEN
 

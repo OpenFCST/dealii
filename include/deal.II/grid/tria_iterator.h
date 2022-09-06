@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2019 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -319,25 +319,27 @@ public:
   /**
    * @name Dereferencing
    */
-  /*@{*/
+  /** @{ */
   /**
    * Dereferencing operator, returns a reference to an accessor. Usage is thus
    * like <tt>(*i).index ();</tt>
    *
    * This function has to be specialized explicitly for the different @p
-   * Pointees, to allow an
+   * Pointers, to allow an
    * <tt>iterator<1,TriangulationLevel<1>::LinesData></tt> to point to
    * <tt>tria->lines.cells[index]</tt> while for one dimension higher it has
    * to point to <tt>tria->quads.cells[index]</tt>.
    *
    * You must not dereference invalid or past the end iterators.
    */
-  const Accessor &operator*() const;
+  const Accessor &
+  operator*() const;
 
   /**
    * Dereferencing operator, non-@p const version.
    */
-  Accessor &operator*();
+  Accessor &
+  operator*();
 
   /**
    * Dereferencing operator, returns a reference of the cell pointed to. Usage
@@ -345,12 +347,14 @@ public:
    *
    * There is a @p const and a non-@p const version.
    */
-  const Accessor *operator->() const;
+  const Accessor *
+  operator->() const;
 
   /**
    * Dereferencing operator, non-@p const version.
    */
-  Accessor *operator->();
+  Accessor *
+  operator->();
 
 
   /**
@@ -365,7 +369,7 @@ public:
   const Accessor &
   access_any() const;
 
-  /*@}*/
+  /** @} */
 
   /**
    * Assignment operator.
@@ -377,8 +381,7 @@ public:
    * Compare for equality.
    */
   template <typename OtherAccessor = Accessor>
-  typename std::enable_if<std::is_convertible<OtherAccessor, Accessor>::value,
-                          bool>::type
+  std::enable_if_t<std::is_convertible<OtherAccessor, Accessor>::value, bool>
   operator==(const TriaRawIterator<OtherAccessor> &) const;
 
   /**
@@ -425,7 +428,7 @@ public:
   /**
    * @name Advancement of iterators
    */
-  /*@{*/
+  /** @{ */
   /**
    * Prefix <tt>++</tt> operator: <tt>++iterator</tt>. This operator advances
    * the iterator to the next element and returns a reference to
@@ -465,7 +468,7 @@ public:
    */
   TriaRawIterator
   operator--(int);
-  /*@}*/
+  /** @} */
 
   /**
    * Return the state of the iterator.
@@ -503,7 +506,7 @@ public:
   /**
    * @name Exceptions
    */
-  /*@{*/
+  /** @{ */
   /**
    * Exception for TriaObjects with level, i.e. cells.
    */
@@ -542,7 +545,7 @@ public:
    */
   DeclException0(ExcInvalidComparison);
 
-  /*@}*/
+  /** @} */
 protected:
   /**
    * Object holding the real data.
@@ -691,7 +694,7 @@ public:
   /**
    * @name Advancement of iterators
    */
-  /*@{*/
+  /** @{ */
   /**
    * Prefix <tt>++</tt> operator: <tt>++i</tt>. This operator advances the
    * iterator to the next used element and returns a reference to
@@ -724,7 +727,7 @@ public:
    */
   TriaIterator<Accessor>
   operator--(int);
-  /*@}*/
+  /** @} */
 
   /**
    * Declare some aliases which are standard for iterators and are used
@@ -900,7 +903,7 @@ public:
   /**
    * @name Advancement of iterators
    */
-  /*@{*/
+  /** @{ */
   /**
    * Postfix <tt>++</tt> operator: <tt>i++</tt>. This operator advances the
    * iterator to the next active element, but returns an iterator to the
@@ -925,7 +928,7 @@ public:
    */
   TriaActiveIterator<Accessor>
   operator--(int);
-  /*@}*/
+  /** @} */
 
   /**
    * Declare some alias which are standard for iterators and are used
@@ -991,7 +994,8 @@ inline TriaRawIterator<Accessor>::TriaRawIterator(
 
 
 template <typename Accessor>
-inline const Accessor &TriaRawIterator<Accessor>::operator*() const
+inline const Accessor &
+TriaRawIterator<Accessor>::operator*() const
 {
   Assert(Accessor::structure_dimension != Accessor::dimension ||
            state() == IteratorState::valid,
@@ -1006,7 +1010,8 @@ inline const Accessor &TriaRawIterator<Accessor>::operator*() const
 
 
 template <typename Accessor>
-inline Accessor &TriaRawIterator<Accessor>::operator*()
+inline Accessor &
+TriaRawIterator<Accessor>::operator*()
 {
   Assert(Accessor::structure_dimension != Accessor::dimension ||
            state() == IteratorState::valid,
@@ -1030,7 +1035,8 @@ TriaRawIterator<Accessor>::access_any() const
 
 
 template <typename Accessor>
-inline const Accessor *TriaRawIterator<Accessor>::operator->() const
+inline const Accessor *
+TriaRawIterator<Accessor>::operator->() const
 {
   return &(this->operator*());
 }
@@ -1038,7 +1044,8 @@ inline const Accessor *TriaRawIterator<Accessor>::operator->() const
 
 
 template <typename Accessor>
-inline Accessor *TriaRawIterator<Accessor>::operator->()
+inline Accessor *
+TriaRawIterator<Accessor>::operator->()
 {
   return &(this->operator*());
 }
@@ -1056,8 +1063,8 @@ TriaRawIterator<Accessor>::state() const
 
 template <typename Accessor>
 inline bool
-TriaRawIterator<Accessor>::
-operator<(const TriaRawIterator<Accessor> &other) const
+TriaRawIterator<Accessor>::operator<(
+  const TriaRawIterator<Accessor> &other) const
 {
   Assert(state() != IteratorState::invalid,
          ExcDereferenceInvalidObject(accessor));
@@ -1080,8 +1087,8 @@ operator<(const TriaRawIterator<Accessor> &other) const
 
 template <typename Accessor>
 inline bool
-TriaRawIterator<Accessor>::
-operator>(const TriaRawIterator<Accessor> &other) const
+TriaRawIterator<Accessor>::operator>(
+  const TriaRawIterator<Accessor> &other) const
 {
   return (other < *this);
 }
@@ -1118,7 +1125,7 @@ inline void
 TriaRawIterator<Accessor>::print(StreamType &out) const
 {
   if (Accessor::structure_dimension == Accessor::dimension)
-    out << accessor.level() << "." << accessor.index();
+    out << accessor.level() << '.' << accessor.index();
   else
     out << accessor.index();
 }

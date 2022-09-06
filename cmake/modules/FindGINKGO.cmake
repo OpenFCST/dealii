@@ -1,6 +1,6 @@
 ## ---------------------------------------------------------------------
 ##
-## Copyright (C) 2018 - 2020 by the deal.II authors
+## Copyright (C) 2018 - 2021 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
@@ -20,6 +20,7 @@
 #
 #   GINKGO_INCLUDE_DIRS
 #   GINKGO_INTERFACE_LINK_FLAGS
+#   GINKGO_VERSION
 #
 
 SET(GINKGO_DIR "" CACHE PATH "An optional hint to a GINKGO installation")
@@ -62,6 +63,13 @@ FOREACH(_library ginkgo ${GINKGO_INTERFACE_LINK_LIBRARIES})
     NO_CMAKE_FIND_ROOT_PATH
     )
 ENDFOREACH()
+
+#
+# Get ginkgo version number
+#
+IF(Ginkgo_FOUND)
+  SET(GINKGO_VERSION "${GINKGO_PROJECT_VERSION}")
+ENDIF()
 
 DEAL_II_PACKAGE_HANDLE(GINKGO
   LIBRARIES REQUIRED ${_libraries}

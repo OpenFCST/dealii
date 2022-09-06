@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2018 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -85,7 +85,7 @@ check()
       deallog << "Color: " << color << std::endl;
       for (unsigned int i = 0; i < coloring[color].size(); ++i)
         for (unsigned int j = 0; j < dim; ++j)
-          deallog << coloring[color][i]->center()[j] << " ";
+          deallog << coloring[color][i]->center()[j] << ' ';
       deallog << std::endl;
     }
 }

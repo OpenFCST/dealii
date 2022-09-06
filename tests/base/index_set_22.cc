@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2010 - 2018 by the deal.II authors
+// Copyright (C) 2010 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -40,7 +40,7 @@ test()
   deallog << "Original index set: " << std::endl;
   is1.print(deallog);
 
-  for (unsigned int i = 0; i < is1.size(); i++)
+  for (unsigned int i = 0; i < is1.size(); ++i)
     Assert(is1.is_element(i) == zeros_and_ones[i], ExcInternalError());
 
   deallog << "OK" << std::endl;

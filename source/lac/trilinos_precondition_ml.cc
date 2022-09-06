@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -169,7 +169,7 @@ namespace TrilinosWrappers
                     TrilinosWrappers::global_index(domain_map, row) :
                     row;
                 distributed_constant_modes[d][row] =
-                  constant_modes[d][mode_index];
+                  static_cast<double>(constant_modes[d][mode_index]);
               }
           }
         (void)expected_mode_size;

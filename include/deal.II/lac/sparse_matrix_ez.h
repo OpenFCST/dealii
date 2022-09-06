@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2002 - 2020 by the deal.II authors
+// Copyright (C) 2002 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -253,12 +253,14 @@ public:
     /**
      * Dereferencing operator.
      */
-    const Accessor &operator*() const;
+    const Accessor &
+    operator*() const;
 
     /**
      * Dereferencing operator.
      */
-    const Accessor *operator->() const;
+    const Accessor *
+    operator->() const;
 
     /**
      * Comparison. True, if both iterators point to the same matrix position.
@@ -294,7 +296,7 @@ public:
   /**
    * @name Constructors and initialization
    */
-  //@{
+  /** @{ */
   /**
    * Constructor. Initializes an empty matrix of dimension zero times zero.
    */
@@ -362,11 +364,11 @@ public:
    */
   void
   clear();
-  //@}
+  /** @} */
   /**
    * @name Information on the matrix
    */
-  //@{
+  /** @{ */
   /**
    * Return whether the object is empty. It is empty if both dimensions are
    * zero.
@@ -431,11 +433,11 @@ public:
                      size_type &             reserved,
                      std::vector<size_type> &used_by_line,
                      const bool              compute_by_line) const;
-  //@}
+  /** @} */
   /**
    * @name Modifying entries
    */
-  //@{
+  /** @{ */
   /**
    * Set the element <tt>(i,j)</tt> to @p value.
    *
@@ -573,11 +575,11 @@ public:
   template <typename MatrixType>
   void
   add(const number factor, const MatrixType &matrix);
-  //@}
+  /** @} */
   /**
    * @name Entry Access
    */
-  //@{
+  /** @{ */
   /**
    * Return the value of the entry (i,j).  This may be an expensive operation
    * and you should always take care where to call this function.  In order to
@@ -596,11 +598,11 @@ public:
    */
   number
   el(const size_type i, const size_type j) const;
-  //@}
+  /** @} */
   /**
    * @name Multiplications
    */
-  //@{
+  /** @{ */
   /**
    * Matrix-vector multiplication: let $dst = M*src$ with $M$ being this
    * matrix.
@@ -634,21 +636,21 @@ public:
   template <typename somenumber>
   void
   Tvmult_add(Vector<somenumber> &dst, const Vector<somenumber> &src) const;
-  //@}
+  /** @} */
   /**
    * @name Matrix norms
    */
-  //@{
+  /** @{ */
   /**
    * Frobenius-norm of the matrix.
    */
   number
   l2_norm() const;
-  //@}
+  /** @} */
   /**
    * @name Preconditioning methods
    */
-  //@{
+  /** @{ */
   /**
    * Apply the Jacobi preconditioner, which multiplies every element of the @p
    * src vector by the inverse of the respective diagonal element and
@@ -704,11 +706,11 @@ public:
   conjugate_add(const MatrixTypeA &A,
                 const MatrixTypeB &B,
                 const bool         transpose = false);
-  //@}
+  /** @} */
   /**
    * @name Iterators
    */
-  //@{
+  /** @{ */
   /**
    * Iterator starting at the first existing entry.
    */
@@ -734,11 +736,11 @@ public:
    */
   const_iterator
   end(const size_type r) const;
-  //@}
+  /** @} */
   /**
    * @name Input/Output
    */
-  //@{
+  /** @{ */
   /**
    * Print the matrix to the given stream, using the format <tt>(line,col)
    * value</tt>, i.e. one nonzero entry of the matrix per line.
@@ -794,7 +796,7 @@ public:
    */
   void
   block_read(std::istream &in);
-  //@}
+  /** @} */
 
   /**
    * @addtogroup Exceptions
@@ -820,7 +822,7 @@ public:
                  int,
                  << "An entry with index (" << arg1 << ',' << arg2
                  << ") cannot be allocated.");
-  //@}
+  /** @} */
 private:
   /**
    * Find an entry and return a const pointer. Return a zero-pointer if the
@@ -1042,7 +1044,7 @@ SparseMatrixEZ<number>::const_iterator::operator++()
 
 template <typename number>
 inline const typename SparseMatrixEZ<number>::const_iterator::Accessor &
-  SparseMatrixEZ<number>::const_iterator::operator*() const
+SparseMatrixEZ<number>::const_iterator::operator*() const
 {
   return accessor;
 }
@@ -1050,7 +1052,7 @@ inline const typename SparseMatrixEZ<number>::const_iterator::Accessor &
 
 template <typename number>
 inline const typename SparseMatrixEZ<number>::const_iterator::Accessor *
-  SparseMatrixEZ<number>::const_iterator::operator->() const
+SparseMatrixEZ<number>::const_iterator::operator->() const
 {
   return &accessor;
 }
@@ -1058,8 +1060,8 @@ inline const typename SparseMatrixEZ<number>::const_iterator::Accessor *
 
 template <typename number>
 inline bool
-SparseMatrixEZ<number>::const_iterator::
-operator==(const const_iterator &other) const
+SparseMatrixEZ<number>::const_iterator::operator==(
+  const const_iterator &other) const
 {
   return (accessor.row() == other.accessor.row() &&
           accessor.index() == other.accessor.index());
@@ -1068,8 +1070,8 @@ operator==(const const_iterator &other) const
 
 template <typename number>
 inline bool
-SparseMatrixEZ<number>::const_iterator::
-operator!=(const const_iterator &other) const
+SparseMatrixEZ<number>::const_iterator::operator!=(
+  const const_iterator &other) const
 {
   return !(*this == other);
 }
@@ -1077,8 +1079,8 @@ operator!=(const const_iterator &other) const
 
 template <typename number>
 inline bool
-SparseMatrixEZ<number>::const_iterator::
-operator<(const const_iterator &other) const
+SparseMatrixEZ<number>::const_iterator::operator<(
+  const const_iterator &other) const
 {
   return (accessor.row() < other.accessor.row() ||
           (accessor.row() == other.accessor.row() &&

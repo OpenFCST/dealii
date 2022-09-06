@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,6 +18,7 @@
 #define dealii_vector_tools_boundary_templates_h
 
 #include <deal.II/base/qprojector.h>
+#include <deal.II/base/quadrature_lib.h>
 
 #include <deal.II/dofs/dof_tools.h>
 
@@ -52,7 +53,8 @@ namespace VectorTools
     template <int dim,
               int spacedim,
               typename number,
-              template <int, int> class M_or_MC>
+              template <int, int>
+              class M_or_MC>
     static inline void
     do_interpolate_boundary_values(
       const M_or_MC<dim, spacedim> &   mapping,
@@ -159,60 +161,65 @@ namespace VectorTools
           dof_values_system.reserve(
             dof.get_fe_collection().max_dofs_per_face());
 
-          // TODO: get support for each face -> PR #10764
-          const unsigned int face_no = 0;
-
           // before we start with the loop over all cells create an hp::FEValues
           // object that holds the interpolation points of all finite elements
           // that may ever be in use
           const dealii::hp::FECollection<dim, spacedim> &finite_elements =
             dof.get_fe_collection();
-          dealii::hp::QCollection<dim - 1> q_collection;
+          std::vector<dealii::hp::QCollection<dim - 1>> q_collection(
+            finite_elements.size());
           for (unsigned int f = 0; f < finite_elements.size(); ++f)
-            {
-              const FiniteElement<dim, spacedim> &fe = finite_elements[f];
+            for (unsigned int face_no = 0;
+                 face_no < (finite_elements[f].n_unique_faces() == 1 ?
+                              1 :
+                              finite_elements[f].reference_cell().n_faces());
+                 ++face_no)
+              {
+                const FiniteElement<dim, spacedim> &fe = finite_elements[f];
 
-              // generate a quadrature rule on the face from the unit support
-              // points. this will be used to obtain the quadrature points on
-              // the real cell's face
-              //
-              // to do this, we check whether the FE has support points on the
-              // face at all:
-              if (fe.has_face_support_points(face_no))
-                q_collection.push_back(Quadrature<dim - 1>(
-                  fe.get_unit_face_support_points(face_no)));
-              else
-                {
-                  // if not, then we should try a more clever way. the idea is
-                  // that a finite element may not offer support points for all
-                  // its shape functions, but maybe only some. if it offers
-                  // support points for the components we are interested in in
-                  // this function, then that's fine. if not, the function we
-                  // call in the finite element will raise an exception. the
-                  // support points for the other shape functions are left
-                  // uninitialized (well, initialized by the default
-                  // constructor), since we don't need them anyway.
-                  //
-                  // As a detour, we must make sure we only query
-                  // face_system_to_component_index if the index corresponds to
-                  // a primitive shape function. since we know that all the
-                  // components we are interested in are primitive (by the above
-                  // check), we can safely put such a check in front
-                  std::vector<Point<dim - 1>> unit_support_points(
-                    fe.n_dofs_per_face(face_no));
+                // generate a quadrature rule on the face from the unit support
+                // points. this will be used to obtain the quadrature points on
+                // the real cell's face
+                //
+                // to do this, we check whether the FE has support points on the
+                // face at all:
+                if (fe.has_face_support_points(face_no))
+                  q_collection[f].push_back(Quadrature<dim - 1>(
+                    fe.get_unit_face_support_points(face_no)));
+                else
+                  {
+                    // if not, then we should try a more clever way. the idea is
+                    // that a finite element may not offer support points for
+                    // all its shape functions, but maybe only some. if it
+                    // offers support points for the components we are
+                    // interested in in this function, then that's fine. if not,
+                    // the function we call in the finite element will raise an
+                    // exception. the support points for the other shape
+                    // functions are left uninitialized (well, initialized by
+                    // the default constructor), since we don't need them
+                    // anyway.
+                    //
+                    // As a detour, we must make sure we only query
+                    // face_system_to_component_index if the index corresponds
+                    // to a primitive shape function. since we know that all the
+                    // components we are interested in are primitive (by the
+                    // above check), we can safely put such a check in front
+                    std::vector<Point<dim - 1>> unit_support_points(
+                      fe.n_dofs_per_face(face_no));
 
-                  for (unsigned int i = 0; i < fe.n_dofs_per_face(face_no); ++i)
-                    if (fe.is_primitive(fe.face_to_cell_index(i, face_no)))
-                      if (component_mask[fe.face_system_to_component_index(
-                                             i, face_no)
-                                           .first] == true)
-                        unit_support_points[i] =
-                          fe.unit_face_support_point(i, face_no);
+                    for (unsigned int i = 0; i < fe.n_dofs_per_face(face_no);
+                         ++i)
+                      if (fe.is_primitive(fe.face_to_cell_index(i, face_no)))
+                        if (component_mask[fe.face_system_to_component_index(
+                                               i, face_no)
+                                             .first] == true)
+                          unit_support_points[i] =
+                            fe.unit_face_support_point(i, face_no);
 
-                  q_collection.push_back(
-                    Quadrature<dim - 1>(unit_support_points));
-                }
-            }
+                    q_collection[f].push_back(
+                      Quadrature<dim - 1>(unit_support_points));
+                  }
+              }
           // now that we have a q_collection object with all the right
           // quadrature points, create an hp::FEFaceValues object that we can
           // use to evaluate the boundary values at
@@ -236,16 +243,15 @@ namespace VectorTools
                   // interested in, however. make sure that all shape functions
                   // that are non-zero for the components we are interested in,
                   // are in fact primitive
-                  for (unsigned int i = 0; i < cell->get_fe().n_dofs_per_cell();
-                       ++i)
+                  for (unsigned int i = 0; i < fe.n_dofs_per_cell(); ++i)
                     {
                       const ComponentMask &nonzero_component_array =
-                        cell->get_fe().get_nonzero_components(i);
+                        fe.get_nonzero_components(i);
                       for (unsigned int c = 0; c < n_components; ++c)
                         if ((nonzero_component_array[c] == true) &&
                             (component_mask[c] == true))
                           Assert(
-                            cell->get_fe().is_primitive(i),
+                            fe.is_primitive(i),
                             ExcMessage(
                               "This function can only deal with requested boundary "
                               "values that correspond to primitive (scalar) base "
@@ -267,7 +273,7 @@ namespace VectorTools
                   // element in use here has DoFs on the face at all
                   if ((function_map.find(boundary_component) !=
                        function_map.end()) &&
-                      (cell->get_fe().n_dofs_per_face(face_no) > 0))
+                      (fe.n_dofs_per_face(face_no) > 0))
                     {
                       // face is of the right component
                       x_fe_values.reinit(cell, face_no);
@@ -278,21 +284,15 @@ namespace VectorTools
                       // dofs on this face
                       face_dofs.resize(fe.n_dofs_per_face(face_no));
                       face->get_dof_indices(face_dofs, cell->active_fe_index());
-                      const std::vector<Point<spacedim>> &dof_locations =
+                      std::vector<Point<spacedim>> dof_locations =
                         fe_values.get_quadrature_points();
+                      dof_locations.resize(fe.n_dofs_per_face(face_no));
 
                       if (fe_is_system)
                         {
-                          // resize array. avoid construction of a memory
-                          // allocating temporary if possible
-                          if (dof_values_system.size() <
-                              fe.n_dofs_per_face(face_no))
-                            dof_values_system.resize(
-                              fe.n_dofs_per_face(face_no),
-                              Vector<number>(fe.n_components()));
-                          else
-                            dof_values_system.resize(
-                              fe.n_dofs_per_face(face_no));
+                          dof_values_system.resize(fe.n_dofs_per_face(face_no),
+                                                   Vector<number>(
+                                                     fe.n_components()));
 
                           function_map.find(boundary_component)
                             ->second->vector_value_list(dof_locations,
@@ -690,8 +690,10 @@ namespace VectorTools
 
     template <int dim,
               int spacedim,
-              template <int, int> class M_or_MC,
-              template <int> class Q_or_QC,
+              template <int, int>
+              class M_or_MC,
+              template <int>
+              class Q_or_QC,
               typename number>
     void
     do_project_boundary_values(
@@ -988,1117 +990,8 @@ namespace VectorTools
 
   namespace internals
   {
-    // This function computes the
-    // projection of the boundary
-    // function on edges for 3D.
-    template <typename cell_iterator>
-    void
-    compute_edge_projection(const cell_iterator &cell,
-                            const unsigned int   face,
-                            const unsigned int   line,
-                            hp::FEValues<3> &    hp_fe_values,
-                            const Function<3> &  boundary_function,
-                            const unsigned int   first_vector_component,
-                            std::vector<double> &dof_values,
-                            std::vector<bool> &  dofs_processed)
-    {
-      const double tol =
-        0.5 * cell->face(face)->line(line)->diameter() / cell->get_fe().degree;
-      const unsigned int dim      = 3;
-      const unsigned int spacedim = 3;
-
-      hp_fe_values.reinit(cell,
-                          (cell->active_fe_index() * cell->n_faces() + face) *
-                              GeometryInfo<dim>::lines_per_face +
-                            line);
-
-      // Initialize the required
-      // objects.
-      const FEValues<dim> &fe_values = hp_fe_values.get_present_fe_values();
-      const FiniteElement<dim> &                           fe = cell->get_fe();
-      const std::vector<DerivativeForm<1, dim, spacedim>> &jacobians =
-        fe_values.get_jacobians();
-      const std::vector<Point<dim>> &quadrature_points =
-        fe_values.get_quadrature_points();
-
-      std::vector<Tensor<1, dim>> tangentials(fe_values.n_quadrature_points);
-      std::vector<Vector<double>> values(fe_values.n_quadrature_points,
-                                         Vector<double>(fe.n_components()));
-
-      // Get boundary function values
-      // at quadrature points.
-      boundary_function.vector_value_list(quadrature_points, values);
-
-      const std::vector<Point<dim>> &reference_quadrature_points =
-        fe_values.get_quadrature().get_points();
-      std::pair<unsigned int, unsigned int> base_indices(0, 0);
-
-      if (dynamic_cast<const FESystem<dim> *>(&cell->get_fe()) != nullptr)
-        {
-          unsigned int fe_index     = 0;
-          unsigned int fe_index_old = 0;
-          unsigned int i            = 0;
-
-          for (; i < fe.n_base_elements(); ++i)
-            {
-              fe_index_old = fe_index;
-              fe_index +=
-                fe.element_multiplicity(i) * fe.base_element(i).n_components();
-
-              if (fe_index > first_vector_component)
-                break;
-            }
-
-          base_indices.first  = i;
-          base_indices.second = (first_vector_component - fe_index_old) /
-                                fe.base_element(i).n_components();
-        }
-
-      // coordinate directions of
-      // the edges of the face.
-      const unsigned int
-        edge_coordinate_direction[GeometryInfo<dim>::faces_per_cell]
-                                 [GeometryInfo<dim>::lines_per_face] = {
-                                   {2, 2, 1, 1},
-                                   {2, 2, 1, 1},
-                                   {0, 0, 2, 2},
-                                   {0, 0, 2, 2},
-                                   {1, 1, 0, 0},
-                                   {1, 1, 0, 0}};
-      const FEValuesExtractors::Vector vec(first_vector_component);
-
-      // The interpolation for the
-      // lowest order edge shape
-      // functions is just the mean
-      // value of the tangential
-      // components of the boundary
-      // function on the edge.
-      for (unsigned int q_point = 0; q_point < fe_values.n_quadrature_points;
-           ++q_point)
-        {
-          // Therefore compute the
-          // tangential of the edge at
-          // the quadrature point.
-          Point<dim> shifted_reference_point_1 =
-            reference_quadrature_points[q_point];
-          Point<dim> shifted_reference_point_2 =
-            reference_quadrature_points[q_point];
-
-          shifted_reference_point_1(edge_coordinate_direction[face][line]) +=
-            tol;
-          shifted_reference_point_2(edge_coordinate_direction[face][line]) -=
-            tol;
-          tangentials[q_point] =
-            (0.5 *
-             (fe_values.get_mapping().transform_unit_to_real_cell(
-                cell, shifted_reference_point_1) -
-              fe_values.get_mapping().transform_unit_to_real_cell(
-                cell, shifted_reference_point_2)) /
-             tol);
-          tangentials[q_point] /= tangentials[q_point].norm();
-
-          // Compute the degrees of
-          // freedom.
-          for (unsigned int i = 0; i < fe.n_dofs_per_face(face); ++i)
-            if (((dynamic_cast<const FESystem<dim> *>(&fe) != nullptr) &&
-                 (fe.system_to_base_index(fe.face_to_cell_index(i, face))
-                    .first == base_indices) &&
-                 (fe.base_element(base_indices.first)
-                    .face_to_cell_index(line * fe.degree, face) <=
-                  fe.system_to_base_index(fe.face_to_cell_index(i, face))
-                    .second) &&
-                 (fe.system_to_base_index(fe.face_to_cell_index(i, face))
-                    .second <=
-                  fe.base_element(base_indices.first)
-                    .face_to_cell_index((line + 1) * fe.degree - 1, face))) ||
-                ((dynamic_cast<const FE_Nedelec<dim> *>(&fe) != nullptr) &&
-                 (line * fe.degree <= i) && (i < (line + 1) * fe.degree)))
-              {
-                const double tangential_solution_component =
-                  (values[q_point](first_vector_component) *
-                     tangentials[q_point][0] +
-                   values[q_point](first_vector_component + 1) *
-                     tangentials[q_point][1] +
-                   values[q_point](first_vector_component + 2) *
-                     tangentials[q_point][2]);
-                dof_values[i] +=
-                  (fe_values.JxW(q_point) * tangential_solution_component *
-                   (fe_values[vec].value(fe.face_to_cell_index(i, face),
-                                         q_point) *
-                    tangentials[q_point]) /
-                   std::sqrt(
-                     jacobians[q_point][0]
-                              [edge_coordinate_direction[face][line]] *
-                       jacobians[q_point][0]
-                                [edge_coordinate_direction[face][line]] +
-                     jacobians[q_point][1]
-                              [edge_coordinate_direction[face][line]] *
-                       jacobians[q_point][1]
-                                [edge_coordinate_direction[face][line]] +
-                     jacobians[q_point][2]
-                              [edge_coordinate_direction[face][line]] *
-                       jacobians[q_point][2]
-                                [edge_coordinate_direction[face][line]]));
-
-                if (q_point == 0)
-                  dofs_processed[i] = true;
-              }
-        }
-    }
-
-    // dummy implementation of above
-    // function for all other
-    // dimensions
-    template <int dim, typename cell_iterator>
-    void
-    compute_edge_projection(const cell_iterator &,
-                            const unsigned int,
-                            const unsigned int,
-                            hp::FEValues<dim> &,
-                            const Function<dim> &,
-                            const unsigned int,
-                            std::vector<double> &,
-                            std::vector<bool> &)
-    {
-      Assert(false, ExcInternalError());
-    }
-
-    // This function computes the
-    // projection of the boundary
-    // function on the interior of
-    // faces.
     template <int dim, typename cell_iterator, typename number>
-    void
-    compute_face_projection_curl_conforming(
-      const cell_iterator &        cell,
-      const unsigned int           face,
-      hp::FEValues<dim> &          hp_fe_values,
-      const Function<dim, number> &boundary_function,
-      const unsigned int           first_vector_component,
-      std::vector<double> &        dof_values,
-      std::vector<bool> &          dofs_processed)
-    {
-      const unsigned int spacedim = dim;
-      hp_fe_values.reinit(cell,
-                          cell->active_fe_index() * cell->n_faces() + face);
-      // Initialize the required
-      // objects.
-      const FEValues<dim> &fe_values = hp_fe_values.get_present_fe_values();
-      const FiniteElement<dim> &                           fe = cell->get_fe();
-      const std::vector<DerivativeForm<1, dim, spacedim>> &jacobians =
-        fe_values.get_jacobians();
-      const std::vector<Point<dim>> &quadrature_points =
-        fe_values.get_quadrature_points();
-      const unsigned int                    degree = fe.degree - 1;
-      std::pair<unsigned int, unsigned int> base_indices(0, 0);
-
-      if (dynamic_cast<const FESystem<dim> *>(&cell->get_fe()) != nullptr)
-        {
-          unsigned int fe_index     = 0;
-          unsigned int fe_index_old = 0;
-          unsigned int i            = 0;
-
-          for (; i < fe.n_base_elements(); ++i)
-            {
-              fe_index_old = fe_index;
-              fe_index +=
-                fe.element_multiplicity(i) * fe.base_element(i).n_components();
-
-              if (fe_index > first_vector_component)
-                break;
-            }
-
-          base_indices.first  = i;
-          base_indices.second = (first_vector_component - fe_index_old) /
-                                fe.base_element(i).n_components();
-        }
-
-      std::vector<Vector<double>> values(fe_values.n_quadrature_points,
-                                         Vector<double>(fe.n_components()));
-
-      // Get boundary function
-      // values at quadrature
-      // points.
-      boundary_function.vector_value_list(quadrature_points, values);
-
-      switch (dim)
-        {
-          case 2:
-            {
-              const double tol =
-                0.5 * cell->face(face)->diameter() / cell->get_fe().degree;
-              std::vector<Tensor<1, dim>> tangentials(
-                fe_values.n_quadrature_points);
-
-              const std::vector<Point<dim>> &reference_quadrature_points =
-                fe_values.get_quadrature().get_points();
-
-              // coordinate directions
-              // of the face.
-              const unsigned int
-                face_coordinate_direction[GeometryInfo<dim>::faces_per_cell] = {
-                  1, 1, 0, 0};
-              const FEValuesExtractors::Vector vec(first_vector_component);
-
-              // The interpolation for
-              // the lowest order face
-              // shape functions is just
-              // the mean value of the
-              // tangential  components
-              // of the boundary function
-              // on the edge.
-              for (unsigned int q_point = 0;
-                   q_point < fe_values.n_quadrature_points;
-                   ++q_point)
-                {
-                  // Therefore compute the
-                  // tangential of the
-                  // face at the quadrature
-                  // point.
-                  Point<dim> shifted_reference_point_1 =
-                    reference_quadrature_points[q_point];
-                  Point<dim> shifted_reference_point_2 =
-                    reference_quadrature_points[q_point];
-
-                  shifted_reference_point_1(face_coordinate_direction[face]) +=
-                    tol;
-                  shifted_reference_point_2(face_coordinate_direction[face]) -=
-                    tol;
-                  tangentials[q_point] =
-                    (fe_values.get_mapping().transform_unit_to_real_cell(
-                       cell, shifted_reference_point_1) -
-                     fe_values.get_mapping().transform_unit_to_real_cell(
-                       cell, shifted_reference_point_2)) /
-                    tol;
-                  tangentials[q_point] /= tangentials[q_point].norm();
-
-                  // Compute the degrees
-                  // of freedom.
-                  for (unsigned int i = 0; i < fe.n_dofs_per_face(face); ++i)
-                    if (((dynamic_cast<const FESystem<dim> *>(&fe) !=
-                          nullptr) &&
-                         (fe.system_to_base_index(
-                              fe.face_to_cell_index(i, face))
-                            .first == base_indices)) ||
-                        (dynamic_cast<const FE_Nedelec<dim> *>(&fe) != nullptr))
-                      {
-                        dof_values[i] +=
-                          fe_values.JxW(q_point) *
-                          (values[q_point](first_vector_component) *
-                             tangentials[q_point][0] +
-                           values[q_point](first_vector_component + 1) *
-                             tangentials[q_point][1]) *
-                          (fe_values[vec].value(fe.face_to_cell_index(i, face),
-                                                q_point) *
-                           tangentials[q_point]);
-
-                        if (q_point == 0)
-                          dofs_processed[i] = true;
-                      }
-                }
-
-              break;
-            }
-
-          case 3:
-            {
-              const FEValuesExtractors::Vector vec(first_vector_component);
-              FullMatrix<double>               assembling_matrix(
-                degree * fe.degree, dim * fe_values.n_quadrature_points);
-              Vector<double>     assembling_vector(assembling_matrix.n());
-              Vector<double>     cell_rhs(assembling_matrix.m());
-              FullMatrix<double> cell_matrix(assembling_matrix.m(),
-                                             assembling_matrix.m());
-              FullMatrix<double> cell_matrix_inv(assembling_matrix.m(),
-                                                 assembling_matrix.m());
-              Vector<double>     solution(cell_matrix.m());
-
-              // Get coordinate directions
-              // of the face.
-              const unsigned int global_face_coordinate_directions
-                [GeometryInfo<3>::faces_per_cell][2] = {
-                  {1, 2}, {1, 2}, {2, 0}, {2, 0}, {0, 1}, {0, 1}};
-
-              // The projection is divided into two steps.  In the first step we
-              // project the boundary function on the horizontal shape
-              // functions. Then the boundary function is projected on the
-              // vertical shape functions.  We begin with the horizontal shape
-              // functions and set up a linear system of equations to get the
-              // values for degrees of freedom associated with the interior of
-              // the face.
-              for (unsigned int q_point = 0;
-                   q_point < fe_values.n_quadrature_points;
-                   ++q_point)
-                {
-                  // The right hand
-                  // side of the
-                  // corresponding problem
-                  // is the residual
-                  // of the boundary
-                  // function and
-                  // the already
-                  // interpolated part
-                  // on the edges.
-                  Tensor<1, dim> tmp;
-
-                  for (unsigned int d = 0; d < dim; ++d)
-                    tmp[d] = values[q_point](first_vector_component + d);
-
-                  for (unsigned int i = 0; i < fe.n_dofs_per_face(face); ++i)
-                    if (((dynamic_cast<const FESystem<dim> *>(&fe) !=
-                          nullptr) &&
-                         (fe.system_to_base_index(
-                              fe.face_to_cell_index(i, face))
-                            .first == base_indices) &&
-                         (fe.base_element(base_indices.first)
-                            .face_to_cell_index(2 * fe.degree, face) <=
-                          fe.system_to_base_index(
-                              fe.face_to_cell_index(i, face))
-                            .second) &&
-                         (fe.system_to_base_index(
-                              fe.face_to_cell_index(i, face))
-                            .second <=
-                          fe.base_element(base_indices.first)
-                            .face_to_cell_index(4 * fe.degree - 1, face))) ||
-                        ((dynamic_cast<const FE_Nedelec<dim> *>(&fe) !=
-                          nullptr) &&
-                         (2 * fe.degree <= i) && (i < 4 * fe.degree)))
-                      tmp -=
-                        dof_values[i] *
-                        fe_values[vec].value(fe.face_to_cell_index(i, face),
-                                             q_point);
-
-                  const double JxW = std::sqrt(
-                    fe_values.JxW(q_point) /
-                    ((jacobians[q_point][0]
-                               [global_face_coordinate_directions[face][0]] *
-                        jacobians[q_point][0]
-                                 [global_face_coordinate_directions[face][0]] +
-                      jacobians[q_point][1]
-                               [global_face_coordinate_directions[face][0]] *
-                        jacobians[q_point][1]
-                                 [global_face_coordinate_directions[face][0]] +
-                      jacobians[q_point][2]
-                               [global_face_coordinate_directions[face][0]] *
-                        jacobians[q_point][2]
-                                 [global_face_coordinate_directions[face][0]]) *
-                     (jacobians[q_point][0]
-                               [global_face_coordinate_directions[face][1]] *
-                        jacobians[q_point][0]
-                                 [global_face_coordinate_directions[face][1]] +
-                      jacobians[q_point][1]
-                               [global_face_coordinate_directions[face][1]] *
-                        jacobians[q_point][1]
-                                 [global_face_coordinate_directions[face][1]] +
-                      jacobians[q_point][2]
-                               [global_face_coordinate_directions[face][1]] *
-                        jacobians[q_point][2]
-                                 [global_face_coordinate_directions[face]
-                                                                   [1]])));
-
-                  // In the weak form
-                  // the right hand
-                  // side function
-                  // is multiplicated
-                  // by the horizontal
-                  // shape functions
-                  // defined in the
-                  // interior of
-                  // the face.
-                  for (unsigned int d = 0; d < dim; ++d)
-                    assembling_vector(dim * q_point + d) = JxW * tmp[d];
-
-                  unsigned int index = 0;
-
-                  for (unsigned int i = 0; i < fe.n_dofs_per_face(face); ++i)
-                    if (((dynamic_cast<const FESystem<dim> *>(&fe) !=
-                          nullptr) &&
-                         (fe.system_to_base_index(
-                              fe.face_to_cell_index(i, face))
-                            .first == base_indices) &&
-                         (fe.base_element(base_indices.first)
-                            .face_to_cell_index(
-                              GeometryInfo<dim>::lines_per_face * fe.degree,
-                              face) <=
-                          fe.system_to_base_index(
-                              fe.face_to_cell_index(i, face))
-                            .second) &&
-                         (fe.system_to_base_index(
-                              fe.face_to_cell_index(i, face))
-                            .second <
-                          fe.base_element(base_indices.first)
-                            .face_to_cell_index(
-                              (degree + GeometryInfo<dim>::lines_per_face) *
-                                fe.degree,
-                              face))) ||
-                        ((dynamic_cast<const FE_Nedelec<dim> *>(&fe) !=
-                          nullptr) &&
-                         (GeometryInfo<dim>::lines_per_face * fe.degree <= i) &&
-                         (i < (degree + GeometryInfo<dim>::lines_per_face) *
-                                fe.degree)))
-                      {
-                        const Tensor<1, dim> shape_value =
-                          (JxW *
-                           fe_values[vec].value(fe.face_to_cell_index(i, face),
-                                                q_point));
-
-                        for (unsigned int d = 0; d < dim; ++d)
-                          assembling_matrix(index, dim * q_point + d) =
-                            shape_value[d];
-
-                        ++index;
-                      }
-                }
-
-              // Create the system matrix by multiplying the assembling matrix
-              // with its transposed and the right hand side vector by
-              // multiplying the assembling matrix with the assembling vector.
-              // Invert the system matrix.
-              assembling_matrix.mTmult(cell_matrix, assembling_matrix);
-              cell_matrix_inv.invert(cell_matrix);
-              assembling_matrix.vmult(cell_rhs, assembling_vector);
-              cell_matrix_inv.vmult(solution, cell_rhs);
-
-              // Store the computed
-              // values.
-              {
-                unsigned int index = 0;
-
-                for (unsigned int i = 0; i < fe.n_dofs_per_face(face); ++i)
-                  if (((dynamic_cast<const FESystem<dim> *>(&fe) != nullptr) &&
-                       (fe.system_to_base_index(fe.face_to_cell_index(i, face))
-                          .first == base_indices) &&
-                       (fe.base_element(base_indices.first)
-                          .face_to_cell_index(
-                            GeometryInfo<dim>::lines_per_face * fe.degree,
-                            face) <=
-                        fe.system_to_base_index(fe.face_to_cell_index(i, face))
-                          .second) &&
-                       (fe.system_to_base_index(fe.face_to_cell_index(i, face))
-                          .second <
-                        fe.base_element(base_indices.first)
-                          .face_to_cell_index(
-                            (degree + GeometryInfo<dim>::lines_per_face) *
-                              fe.degree,
-                            face))) ||
-                      ((dynamic_cast<const FE_Nedelec<dim> *>(&fe) !=
-                        nullptr) &&
-                       (GeometryInfo<dim>::lines_per_face * fe.degree <= i) &&
-                       (i < (degree + GeometryInfo<dim>::lines_per_face) *
-                              fe.degree)))
-                    {
-                      dof_values[i]     = solution(index);
-                      dofs_processed[i] = true;
-                      ++index;
-                    }
-              }
-
-              // Now we do the same as above with the vertical shape functions
-              // instead of the horizontal ones.
-              for (unsigned int q_point = 0;
-                   q_point < fe_values.n_quadrature_points;
-                   ++q_point)
-                {
-                  Tensor<1, dim> tmp;
-
-                  for (unsigned int d = 0; d < dim; ++d)
-                    tmp[d] = values[q_point](first_vector_component + d);
-
-                  for (unsigned int i = 0; i < fe.n_dofs_per_face(face); ++i)
-                    if (((dynamic_cast<const FESystem<dim> *>(&fe) !=
-                          nullptr) &&
-                         (fe.system_to_base_index(
-                              fe.face_to_cell_index(i, face))
-                            .first == base_indices) &&
-                         (fe.system_to_base_index(
-                              fe.face_to_cell_index(i, face))
-                            .second <=
-                          fe.base_element(base_indices.first)
-                            .face_to_cell_index(2 * fe.degree - 1, face)) &&
-                         (fe.system_to_base_index(
-                              fe.face_to_cell_index(i, face))
-                            .second >= fe.base_element(base_indices.first)
-                                         .face_to_cell_index(0, face))) ||
-                        ((dynamic_cast<const FE_Nedelec<dim> *>(&fe) !=
-                          nullptr) &&
-                         (i < 2 * fe.degree)))
-                      tmp -=
-                        dof_values[i] *
-                        fe_values[vec].value(fe.face_to_cell_index(i, face),
-                                             q_point);
-
-                  const double JxW = std::sqrt(
-                    fe_values.JxW(q_point) /
-                    ((jacobians[q_point][0]
-                               [global_face_coordinate_directions[face][0]] *
-                        jacobians[q_point][0]
-                                 [global_face_coordinate_directions[face][0]] +
-                      jacobians[q_point][1]
-                               [global_face_coordinate_directions[face][0]] *
-                        jacobians[q_point][1]
-                                 [global_face_coordinate_directions[face][0]] +
-                      jacobians[q_point][2]
-                               [global_face_coordinate_directions[face][0]] *
-                        jacobians[q_point][2]
-                                 [global_face_coordinate_directions[face][0]]) *
-                     (jacobians[q_point][0]
-                               [global_face_coordinate_directions[face][1]] *
-                        jacobians[q_point][0]
-                                 [global_face_coordinate_directions[face][1]] +
-                      jacobians[q_point][1]
-                               [global_face_coordinate_directions[face][1]] *
-                        jacobians[q_point][1]
-                                 [global_face_coordinate_directions[face][1]] +
-                      jacobians[q_point][2]
-                               [global_face_coordinate_directions[face][1]] *
-                        jacobians[q_point][2]
-                                 [global_face_coordinate_directions[face]
-                                                                   [1]])));
-
-                  for (unsigned int d = 0; d < dim; ++d)
-                    assembling_vector(dim * q_point + d) = JxW * tmp[d];
-
-                  unsigned int index = 0;
-
-                  for (unsigned int i = 0; i < fe.n_dofs_per_face(face); ++i)
-                    if (((dynamic_cast<const FESystem<dim> *>(&fe) !=
-                          nullptr) &&
-                         (fe.system_to_base_index(
-                              fe.face_to_cell_index(i, face))
-                            .first == base_indices) &&
-                         (fe.base_element(base_indices.first)
-                            .face_to_cell_index(
-                              (degree + GeometryInfo<dim>::lines_per_face) *
-                                fe.degree,
-                              face) <=
-                          fe.system_to_base_index(
-                              fe.face_to_cell_index(i, face))
-                            .second)) ||
-                        ((dynamic_cast<const FE_Nedelec<dim> *>(&fe) !=
-                          nullptr) &&
-                         ((degree + GeometryInfo<dim>::lines_per_face) *
-                            fe.degree <=
-                          i)))
-                      {
-                        const Tensor<1, dim> shape_value =
-                          JxW *
-                          fe_values[vec].value(fe.face_to_cell_index(i, face),
-                                               q_point);
-
-                        for (unsigned int d = 0; d < dim; ++d)
-                          assembling_matrix(index, dim * q_point + d) =
-                            shape_value[d];
-
-                        ++index;
-                      }
-                }
-
-              assembling_matrix.mTmult(cell_matrix, assembling_matrix);
-              cell_matrix_inv.invert(cell_matrix);
-              assembling_matrix.vmult(cell_rhs, assembling_vector);
-              cell_matrix_inv.vmult(solution, cell_rhs);
-
-              unsigned int index = 0;
-
-              for (unsigned int i = 0; i < fe.n_dofs_per_face(face); ++i)
-                if (((dynamic_cast<const FESystem<dim> *>(&fe) != nullptr) &&
-                     (fe.system_to_base_index(fe.face_to_cell_index(i, face))
-                        .first == base_indices) &&
-                     (fe.base_element(base_indices.first)
-                        .face_to_cell_index(
-                          (degree + GeometryInfo<dim>::lines_per_face) *
-                            fe.degree,
-                          face) <=
-                      fe.system_to_base_index(fe.face_to_cell_index(i, face))
-                        .second)) ||
-                    ((dynamic_cast<const FE_Nedelec<dim> *>(&fe) != nullptr) &&
-                     ((degree + GeometryInfo<dim>::lines_per_face) *
-                        fe.degree <=
-                      i)))
-                  {
-                    dof_values[i]     = solution(index);
-                    dofs_processed[i] = true;
-                    ++index;
-                  }
-
-              break;
-            }
-
-          default:
-            Assert(false, ExcNotImplemented());
-        }
-    }
-  } // namespace internals
-
-
-
-  template <int dim>
-  void
-  project_boundary_values_curl_conforming(
-    const DoFHandler<dim> &    dof_handler,
-    const unsigned int         first_vector_component,
-    const Function<dim> &      boundary_function,
-    const types::boundary_id   boundary_component,
-    AffineConstraints<double> &constraints,
-    const Mapping<dim> &       mapping)
-  {
-    // Projection-based interpolation is performed in two (in 2D) respectively
-    // three (in 3D) steps. First the tangential component of the function is
-    // interpolated on each edge.  This gives the values for the degrees of
-    // freedom corresponding to the edge shape functions. Now we are done for
-    // 2D, but in 3D we possibly have also degrees of freedom, which are
-    // located in the interior of the faces. Therefore we compute the residual
-    // of the function describing the boundary values and the interpolated
-    // part, which we have computed in the last step. On the faces there are
-    // two kinds of shape functions, the horizontal and the vertical
-    // ones. Thus we have to solve two linear systems of equations of size
-    // <tt>degree * (degree + 1)<tt> to obtain the values for the
-    // corresponding degrees of freedom.
-    const unsigned int    superdegree = dof_handler.get_fe().degree;
-    const QGauss<dim - 1> reference_face_quadrature(2 * superdegree);
-
-    // TODO: the implementation makes the assumption that all faces have the
-    // same number of dofs
-    AssertDimension(dof_handler.get_fe().n_unique_faces(), 1);
-    const unsigned int dofs_per_face = dof_handler.get_fe().n_dofs_per_face(0);
-
-    const hp::FECollection<dim> &fe_collection(dof_handler.get_fe_collection());
-    const hp::MappingCollection<dim> mapping_collection(mapping);
-    hp::QCollection<dim>             face_quadrature_collection;
-
-    for (unsigned int face : GeometryInfo<dim>::face_indices())
-      face_quadrature_collection.push_back(
-        QProjector<dim>::project_to_face(reference_face_quadrature, face));
-
-    hp::FEValues<dim> fe_face_values(mapping_collection,
-                                     fe_collection,
-                                     face_quadrature_collection,
-                                     update_jacobians | update_JxW_values |
-                                       update_quadrature_points |
-                                       update_values);
-
-    std::vector<bool>                    dofs_processed(dofs_per_face);
-    std::vector<double>                  dof_values(dofs_per_face);
-    std::vector<types::global_dof_index> face_dof_indices(dofs_per_face);
-    typename DoFHandler<dim>::active_cell_iterator cell =
-      dof_handler.begin_active();
-
-    switch (dim)
-      {
-        case 2:
-          {
-            for (; cell != dof_handler.end(); ++cell)
-              if (cell->at_boundary() && cell->is_locally_owned())
-                for (const unsigned int face : cell->face_indices())
-                  if (cell->face(face)->boundary_id() == boundary_component)
-                    {
-                      // if the FE is a
-                      // FE_Nothing object
-                      // there is no work to
-                      // do
-                      if (dynamic_cast<const FE_Nothing<dim> *>(
-                            &cell->get_fe()) != nullptr)
-                        return;
-
-                      // This is only
-                      // implemented, if the
-                      // FE is a Nedelec
-                      // element. If the FE
-                      // is a FESystem, we
-                      // cannot check this.
-                      if (dynamic_cast<const FESystem<dim> *>(
-                            &cell->get_fe()) == nullptr)
-                        {
-                          AssertThrow(
-                            dynamic_cast<const FE_Nedelec<dim> *>(
-                              &cell->get_fe()) != nullptr,
-                            (typename FiniteElement<
-                              dim>::ExcInterpolationNotImplemented()));
-                        }
-
-                      for (unsigned int dof = 0; dof < dofs_per_face; ++dof)
-                        {
-                          dof_values[dof]     = 0.0;
-                          dofs_processed[dof] = false;
-                        }
-
-                      // Compute the
-                      // projection of the
-                      // boundary function on
-                      // the edge.
-                      internals::compute_face_projection_curl_conforming(
-                        cell,
-                        face,
-                        fe_face_values,
-                        boundary_function,
-                        first_vector_component,
-                        dof_values,
-                        dofs_processed);
-                      cell->face(face)->get_dof_indices(
-                        face_dof_indices, cell->active_fe_index());
-
-                      // Add the computed constraints to the constraints
-                      // object, if the degree of freedom is not already
-                      // constrained.
-                      for (unsigned int dof = 0; dof < dofs_per_face; ++dof)
-                        if (dofs_processed[dof] &&
-                            constraints.can_store_line(face_dof_indices[dof]) &&
-                            !(constraints.is_constrained(
-                              face_dof_indices[dof])))
-                          {
-                            constraints.add_line(face_dof_indices[dof]);
-
-                            if (std::abs(dof_values[dof]) > 1e-13)
-                              constraints.set_inhomogeneity(
-                                face_dof_indices[dof], dof_values[dof]);
-                          }
-                    }
-
-            break;
-          }
-
-        case 3:
-          {
-            const QGauss<dim - 2> reference_edge_quadrature(2 * superdegree);
-            const unsigned int    degree = superdegree - 1;
-            hp::QCollection<dim>  edge_quadrature_collection;
-
-            for (const unsigned int face : GeometryInfo<dim>::face_indices())
-              for (unsigned int line = 0;
-                   line < GeometryInfo<dim>::lines_per_face;
-                   ++line)
-                edge_quadrature_collection.push_back(
-                  QProjector<dim>::project_to_face(
-                    QProjector<dim - 1>::project_to_face(
-                      reference_edge_quadrature, line),
-                    face));
-
-            hp::FEValues<dim> fe_edge_values(mapping_collection,
-                                             fe_collection,
-                                             edge_quadrature_collection,
-                                             update_jacobians |
-                                               update_JxW_values |
-                                               update_quadrature_points |
-                                               update_values);
-
-            for (; cell != dof_handler.end(); ++cell)
-              if (cell->at_boundary() && cell->is_locally_owned())
-                for (const unsigned int face : cell->face_indices())
-                  if (cell->face(face)->boundary_id() == boundary_component)
-                    {
-                      // if the FE is a
-                      // FE_Nothing object
-                      // there is no work to
-                      // do
-                      if (dynamic_cast<const FE_Nothing<dim> *>(
-                            &cell->get_fe()) != nullptr)
-                        return;
-
-                      // This is only
-                      // implemented, if the
-                      // FE is a Nedelec
-                      // element. If the FE is
-                      // a FESystem we cannot
-                      // check this.
-                      if (dynamic_cast<const FESystem<dim> *>(
-                            &cell->get_fe()) == nullptr)
-                        {
-                          AssertThrow(dynamic_cast<const FE_Nedelec<dim> *>(
-                                        &cell->get_fe()) != nullptr,
-                                      typename FiniteElement<
-                                        dim>::ExcInterpolationNotImplemented());
-                        }
-
-                      for (unsigned int dof = 0; dof < dofs_per_face; ++dof)
-                        {
-                          dof_values[dof]     = 0.0;
-                          dofs_processed[dof] = false;
-                        }
-
-                      // First we compute the
-                      // projection on the
-                      // edges.
-                      for (unsigned int line = 0;
-                           line < GeometryInfo<3>::lines_per_face;
-                           ++line)
-                        internals::compute_edge_projection(
-                          cell,
-                          face,
-                          line,
-                          fe_edge_values,
-                          boundary_function,
-                          first_vector_component,
-                          dof_values,
-                          dofs_processed);
-
-                      // If there are higher
-                      // order shape
-                      // functions, there is
-                      // still some work
-                      // left.
-                      if (degree > 0)
-                        internals::compute_face_projection_curl_conforming(
-                          cell,
-                          face,
-                          fe_face_values,
-                          boundary_function,
-                          first_vector_component,
-                          dof_values,
-                          dofs_processed);
-
-                      // Store the computed
-                      // values in the global
-                      // vector.
-                      cell->face(face)->get_dof_indices(
-                        face_dof_indices, cell->active_fe_index());
-
-                      for (unsigned int dof = 0; dof < dofs_per_face; ++dof)
-                        if (dofs_processed[dof] &&
-                            constraints.can_store_line(face_dof_indices[dof]) &&
-                            !(constraints.is_constrained(
-                              face_dof_indices[dof])))
-                          {
-                            constraints.add_line(face_dof_indices[dof]);
-
-                            if (std::abs(dof_values[dof]) > 1e-13)
-                              constraints.set_inhomogeneity(
-                                face_dof_indices[dof], dof_values[dof]);
-                          }
-                    }
-
-            break;
-          }
-
-        default:
-          Assert(false, ExcNotImplemented());
-      }
-  }
-
-
-
-  template <int dim>
-  void
-
-  project_boundary_values_curl_conforming(
-    const DoFHandler<dim> &           dof_handler,
-    const unsigned int                first_vector_component,
-    const Function<dim> &             boundary_function,
-    const types::boundary_id          boundary_component,
-    AffineConstraints<double> &       constraints,
-    const hp::MappingCollection<dim> &mapping_collection)
-  {
-    const hp::FECollection<dim> &fe_collection(dof_handler.get_fe_collection());
-    hp::QCollection<dim>         face_quadrature_collection;
-
-    for (unsigned int i = 0; i < fe_collection.size(); ++i)
-      {
-        const QGauss<dim - 1> reference_face_quadrature(
-          2 * fe_collection[i].degree);
-
-        for (unsigned int face : GeometryInfo<dim>::face_indices())
-          face_quadrature_collection.push_back(
-            QProjector<dim>::project_to_face(reference_face_quadrature, face));
-      }
-
-    hp::FEValues<dim>                    fe_face_values(mapping_collection,
-                                     fe_collection,
-                                     face_quadrature_collection,
-                                     update_jacobians | update_JxW_values |
-                                       update_quadrature_points |
-                                       update_values);
-    std::vector<bool>                    dofs_processed;
-    std::vector<double>                  dof_values;
-    std::vector<types::global_dof_index> face_dof_indices;
-    typename DoFHandler<dim>::active_cell_iterator cell =
-      dof_handler.begin_active();
-
-    switch (dim)
-      {
-        case 2:
-          {
-            for (; cell != dof_handler.end(); ++cell)
-              if (cell->at_boundary() && cell->is_locally_owned())
-                for (const unsigned int face : cell->face_indices())
-                  if (cell->face(face)->boundary_id() == boundary_component)
-                    {
-                      // if the FE is a FE_Nothing object there is no work to do
-                      if (dynamic_cast<const FE_Nothing<dim> *>(
-                            &cell->get_fe()) != nullptr)
-                        return;
-
-                      // This is only implemented, if the FE is a Nedelec
-                      // element. If the FE is a FESystem we cannot check this.
-                      if (dynamic_cast<const FESystem<dim> *>(
-                            &cell->get_fe()) == nullptr)
-                        {
-                          AssertThrow(dynamic_cast<const FE_Nedelec<dim> *>(
-                                        &cell->get_fe()) != nullptr,
-                                      typename FiniteElement<
-                                        dim>::ExcInterpolationNotImplemented());
-                        }
-
-                      const unsigned int dofs_per_face =
-                        cell->get_fe().n_dofs_per_face(face);
-
-                      dofs_processed.resize(dofs_per_face);
-                      dof_values.resize(dofs_per_face);
-
-                      for (unsigned int dof = 0; dof < dofs_per_face; ++dof)
-                        {
-                          dof_values[dof]     = 0.0;
-                          dofs_processed[dof] = false;
-                        }
-
-                      internals::compute_face_projection_curl_conforming(
-                        cell,
-                        face,
-                        fe_face_values,
-                        boundary_function,
-                        first_vector_component,
-                        dof_values,
-                        dofs_processed);
-                      face_dof_indices.resize(dofs_per_face);
-                      cell->face(face)->get_dof_indices(
-                        face_dof_indices, cell->active_fe_index());
-
-                      for (unsigned int dof = 0; dof < dofs_per_face; ++dof)
-                        if (dofs_processed[dof] &&
-                            constraints.can_store_line(face_dof_indices[dof]) &&
-                            !(constraints.is_constrained(
-                              face_dof_indices[dof])))
-                          {
-                            constraints.add_line(face_dof_indices[dof]);
-
-                            if (std::abs(dof_values[dof]) > 1e-13)
-                              constraints.set_inhomogeneity(
-                                face_dof_indices[dof], dof_values[dof]);
-                          }
-                    }
-
-            break;
-          }
-
-        case 3:
-          {
-            hp::QCollection<dim> edge_quadrature_collection;
-
-            for (unsigned int i = 0; i < fe_collection.size(); ++i)
-              {
-                const QGauss<dim - 2> reference_edge_quadrature(
-                  2 * fe_collection[i].degree);
-
-                for (const unsigned int face :
-                     GeometryInfo<dim>::face_indices())
-                  for (unsigned int line = 0;
-                       line < GeometryInfo<dim>::lines_per_face;
-                       ++line)
-                    edge_quadrature_collection.push_back(
-                      QProjector<dim>::project_to_face(
-                        QProjector<dim - 1>::project_to_face(
-                          reference_edge_quadrature, line),
-                        face));
-              }
-
-            hp::FEValues<dim> fe_edge_values(mapping_collection,
-                                             fe_collection,
-                                             edge_quadrature_collection,
-                                             update_jacobians |
-                                               update_JxW_values |
-                                               update_quadrature_points |
-                                               update_values);
-
-            for (; cell != dof_handler.end(); ++cell)
-              if (cell->at_boundary() && cell->is_locally_owned())
-                for (const unsigned int face : cell->face_indices())
-                  if (cell->face(face)->boundary_id() == boundary_component)
-                    {
-                      // if the FE is a FE_Nothing object there is no work to do
-                      if (dynamic_cast<const FE_Nothing<dim> *>(
-                            &cell->get_fe()) != nullptr)
-                        return;
-
-                      // This is only implemented, if the FE is a Nedelec
-                      // element. If the FE is a FESystem we cannot check this.
-                      if (dynamic_cast<const FESystem<dim> *>(
-                            &cell->get_fe()) == nullptr)
-                        {
-                          AssertThrow(dynamic_cast<const FE_Nedelec<dim> *>(
-                                        &cell->get_fe()) != nullptr,
-                                      typename FiniteElement<
-                                        dim>::ExcInterpolationNotImplemented());
-                        }
-
-                      const unsigned int superdegree = cell->get_fe().degree;
-                      const unsigned int degree      = superdegree - 1;
-                      const unsigned int dofs_per_face =
-                        cell->get_fe().n_dofs_per_face(face);
-
-                      dofs_processed.resize(dofs_per_face);
-                      dof_values.resize(dofs_per_face);
-
-                      for (unsigned int dof = 0; dof < dofs_per_face; ++dof)
-                        {
-                          dof_values[dof]     = 0.0;
-                          dofs_processed[dof] = false;
-                        }
-
-                      for (unsigned int line = 0;
-                           line < GeometryInfo<dim>::lines_per_face;
-                           ++line)
-                        internals::compute_edge_projection(
-                          cell,
-                          face,
-                          line,
-                          fe_edge_values,
-                          boundary_function,
-                          first_vector_component,
-                          dof_values,
-                          dofs_processed);
-
-                      // If there are higher order shape functions, there is
-                      // still some work left.
-                      if (degree > 0)
-                        internals::compute_face_projection_curl_conforming(
-                          cell,
-                          face,
-                          fe_face_values,
-                          boundary_function,
-                          first_vector_component,
-                          dof_values,
-                          dofs_processed);
-
-
-                      face_dof_indices.resize(dofs_per_face);
-                      cell->face(face)->get_dof_indices(
-                        face_dof_indices, cell->active_fe_index());
-
-                      for (unsigned int dof = 0; dof < dofs_per_face; ++dof)
-                        if (dofs_processed[dof] &&
-                            constraints.can_store_line(face_dof_indices[dof]) &&
-                            !(constraints.is_constrained(
-                              face_dof_indices[dof])))
-                          {
-                            constraints.add_line(face_dof_indices[dof]);
-
-                            if (std::abs(dof_values[dof]) > 1e-13)
-                              constraints.set_inhomogeneity(
-                                face_dof_indices[dof], dof_values[dof]);
-                          }
-                    }
-
-            break;
-          }
-
-        default:
-          Assert(false, ExcNotImplemented());
-      }
-  }
-
-
-  namespace internals
-  {
-    template <int dim, typename cell_iterator, typename number>
-    typename std::enable_if<dim == 3>::type
+    std::enable_if_t<dim == 3>
     compute_edge_projection_l2(const cell_iterator &        cell,
                                const unsigned int           face,
                                const unsigned int           line,
@@ -2133,13 +1026,14 @@ namespace VectorTools
 
       // Get boundary function values
       // at quadrature points.
+      AssertDimension(boundary_function.n_components, fe.n_components());
       boundary_function.vector_value_list(quadrature_points, values);
 
       // Find the group of vector components we want to project onto
       // (dim of them, starting at first_vector_component) within the
       // overall finite element (which may be an FESystem).
       std::pair<unsigned int, unsigned int> base_indices(0, 0);
-      if (dynamic_cast<const FESystem<dim> *>(&cell->get_fe()) != nullptr)
+      if (dynamic_cast<const FESystem<dim> *>(&fe) != nullptr)
         {
           unsigned int fe_index     = 0;
           unsigned int fe_index_old = 0;
@@ -2171,10 +1065,8 @@ namespace VectorTools
         // FE_Nedelec, which has one base element and one copy of it
         // (with 3 components). In that case, the values of
         // 'base_indices' as initialized above are correct.
-        Assert((dynamic_cast<const FE_Nedelec<dim> *>(&cell->get_fe()) !=
-                nullptr) ||
-                 (dynamic_cast<const FE_NedelecSZ<dim> *>(&cell->get_fe()) !=
-                  nullptr),
+        Assert((dynamic_cast<const FE_Nedelec<dim> *>(&fe) != nullptr) ||
+                 (dynamic_cast<const FE_NedelecSZ<dim> *>(&fe) != nullptr),
                ExcNotImplemented());
 
 
@@ -2389,7 +1281,7 @@ namespace VectorTools
 
 
     template <int dim, typename cell_iterator, typename number>
-    typename std::enable_if<dim != 3>::type
+    std::enable_if_t<dim != 3>
     compute_edge_projection_l2(const cell_iterator &,
                                const unsigned int,
                                const unsigned int,
@@ -2440,6 +1332,7 @@ namespace VectorTools
                                          Vector<number>(fe.n_components()));
 
       // Get boundary function values at quadrature points.
+      AssertDimension(boundary_function.n_components, fe.n_components());
       boundary_function.vector_value_list(quadrature_points, values);
 
       // Find where the group of vector components (dim of them,
@@ -2448,7 +1341,7 @@ namespace VectorTools
       // If not using FESystem then must be using FE_Nedelec,
       // which has one base element and one copy of it (with 3 components).
       std::pair<unsigned int, unsigned int> base_indices(0, 0);
-      if (dynamic_cast<const FESystem<dim> *>(&cell->get_fe()) != nullptr)
+      if (dynamic_cast<const FESystem<dim> *>(&fe) != nullptr)
         {
           unsigned int fe_index     = 0;
           unsigned int fe_index_old = 0;
@@ -2478,10 +1371,8 @@ namespace VectorTools
         {
           // Assert that the FE is in fact an FE_Nedelec, so that the default
           // base_indices == (0,0) is correct.
-          Assert((dynamic_cast<const FE_Nedelec<dim> *>(&cell->get_fe()) !=
-                  nullptr) ||
-                   (dynamic_cast<const FE_NedelecSZ<dim> *>(&cell->get_fe()) !=
-                    nullptr),
+          Assert((dynamic_cast<const FE_Nedelec<dim> *>(&fe) != nullptr) ||
+                   (dynamic_cast<const FE_NedelecSZ<dim> *>(&fe) != nullptr),
                  ExcNotImplemented());
         }
       const unsigned int degree =
@@ -2635,9 +1526,8 @@ namespace VectorTools
               const unsigned int lines_per_face =
                 GeometryInfo<dim>::lines_per_face;
               std::vector<std::vector<unsigned int>>
-                                        associated_edge_dof_to_face_dof(lines_per_face,
-                                                                        std::vector<unsigned int>(degree +
-                                                                        1));
+                associated_edge_dof_to_face_dof(
+                  lines_per_face, std::vector<unsigned int>(degree + 1));
               std::vector<unsigned int> associated_edge_dofs(lines_per_face);
 
               for (unsigned int line = 0; line < lines_per_face; ++line)
@@ -2828,7 +1718,7 @@ namespace VectorTools
                     }
 
                   // Tensor of normal vector on the face at q_point;
-                  const Tensor<1, dim> normal_vector =
+                  const Tensor<1, dim> &normal_vector =
                     fe_face_values.normal_vector(q_point);
 
                   // Now compute the linear system:
@@ -2961,17 +1851,15 @@ namespace VectorTools
                                              update_JxW_values);
 
       // Storage for dof values found and whether they have been processed:
-      std::vector<bool>                                        dofs_processed;
-      std::vector<number>                                      dof_values;
-      std::vector<types::global_dof_index>                     face_dof_indices;
-      typename DoFHandler<dim, spacedim>::active_cell_iterator cell =
-        dof_handler.begin_active();
+      std::vector<bool>                    dofs_processed;
+      std::vector<number>                  dof_values;
+      std::vector<types::global_dof_index> face_dof_indices;
 
       switch (dim)
         {
           case 2:
             {
-              for (; cell != dof_handler.end(); ++cell)
+              for (const auto &cell : dof_handler.active_cell_iterators())
                 {
                   if (cell->at_boundary() && cell->is_locally_owned())
                     {
@@ -2980,10 +1868,12 @@ namespace VectorTools
                           if (cell->face(face)->boundary_id() ==
                               boundary_component)
                             {
+                              const FiniteElement<dim> &fe = cell->get_fe();
+
                               // If the FE is an FE_Nothing object there is no
                               // work to do
-                              if (dynamic_cast<const FE_Nothing<dim> *>(
-                                    &cell->get_fe()) != nullptr)
+                              if (dynamic_cast<const FE_Nothing<dim> *>(&fe) !=
+                                  nullptr)
                                 {
                                   return;
                                 }
@@ -2991,20 +1881,20 @@ namespace VectorTools
                               // This is only implemented for FE_Nedelec
                               // elements. If the FE is a FESystem we cannot
                               // check this.
-                              if (dynamic_cast<const FESystem<dim> *>(
-                                    &cell->get_fe()) == nullptr)
+                              if (dynamic_cast<const FESystem<dim> *>(&fe) ==
+                                  nullptr)
                                 {
                                   AssertThrow(
                                     (dynamic_cast<const FE_Nedelec<dim> *>(
-                                       &cell->get_fe()) != nullptr) ||
+                                       &fe) != nullptr) ||
                                       (dynamic_cast<const FE_NedelecSZ<dim> *>(
-                                         &cell->get_fe()) != nullptr),
+                                         &fe) != nullptr),
                                     typename FiniteElement<
                                       dim>::ExcInterpolationNotImplemented());
                                 }
 
                               const unsigned int dofs_per_face =
-                                cell->get_fe().n_dofs_per_face(face);
+                                fe.n_dofs_per_face(face);
 
                               dofs_processed.resize(dofs_per_face);
                               dof_values.resize(dofs_per_face);
@@ -3079,8 +1969,11 @@ namespace VectorTools
                         {
                           edge_quadrature_collection.push_back(
                             QProjector<dim>::project_to_face(
+                              ReferenceCells::get_hypercube<dim>(),
                               QProjector<dim - 1>::project_to_face(
-                                reference_edge_quadrature, line),
+                                ReferenceCells::get_hypercube<dim - 1>(),
+                                reference_edge_quadrature,
+                                line),
                               face));
                         }
                     }
@@ -3094,10 +1987,11 @@ namespace VectorTools
                                                  update_quadrature_points |
                                                  update_values);
 
-              for (; cell != dof_handler.end(); ++cell)
+              for (const auto &cell : dof_handler.active_cell_iterators())
                 {
                   if (cell->at_boundary() && cell->is_locally_owned())
                     {
+                      const FiniteElement<dim> &fe = cell->get_fe();
                       for (const unsigned int face : cell->face_indices())
                         {
                           if (cell->face(face)->boundary_id() ==
@@ -3105,8 +1999,8 @@ namespace VectorTools
                             {
                               // If the FE is an FE_Nothing object there is no
                               // work to do
-                              if (dynamic_cast<const FE_Nothing<dim> *>(
-                                    &cell->get_fe()) != nullptr)
+                              if (dynamic_cast<const FE_Nothing<dim> *>(&fe) !=
+                                  nullptr)
                                 {
                                   return;
                                 }
@@ -3114,23 +2008,22 @@ namespace VectorTools
                               // This is only implemented for FE_Nedelec
                               // elements. If the FE is a FESystem we cannot
                               // check this.
-                              if (dynamic_cast<const FESystem<dim> *>(
-                                    &cell->get_fe()) == nullptr)
+                              if (dynamic_cast<const FESystem<dim> *>(&fe) ==
+                                  nullptr)
                                 {
                                   AssertThrow(
                                     (dynamic_cast<const FE_Nedelec<dim> *>(
-                                       &cell->get_fe()) != nullptr) ||
+                                       &fe) != nullptr) ||
                                       (dynamic_cast<const FE_NedelecSZ<dim> *>(
-                                         &cell->get_fe()) != nullptr),
+                                         &fe) != nullptr),
                                     typename FiniteElement<
                                       dim>::ExcInterpolationNotImplemented());
                                 }
 
-                              const unsigned int superdegree =
-                                cell->get_fe().degree;
-                              const unsigned int degree = superdegree - 1;
+                              const unsigned int superdegree = fe.degree;
+                              const unsigned int degree      = superdegree - 1;
                               const unsigned int dofs_per_face =
-                                cell->get_fe().n_dofs_per_face(face);
+                                fe.n_dofs_per_face(face);
 
                               dofs_processed.resize(dofs_per_face);
                               dof_values.resize(dofs_per_face);
@@ -3143,7 +2036,7 @@ namespace VectorTools
 
                               // First compute the projection on the edges.
                               for (unsigned int line = 0;
-                                   line < GeometryInfo<3>::lines_per_face;
+                                   line < cell->face(face)->n_lines();
                                    ++line)
                                 {
                                   compute_edge_projection_l2(
@@ -3261,16 +2154,16 @@ namespace VectorTools
   {
     // This function computes the projection of the boundary function on the
     // boundary in 2d.
-    template <typename cell_iterator>
+    template <typename cell_iterator, typename number, typename number2>
     void
     compute_face_projection_div_conforming(
       const cell_iterator &                       cell,
       const unsigned int                          face,
       const FEFaceValues<2> &                     fe_values,
       const unsigned int                          first_vector_component,
-      const Function<2> &                         boundary_function,
+      const Function<2, number2> &                boundary_function,
       const std::vector<DerivativeForm<1, 2, 2>> &jacobians,
-      AffineConstraints<double> &                 constraints)
+      AffineConstraints<number> &                 constraints)
     {
       // Compute the integral over the product of the normal components of
       // the boundary function times the normal components of the shape
@@ -3279,13 +2172,13 @@ namespace VectorTools
       const FiniteElement<2> &         fe      = cell->get_fe();
       const std::vector<Tensor<1, 2>> &normals = fe_values.get_normal_vectors();
       const unsigned int
-                                  face_coordinate_direction[GeometryInfo<2>::faces_per_cell] = {1,
+        face_coordinate_direction[GeometryInfo<2>::faces_per_cell] = {1,
                                                                       1,
                                                                       0,
                                                                       0};
-      std::vector<Vector<double>> values(fe_values.n_quadrature_points,
-                                         Vector<double>(2));
-      Vector<double>              dof_values(fe.n_dofs_per_face(face));
+      std::vector<Vector<number2>> values(fe_values.n_quadrature_points,
+                                          Vector<number2>(2));
+      Vector<number2>              dof_values(fe.n_dofs_per_face(face));
 
       // Get the values of the boundary function at the quadrature points.
       {
@@ -3298,7 +2191,7 @@ namespace VectorTools
       for (unsigned int q_point = 0; q_point < fe_values.n_quadrature_points;
            ++q_point)
         {
-          double tmp = 0.0;
+          number2 tmp = 0.0;
 
           for (unsigned int d = 0; d < 2; ++d)
             tmp += normals[q_point][d] * values[q_point](d);
@@ -3347,32 +2240,35 @@ namespace VectorTools
     }
 
     // dummy implementation of above function for all other dimensions
-    template <int dim, typename cell_iterator>
+    template <int dim,
+              typename cell_iterator,
+              typename number,
+              typename number2>
     void
     compute_face_projection_div_conforming(
       const cell_iterator &,
       const unsigned int,
       const FEFaceValues<dim> &,
       const unsigned int,
-      const Function<dim> &,
+      const Function<dim, number2> &,
       const std::vector<DerivativeForm<1, dim, dim>> &,
-      AffineConstraints<double> &)
+      AffineConstraints<number> &)
     {
       Assert(false, ExcNotImplemented());
     }
 
     // This function computes the projection of the boundary function on the
     // boundary in 3d.
-    template <typename cell_iterator>
+    template <typename cell_iterator, typename number, typename number2>
     void
     compute_face_projection_div_conforming(
       const cell_iterator &                       cell,
       const unsigned int                          face,
       const FEFaceValues<3> &                     fe_values,
       const unsigned int                          first_vector_component,
-      const Function<3> &                         boundary_function,
+      const Function<3, number2> &                boundary_function,
       const std::vector<DerivativeForm<1, 3, 3>> &jacobians,
-      std::vector<double> &                       dof_values,
+      std::vector<number> &                       dof_values,
       std::vector<types::global_dof_index> &      projected_dofs)
     {
       // Compute the intergral over the product of the normal components of
@@ -3384,9 +2280,9 @@ namespace VectorTools
       const unsigned int
         face_coordinate_directions[GeometryInfo<3>::faces_per_cell][2] = {
           {1, 2}, {1, 2}, {2, 0}, {2, 0}, {0, 1}, {0, 1}};
-      std::vector<Vector<double>> values(fe_values.n_quadrature_points,
-                                         Vector<double>(3));
-      Vector<double>              dof_values_local(fe.n_dofs_per_face(face));
+      std::vector<Vector<number2>> values(fe_values.n_quadrature_points,
+                                          Vector<number2>(3));
+      Vector<number2>              dof_values_local(fe.n_dofs_per_face(face));
 
       {
         const std::vector<Point<3>> &quadrature_points =
@@ -3398,7 +2294,7 @@ namespace VectorTools
       for (unsigned int q_point = 0; q_point < fe_values.n_quadrature_points;
            ++q_point)
         {
-          double tmp = 0.0;
+          number2 tmp = 0.0;
 
           for (unsigned int d = 0; d < 3; ++d)
             tmp += normals[q_point][d] * values[q_point](d);
@@ -3454,16 +2350,19 @@ namespace VectorTools
     // dummy implementation of above
     // function for all other
     // dimensions
-    template <int dim, typename cell_iterator>
+    template <int dim,
+              typename cell_iterator,
+              typename number,
+              typename number2>
     void
     compute_face_projection_div_conforming(
       const cell_iterator &,
       const unsigned int,
       const FEFaceValues<dim> &,
       const unsigned int,
-      const Function<dim> &,
+      const Function<dim, number2> &,
       const std::vector<DerivativeForm<1, dim, dim>> &,
-      std::vector<double> &,
+      std::vector<number> &,
       std::vector<types::global_dof_index> &)
     {
       Assert(false, ExcNotImplemented());
@@ -3471,15 +2370,15 @@ namespace VectorTools
   } // namespace internals
 
 
-  template <int dim>
+  template <int dim, typename number, typename number2>
   void
   project_boundary_values_div_conforming(
-    const DoFHandler<dim> &    dof_handler,
-    const unsigned int         first_vector_component,
-    const Function<dim> &      boundary_function,
-    const types::boundary_id   boundary_component,
-    AffineConstraints<double> &constraints,
-    const Mapping<dim> &       mapping)
+    const DoFHandler<dim> &       dof_handler,
+    const unsigned int            first_vector_component,
+    const Function<dim, number2> &boundary_function,
+    const types::boundary_id      boundary_component,
+    AffineConstraints<number> &   constraints,
+    const Mapping<dim> &          mapping)
   {
     const unsigned int spacedim = dim;
     // Interpolate the normal components
@@ -3506,8 +2405,8 @@ namespace VectorTools
     hp::QCollection<dim>             quadrature_collection;
 
     for (unsigned int face : GeometryInfo<dim>::face_indices())
-      quadrature_collection.push_back(
-        QProjector<dim>::project_to_face(face_quadrature, face));
+      quadrature_collection.push_back(QProjector<dim>::project_to_face(
+        ReferenceCells::get_hypercube<dim>(), face_quadrature, face));
 
     hp::FEValues<dim> fe_values(mapping_collection,
                                 fe_collection,
@@ -3523,12 +2422,13 @@ namespace VectorTools
                 for (const unsigned int face : cell->face_indices())
                   if (cell->face(face)->boundary_id() == boundary_component)
                     {
+                      const FiniteElement<dim> &fe = cell->get_fe();
+
                       // if the FE is a
                       // FE_Nothing object
                       // there is no work to
                       // do
-                      if (dynamic_cast<const FE_Nothing<dim> *>(
-                            &cell->get_fe()) != nullptr)
+                      if (dynamic_cast<const FE_Nothing<dim> *>(&fe) != nullptr)
                         return;
 
                       // This is only
@@ -3537,12 +2437,13 @@ namespace VectorTools
                       // element. If the FE is
                       // a FESystem we cannot
                       // check this.
-                      if (dynamic_cast<const FESystem<dim> *>(
-                            &cell->get_fe()) == nullptr)
+                      if (dynamic_cast<const FESystem<dim> *>(&fe) == nullptr)
                         {
                           AssertThrow(
-                            dynamic_cast<const FE_RaviartThomas<dim> *>(
-                              &cell->get_fe()) != nullptr,
+                            dynamic_cast<const FE_RaviartThomas<dim> *>(&fe) !=
+                                nullptr ||
+                              dynamic_cast<const FE_RaviartThomasNodal<dim> *>(
+                                &fe) != nullptr,
                             typename FiniteElement<
                               dim>::ExcInterpolationNotImplemented());
                         }
@@ -3593,12 +2494,13 @@ namespace VectorTools
                       // This is only implemented, if the FE is a
                       // Raviart-Thomas element. If the FE is a FESystem we
                       // cannot check this.
-                      if (dynamic_cast<const FESystem<dim> *>(
-                            &cell->get_fe()) == nullptr)
+                      if (dynamic_cast<const FESystem<dim> *>(&fe) == nullptr)
                         {
                           AssertThrow(
-                            dynamic_cast<const FE_RaviartThomas<dim> *>(
-                              &cell->get_fe()) != nullptr,
+                            dynamic_cast<const FE_RaviartThomas<dim> *>(&fe) !=
+                                nullptr ||
+                              dynamic_cast<const FE_RaviartThomasNodal<dim> *>(
+                                &fe) != nullptr,
                             typename FiniteElement<
                               dim>::ExcInterpolationNotImplemented());
                         }
@@ -3642,14 +2544,14 @@ namespace VectorTools
   }
 
 
-  template <int dim>
+  template <int dim, typename number, typename number2>
   void
   project_boundary_values_div_conforming(
     const DoFHandler<dim> &                dof_handler,
     const unsigned int                     first_vector_component,
-    const Function<dim> &                  boundary_function,
+    const Function<dim, number2> &         boundary_function,
     const types::boundary_id               boundary_component,
-    AffineConstraints<double> &            constraints,
+    AffineConstraints<number> &            constraints,
     const hp::MappingCollection<dim, dim> &mapping_collection)
   {
     const unsigned int           spacedim = dim;
@@ -3665,8 +2567,8 @@ namespace VectorTools
         face_quadrature_collection.push_back(quadrature);
 
         for (unsigned int face : GeometryInfo<dim>::face_indices())
-          quadrature_collection.push_back(
-            QProjector<dim>::project_to_face(quadrature, face));
+          quadrature_collection.push_back(QProjector<dim>::project_to_face(
+            ReferenceCells::get_hypercube<dim>(), quadrature, face));
       }
 
     hp::FEFaceValues<dim> fe_face_values(mapping_collection,
@@ -3701,7 +2603,9 @@ namespace VectorTools
                         {
                           AssertThrow(
                             dynamic_cast<const FE_RaviartThomas<dim> *>(
-                              &cell->get_fe()) != nullptr,
+                              &cell->get_fe()) != nullptr ||
+                              dynamic_cast<const FE_RaviartThomasNodal<dim> *>(
+                                &cell->get_fe()) != nullptr,
                             typename FiniteElement<
                               dim>::ExcInterpolationNotImplemented());
                         }
@@ -3731,7 +2635,7 @@ namespace VectorTools
         case 3:
           {
             const unsigned int                   n_dofs = dof_handler.n_dofs();
-            std::vector<double>                  dof_values(n_dofs);
+            std::vector<number2>                 dof_values(n_dofs);
             std::vector<types::global_dof_index> projected_dofs(n_dofs);
 
             for (unsigned int dof = 0; dof < n_dofs; ++dof)
@@ -3753,7 +2657,9 @@ namespace VectorTools
                         {
                           AssertThrow(
                             dynamic_cast<const FE_RaviartThomas<dim> *>(
-                              &cell->get_fe()) != nullptr,
+                              &cell->get_fe()) != nullptr ||
+                              dynamic_cast<const FE_RaviartThomasNodal<dim> *>(
+                                &cell->get_fe()) != nullptr,
                             typename FiniteElement<
                               dim>::ExcInterpolationNotImplemented());
                         }

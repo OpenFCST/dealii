@@ -71,15 +71,16 @@ WARN_IF_DOC_ERROR      = YES
 INPUT                  =
 RECURSIVE              = YES
 EXCLUDE_PATTERNS       = *.templates.h
-EXAMPLE_PATH           = @CMAKE_BINARY_DIR@/doc/doxygen/tutorial
+EXAMPLE_PATH           = @CMAKE_BINARY_DIR@/doc/doxygen/tutorial \
+                         @CMAKE_SOURCE_DIR@/examples/doxygen
 EXAMPLE_RECURSIVE      = NO
 IMAGE_PATH             =
-INPUT_FILTER           = ${CMAKE_SOURCE_DIR}/doc/doxygen/scripts/filter
+INPUT_FILTER           = ${CMAKE_SOURCE_DIR}/doc/doxygen/scripts/filter.pl
 FILTER_SOURCE_FILES    = YES
 
 # Have some user defined commands that we can use in the documentation
 # and that expands to specific text. For some more transformations, see
-# the scripts/filter perl script that is run over the header files before
+# the scripts/filter.pl perl script that is run over the header files before
 # doxygen sees it and that can expand more complex expressions.
 ALIASES += dealiiRequiresUpdateFlags{1}="@note For this function to work properly, the underlying FEValues, FEFaceValues, or FESubfaceValues object on which you call it must have computed the information you are requesting. To do so, the <code>\1</code> flag must be an element of the list of UpdateFlags that you passed to the constructor of this object. See @ref UpdateFlags for more information."
 
@@ -188,10 +189,12 @@ PREDEFINED             = DOXYGEN=1 \
                          DEAL_II_ADOLC_WITH_TAPELESS_REFCOUNTING=1 \
                          DEAL_II_DEPRECATED_EARLY= \
                          DEAL_II_WITH_ARBORX=1 \
+                         DEAL_II_ARBORX_WITH_MPI=1 \
                          DEAL_II_WITH_ARPACK=1 \
                          DEAL_II_ARPACK_WITH_PARPACK=1 \
                          DEAL_II_WITH_ASSIMP=1 \
                          DEAL_II_WITH_BOOST=1 \
+                         DEAL_II_WITH_CGAL=1 \
                          DEAL_II_WITH_TASKFLOW=1 \
                          DEAL_II_WITH_COMPLEX_VALUES=1 \
                          DEAL_II_WITH_CUDA=1 \
@@ -210,6 +213,10 @@ PREDEFINED             = DOXYGEN=1 \
                          DEAL_II_MPI_VERSION_MINOR=0 \
                          DEAL_II_WITH_MUPARSER=1 \
                          DEAL_II_WITH_OPENCASCADE=1 \
+                         DEAL_II_OPENCASCADE_VERSION_MAJOR=7 \
+                         DEAL_II_OPENCASCADE_VERSION_MINOR=6 \
+                         DEAL_II_OPENCASCADE_VERSION_SUBMINOR=0 \
+                         DEAL_II_OPENCASCADE_VERSION_GTE=1 \
                          DEAL_II_WITH_P4EST=1 \
                          DEAL_II_P4EST_VERSION_MAJOR=2 \
                          DEAL_II_P4EST_VERSION_MINOR=0 \
@@ -229,7 +236,6 @@ PREDEFINED             = DOXYGEN=1 \
                          DEAL_II_WITH_SYMENGINE=1 \
                          DEAL_II_SYMENGINE_WITH_LLVM=1 \
                          DEAL_II_WITH_TBB=1 \
-                         DEAL_II_WITH_THREADS=1 \
                          DEAL_II_WITH_TRILINOS=1 \
                          DEAL_II_TRILINOS_WITH_EPETRAEXT=1 \
                          DEAL_II_TRILINOS_WITH_MUELU=1 \

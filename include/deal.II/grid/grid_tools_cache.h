@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2019 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -23,7 +23,7 @@
 #include <deal.II/base/point.h>
 #include <deal.II/base/subscriptor.h>
 
-#include <deal.II/fe/mapping_q1.h>
+#include <deal.II/fe/mapping.h>
 
 #include <deal.II/grid/grid_tools_cache_update_flags.h>
 #include <deal.II/grid/tria.h>
@@ -77,7 +77,12 @@ namespace GridTools
     Cache(const Triangulation<dim, spacedim> &tria,
           const Mapping<dim, spacedim> &      mapping =
             (ReferenceCells::get_hypercube<dim>()
-               .template get_default_linear_mapping<dim, spacedim>()));
+#ifndef _MSC_VER
+               .template get_default_linear_mapping<dim, spacedim>()
+#else
+               .ReferenceCell::get_default_linear_mapping<dim, spacedim>()
+#endif
+               ));
 
     /**
      * Destructor.

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -22,9 +22,8 @@
 #include <deal.II/base/aligned_vector.h>
 #include <deal.II/base/exceptions.h>
 #include <deal.II/base/index_set.h>
+#include <deal.II/base/numbers.h>
 #include <deal.II/base/subscriptor.h>
-
-#include <deal.II/differentiation/ad/ad_number_traits.h>
 
 #include <deal.II/lac/vector_operation.h>
 #include <deal.II/lac/vector_type_traits.h>
@@ -34,7 +33,6 @@
 #include <algorithm>
 #include <initializer_list>
 #include <iosfwd>
-#include <iterator>
 #include <vector>
 
 DEAL_II_NAMESPACE_OPEN
@@ -75,8 +73,9 @@ namespace parallel
 #endif
 
 
-/*! @addtogroup Vectors
- *@{
+/**
+ * @addtogroup Vectors
+ * @{
  */
 
 /**
@@ -109,11 +108,18 @@ template <typename Number>
 class Vector : public Subscriptor
 {
 public:
-  // The assertion in vector.templates.h for whether or not a number is
-  // finite is not compatible for AD number types.
+  /**
+   * This class only supports basic numeric types (i.e., we support double and
+   * float but not automatically differentiated numbers).
+   *
+   * @note we test real_type here to get the underlying scalar type when using
+   * std::complex.
+   */
   static_assert(
-    !Differentiation::AD::is_ad_number<Number>::value,
-    "The Vector class does not support auto-differentiable numbers.");
+    std::is_arithmetic<
+      typename numbers::NumberTraits<Number>::real_type>::value,
+    "The Vector class only supports basic numeric types. In particular, it "
+    "does not support automatically differentiated numbers.");
 
   /**
    * Declare standard types used in all containers. These types parallel those
@@ -142,7 +148,7 @@ public:
   /**
    * @name Basic object handling
    */
-  //@{
+  /** @{ */
   /**
    * Constructor. Create a vector of dimension zero.
    */
@@ -452,13 +458,13 @@ public:
   bool
   operator!=(const Vector<Number2> &v) const;
 
-  //@}
+  /** @} */
 
 
   /**
    * @name Scalar products, norms and related operations
    */
-  //@{
+  /** @{ */
 
   /**
    * Return the scalar product of two vectors.  The return type is the
@@ -474,7 +480,8 @@ public:
    * repeatable results from one run to another.
    */
   template <typename Number2>
-  Number operator*(const Vector<Number2> &V) const;
+  Number
+  operator*(const Vector<Number2> &V) const;
 
   /**
    * Return the square of the $l_2$-norm.
@@ -561,13 +568,13 @@ public:
   Number
   add_and_dot(const Number a, const Vector<Number> &V, const Vector<Number> &W);
 
-  //@}
+  /** @} */
 
 
   /**
    * @name Data access
    */
-  //@{
+  /** @{ */
 
   /**
    * Return a pointer to the underlying data buffer.
@@ -625,14 +632,16 @@ public:
    *
    * Exactly the same as operator().
    */
-  Number operator[](const size_type i) const;
+  Number
+  operator[](const size_type i) const;
 
   /**
    * Access the @p ith component as a writeable reference.
    *
    * Exactly the same as operator().
    */
-  Number &operator[](const size_type i);
+  Number &
+  operator[](const size_type i);
 
   /**
    * Instead of getting individual elements of a vector via operator(),
@@ -686,13 +695,13 @@ public:
   extract_subvector_to(ForwardIterator       indices_begin,
                        const ForwardIterator indices_end,
                        OutputIterator        values_begin) const;
-  //@}
+  /** @} */
 
 
   /**
    * @name Modification of vectors
    */
-  //@{
+  /** @{ */
 
   /**
    * Add the given vector to the present one.
@@ -838,13 +847,13 @@ public:
    */
   void
   update_ghost_values() const;
-  //@}
+  /** @} */
 
 
   /**
    * @name Input and output
    */
-  //@{
+  /** @{ */
   /**
    * Print to a stream. @p precision denotes the desired precision with which
    * values shall be printed, @p scientific whether scientific notation shall
@@ -919,7 +928,7 @@ public:
   /**
    * @name Information about the object
    */
-  //@{
+  /** @{ */
 
   /**
    * Return true if the given global index is in the local range of this
@@ -992,12 +1001,20 @@ public:
 
   /**
    * This function exists for compatibility with the @p
-   * parallel vector classes (e.g., LinearAlgebra::distributed::Vector class).
-   * Always returns false since this implementation is serial.
+   * parallel vector classes (e.g., LinearAlgebra::distributed::Vector class)
+   * and always returns false since this implementation is serial.
    */
   bool
   has_ghost_elements() const;
-  //@}
+
+  /**
+   * This function exists for compatibility with the @p
+   * parallel vector classes (e.g., LinearAlgebra::distributed::Vector class)
+   * and does nothing since this implementation is serial.
+   */
+  void
+  zero_out_ghost_values() const;
+  /** @} */
 
 private:
   /**
@@ -1033,7 +1050,7 @@ private:
   friend class Vector;
 };
 
-/*@}*/
+/** @} */
 /*----------------------- Inline functions ----------------------------------*/
 
 
@@ -1192,7 +1209,8 @@ Vector<Number>::operator()(const size_type i)
 
 
 template <typename Number>
-inline Number Vector<Number>::operator[](const size_type i) const
+inline Number
+Vector<Number>::operator[](const size_type i) const
 {
   return operator()(i);
 }
@@ -1200,7 +1218,8 @@ inline Number Vector<Number>::operator[](const size_type i) const
 
 
 template <typename Number>
-inline Number &Vector<Number>::operator[](const size_type i)
+inline Number &
+Vector<Number>::operator[](const size_type i)
 {
   return operator()(i);
 }
@@ -1311,12 +1330,22 @@ inline void Vector<Number>::compress(::dealii::VectorOperation::values) const
 {}
 
 
+
 template <typename Number>
 inline bool
 Vector<Number>::has_ghost_elements() const
 {
   return false;
 }
+
+
+
+template <typename Number>
+inline void
+Vector<Number>::zero_out_ghost_values() const
+{}
+
+
 
 template <typename Number>
 inline void
@@ -1364,8 +1393,9 @@ Vector<Number>::load(Archive &ar, const unsigned int)
 #endif
 
 
-/*! @addtogroup Vectors
- *@{
+/**
+ * @addtogroup Vectors
+ * @{
  */
 
 
@@ -1396,18 +1426,18 @@ inline std::ostream &
 operator<<(std::ostream &out, const Vector<number> &v)
 {
   Assert(v.size() != 0, ExcEmptyObject());
-  AssertThrow(out, ExcIO());
+  AssertThrow(out.fail() == false, ExcIO());
 
   for (typename Vector<number>::size_type i = 0; i < v.size() - 1; ++i)
     out << v(i) << ' ';
   out << v(v.size() - 1);
 
-  AssertThrow(out, ExcIO());
+  AssertThrow(out.fail() == false, ExcIO());
 
   return out;
 }
 
-/*@}*/
+/** @} */
 
 
 /**

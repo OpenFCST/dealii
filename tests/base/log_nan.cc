@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2018 by the deal.II authors
+// Copyright (C) 2005 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -34,7 +34,7 @@ main()
   // unusable since we can no longer detect whether something is a
   // NaN. that said, to make the test work in these cases, simply
   // switch off floating point exceptions for invalid arguments
-#if defined(DEAL_II_HAVE_FP_EXCEPTIONS)
+#ifdef DEAL_II_HAVE_FP_EXCEPTIONS
   fedisableexcept(FE_INVALID);
 #endif
 

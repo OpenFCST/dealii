@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2012 - 2018 by the deal.II authors
+// Copyright (C) 2012 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -60,9 +60,8 @@ check()
   for (unsigned int i = 0; i < dof_handler.n_dofs(); ++i)
     vector(i) = i;
 
-  Functions::FEFieldFunction<dim, DoFHandler<dim>> fe_field(dof_handler,
-                                                            vector);
-  QGauss<dim>                                      quadrature(5);
+  Functions::FEFieldFunction<dim> fe_field(dof_handler, vector);
+  QGauss<dim>                     quadrature(5);
 
   deallog << "values:" << std::endl;
 

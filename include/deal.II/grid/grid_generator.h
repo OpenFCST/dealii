@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -27,6 +27,8 @@
 
 #include <deal.II/grid/reference_cell.h>
 #include <deal.II/grid/tria.h>
+
+#include <deal.II/cgal/additional_data.h>
 
 #include <array>
 #include <map>
@@ -60,7 +62,7 @@ namespace GridGenerator
   /**
    * @name Creating meshes for basic geometries
    */
-  ///@{
+  //** @{ */
 
   /**
    * Initialize the given triangulation with a hypercube (line in 1D, square
@@ -129,15 +131,15 @@ namespace GridGenerator
   simplex(Triangulation<dim, dim> &      tria,
           const std::vector<Point<dim>> &vertices);
 
-  /*
+  /**
    * Create a (coarse) grid with a single cell of the shape of the provided
    * reference cell. This is a generalization of the hyper_cube() and simplex()
    * functions above.
    */
   template <int dim, int spacedim>
   void
-  reference_cell(const ReferenceCell &         reference_cell,
-                 Triangulation<dim, spacedim> &tria);
+  reference_cell(Triangulation<dim, spacedim> &tria,
+                 const ReferenceCell &         reference_cell);
 
 
   /**
@@ -375,7 +377,7 @@ namespace GridGenerator
    *
    * In 3D, triangulation will be extruded in the z-direction by the total
    * height of @p L using @p n_slices slices (minimum is 2).
-
+   *
    * If the @p colorize flag is <code>true</code>, the boundary_ids of the
    * boundary faces are assigned such that the lower one in the x-direction is
    * 0, and the upper one is 1 (see
@@ -385,7 +387,7 @@ namespace GridGenerator
    *
    * @p tria is the triangulation to be created. It needs to be empty upon
    * calling this function.
-*/
+   */
   template <int dim>
   void
   plate_with_a_hole(Triangulation<dim> &     tria,
@@ -395,7 +397,7 @@ namespace GridGenerator
                     const double             pad_top           = 2.,
                     const double             pad_left          = 1.,
                     const double             pad_right         = 1.,
-                    const Point<dim>         center            = Point<dim>(),
+                    const Point<dim> &       center            = Point<dim>(),
                     const types::manifold_id polar_manifold_id = 0,
                     const types::manifold_id tfi_manifold_id   = 1,
                     const double             L                 = 1.,
@@ -779,28 +781,26 @@ namespace GridGenerator
                       const double        radius = 1.);
 
   /**
-   * Generate a 2D mesh consisting of the unit square joined with a copy shifted
-   * by $s = (1,0)$. Depending on the flags passed either the right or the left
-   * square is rotated by $\pi/2$. This way one can generate a mesh in which one
-   * square possibly contains an edge that has the opposite tangential (and
-   * hence also opposite normal) orientation of the neighboring edge of the
-   * other square.
+   * Generate a 2D mesh consisting of five squares arranged in a plus-shape.
+   * Depending on the number <code>n_rotate_middle_square</code> passed the
+   * middle square is rotated by a degree of
+   * <code>n_rotate_middle_square</code>$\pi/2$. This way one can generate a
+   * mesh in which the middle square contains edges that have the opposite
+   * tangential and/or opposite normal orientation compared to the neighboring
+   * edges of the other squares.
    *
    * This mesh is not overly useful from a practical point of view. For
    * debugging purposes it can be used to check for orientation issues for
    * vector- or tensor-valued finite elements.
    *
-   * @note If <code>rotate_left_square==rotate_right_square</code> the mesh is consistently oriented.
-   *
    * @param[out] tria The input triangulation.
-   * @param[in] rotate_left_square <code>true</code> if the left square is
-   * rotated by $\pi/2$.
-   * @param[in] rotate_right_square <code>true</code> if the right square is
-   * rotated by $\pi/2$.
+   * @param[in] n_rotate_middle_square number of rotations in [0,4) of right
+   * square by
+   * $\pi/2$.
    */
-  void non_standard_orientation_mesh(Triangulation<2> &tria,
-                                     const bool        rotate_left_square,
-                                     const bool        rotate_right_square);
+  void
+  non_standard_orientation_mesh(Triangulation<2> & tria,
+                                const unsigned int n_rotate_middle_square);
 
   /**
    * Generate a 3D mesh consisting of the unit cube joined with a copy shifted
@@ -823,11 +823,12 @@ namespace GridGenerator
    * @param[in] manipulate_left_cube <code>true</code> if the left cube is
    * to be re-ordered. If `false`, it is the right cube.
    */
-  void non_standard_orientation_mesh(Triangulation<3> &tria,
-                                     const bool        face_orientation,
-                                     const bool        face_flip,
-                                     const bool        face_rotation,
-                                     const bool        manipulate_left_cube);
+  void
+  non_standard_orientation_mesh(Triangulation<3> &tria,
+                                const bool        face_orientation,
+                                const bool        face_flip,
+                                const bool        face_rotation,
+                                const bool        manipulate_left_cube);
 
 
   /**
@@ -856,9 +857,10 @@ namespace GridGenerator
    * this function.
    */
   template <int spacedim>
-  void hyper_sphere(Triangulation<spacedim - 1, spacedim> &tria,
-                    const Point<spacedim> &center = Point<spacedim>(),
-                    const double           radius = 1.);
+  void
+  hyper_sphere(Triangulation<spacedim - 1, spacedim> &tria,
+               const Point<spacedim> &center = Point<spacedim>(),
+               const double           radius = 1.);
 
   /**
    * This function produces a hyper-ball intersected with the positive orthant
@@ -1026,6 +1028,136 @@ namespace GridGenerator
                  const double        half_length = 1.0);
 
   /**
+   * Initialize the given triangulation with a pipe junction, which is the
+   * intersection of three truncated cones.
+   *
+   * The geometry has four characteristic cross sections, located at the three
+   * openings and the bifurcation. They need to be specified via the function's
+   * arguments: each cross section is described by a characteristic point and a
+   * radius. The cross sections at the openings are circles and are described by
+   * their center point and radius. The bifurcation point describes where the
+   * symmetry axes of all cones meet.
+   *
+   * Each truncated cone is transformed so that the three merge seamlessly into
+   * each other. The bifurcation radius describes the radius that each original,
+   * untransformed, truncated cone would have at the bifurcation. This radius is
+   * necessary for the construction of the geometry and can, in general, no
+   * longer be found in the final result.
+   *
+   * Each cone will be assigned a distinct <em>material ID</em> that matches the
+   * index of their opening in the argument @p openings. For example, the cone
+   * which connects to opening with index 0 in @p openings will have material ID 0.
+   *
+   * Similarly, <em>boundary IDs</em> are assigned to the cross-sections of each
+   * opening to match their index. All other boundary faces will be assigned
+   * boundary ID 3.
+   *
+   * @ref GlossManifoldIndicator "Manifold IDs"
+   * will be set on the mantles of each truncated cone in
+   * the same way. Each cone will have a special manifold object assigned, which
+   * is based on the CylindricalManifold class. Further, all cells adjacent to
+   * the mantle are given the manifold ID 3. If desired, you can assign an
+   * (expensive) TransfiniteInterpolationManifold object to that particular
+   * layer of cells with the following code snippet.
+   * @code
+   * TransfiniteInterpolationManifold<3> transfinite;
+   * transfinite.initialize(triangulation);
+   * triangulation.set_manifold(3, transfinite);
+   * @endcode
+   *
+   * @pre The triangulation passed as argument needs to be empty when calling
+   * this function.
+   *
+   * @note Only implemented for `dim = 3` and `spacedim = 3`.
+   *
+   * @param tria An empty triangulation which will hold the pipe junction geometry.
+   * @param openings Center point and radius of each of the three openings.
+   *                 The container has to be of size three.
+   * @param bifurcation Center point of the bifurcation and hypothetical radius of
+   *                    each truncated cone at the bifurcation.
+   * @param aspect_ratio Aspect ratio of cells, specified as radial over z-extension.
+   *                     Default ratio is $\Delta r/\Delta z = 1/2$.
+   *
+   * Common configurations of tee fittings (that is, "T" fittings, mimicking the
+   * geometry of the letter "T") can be generated with the
+   * following sets of parameters:
+   * <div class="threecolumn" style="width: 80%; text-align: center;">
+   *   <div>
+   *     \htmlonly <style>div.image
+   *       img[src="tee_corner.png"]{width:100%}</style>
+   *     \endhtmlonly
+   *     @image html tee_corner.png
+   *     <table class="doxtable" style="display: inline-table;">
+   *       <tr><th colspan="3">Corner piece
+   *       <tr><td>
+   *           <td>Point
+   *           <td>Radius
+   *       <tr><td rowspan="3">Openings
+   *           <td>$(2,0,0)$
+   *           <td>$1$
+   *       <tr><td>$(0,2,0)$
+   *           <td>$1$
+   *       <tr><td>$(0,0,2)$
+   *           <td>$1$
+   *       <tr><td>Bifurcation
+   *           <td>$(0,0,0)$
+   *           <td>$1$
+   *     </table>
+   *   </div>
+   *   <div>
+   *     \htmlonly <style>div.image
+   *       img[src="tee_tpipe.png"]{width:100%}</style>
+   *     \endhtmlonly
+   *     @image html tee_tpipe.png
+   *     <table class="doxtable" style="display: inline-table;">
+   *       <tr><th colspan="3">T-pipe
+   *       <tr><td>
+   *           <td>Point
+   *           <td>Radius
+   *       <tr><td rowspan="3">Openings
+   *           <td>$(-2,0,0)$
+   *           <td>$1$
+   *       <tr><td>$(0,2,0)$
+   *           <td>$1$
+   *       <tr><td>$(2,0,0)$
+   *           <td>$1$
+   *       <tr><td>Bifurcation
+   *           <td>$(0,0,0)$
+   *           <td>$1$
+   *     </table>
+   *   </div>
+   *   <div>
+   *     \htmlonly <style>div.image
+   *       img[src="tee_ypipe.png"]{width:100%}</style>
+   *     \endhtmlonly
+   *     @image html tee_ypipe.png
+   *     <table class="doxtable" style="display: inline-table;">
+   *       <tr><th colspan="3">Y-pipe
+   *       <tr><td>
+   *           <td>Point
+   *           <td>Radius
+   *       <tr><td rowspan="3">Openings
+   *           <td>$(-2,0,0)$
+   *           <td>$1$
+   *       <tr><td>$(1,\sqrt{3},0)$
+   *           <td>$1$
+   *       <tr><td>$(1,-\sqrt{3},0)$
+   *           <td>$1$
+   *       <tr><td>Bifurcation
+   *           <td>$(0,0,0)$
+   *           <td>$1$
+   *     </table>
+   *   </div>
+   * </div>
+   */
+  template <int dim, int spacedim>
+  void
+  pipe_junction(Triangulation<dim, spacedim> &                         tria,
+                const std::vector<std::pair<Point<spacedim>, double>> &openings,
+                const std::pair<Point<spacedim>, double> &bifurcation,
+                const double                              aspect_ratio = 0.5);
+
+  /**
    * \brief A center cell with stacks of cell protruding from each surface.
    *
    * Each of the square mesh cells is Cartesian and has size one in each
@@ -1073,8 +1205,8 @@ namespace GridGenerator
    * If the @p colorize flag is <code>true</code>, the @p boundary_ids of the
    * surfaces are assigned such that the left boundary is 0 and the others are
    * assigned counterclockwise in ascending order (see
-   * @ref GlossColorization "the glossary entry on colorization"). The @p
-   * colorize option only works in two dimensions.
+   * @ref GlossColorization "the glossary entry on colorization").
+   * The @p colorize option only works in two dimensions.
    *
    * This function will create the classical L-shape in 2d
    * and it will look like the following in 3d:
@@ -1114,6 +1246,8 @@ namespace GridGenerator
    * the y-direction, and front to back in the z-direction. A negative number
    * denotes cutting away cells in the reverse direction, so right to left,
    * top to bottom, and back to front.
+   *
+   * A demonstration of this grid can be found in step-75.
    *
    * This function may be used to generate a mesh for a backward
    * facing step, a useful domain for benchmark problems in fluid dynamics.
@@ -1487,8 +1621,8 @@ namespace GridGenerator
    *
    * @f[
    *     r = r_{\mathrm{inner}} + (r_\mathrm{outer} - r_\mathrm{inner})
-   *     \frac{1 - \tanh(\mathrm{skewness}(1 - k/\mathrm{n\_shells}))}
-   *          {\tanh(\mathrm{skewness})}
+   *     \left(1 - \frac{ \tanh(\mathrm{skewness}(1 - k/\mathrm{n\_shells}))}
+   *          {\tanh(\mathrm{skewness})}\right)
    * @f]
    *
    * where @p skewness is a parameter controlling the shell spacing in the
@@ -1509,7 +1643,7 @@ namespace GridGenerator
    * to visualize GNUPLOT output)
    *
    * @code
-   * #include <deal.II/fe/mapping_q_generic.h>
+   * #include <deal.II/fe/mapping_q.h>
    *
    * #include <deal.II/grid/grid_generator.h>
    * #include <deal.II/grid/grid_out.h>
@@ -1533,7 +1667,7 @@ namespace GridGenerator
    *   GridOutFlags::Gnuplot gnuplot_flags(false, 10, true);
    *   grid_out.set_flags(gnuplot_flags);
    *
-   *   const MappingQGeneric<2> mapping(3);
+   *   const MappingQ<2> mapping(3);
    *   std::ofstream out("out.gpl");
    *   grid_out.write_gnuplot(triangulation, out, &mapping);
    * }
@@ -1567,11 +1701,12 @@ namespace GridGenerator
    * of the torus containing the loop of cells. Must be greater than @p r.
    * @param r           The radius of the cylinder bent together as a loop.
    */
-  void moebius(Triangulation<3, 3> &tria,
-               const unsigned int   n_cells,
-               const unsigned int   n_rotations,
-               const double         R,
-               const double         r);
+  void
+  moebius(Triangulation<3, 3> &tria,
+          const unsigned int   n_cells,
+          const unsigned int   n_rotations,
+          const double         R,
+          const double         r);
 
   /**
    * Call one of the other GridGenerator functions, parsing the name of the
@@ -1614,12 +1749,90 @@ namespace GridGenerator
     Triangulation<dim, spacedim> &tria,
     const std::string &           grid_generator_function_name,
     const std::string &           grid_generator_function_arguments);
-  ///@}
+
+  /**
+   * Generate a Triangulation from the zero level set of an implicit function,
+   * using the CGAL library.
+   *
+   * This function is only implemented for `dim` equal to two or three, and
+   * requires that deal.II is configured using `DEAL_II_WITH_CGAL`. When `dim`
+   * is equal to three, the @p implicit_function is supposed to be negative in
+   * the interior of the domain, positive outside, and to be entirely enclosed
+   * in a ball of radius @p outer_ball_radius centered at the point
+   * @p interior_point. The triangulation that is generated covers the volume
+   * bounded by the zero level set of the implicit function  where the
+   * @p implicit_function is negative.
+   *
+   * When `dim` is equal to two, the generated surface triangulation is the zero
+   * level set of the @p implicit_function, oriented such that the surface
+   * triangulation has normals pointing towards the region where
+   * @p implicit_function is positive.
+   *
+   * The struct @p data can be used to pass additional
+   * arguments to the CGAL::Mesh_criteria_3 class (see
+   * https://doc.cgal.org/latest/Mesh_3/index.html for more information.)
+   *
+   * An example usage of this function is given by
+   *
+   * @code
+   * Triangulation<dim, 3>  tria;
+   * FunctionParser<3> my_function("(1-sqrt(x^2+y^2))^2+z^2-.25");
+   * GridGenerator::implicit_function( tria, my_function,
+   *      Point<3>(.5, 0, 0), 1.0, cell_size = 0.2);
+   * @endcode
+   *
+   * The above snippet of code generates the following grid for `dim` equal to
+   * two and three respectively
+   *
+   * @image html grid_generator_implicit_function_2d.png
+   *
+   * @image html grid_generator_implicit_function_3d.png
+   *
+   * @ingroup simplex
+   *
+   * @param[out] tria The output triangulation
+   * @param[in] implicit_function The implicit function
+   * @param[in] data Additional parameters to pass to the CGAL::make_mesh_3
+   * function and to the CGAL::make_surface_mesh functions
+   * @param[in] interior_point A point in the interior of the domain, for which
+   * @p implicit_function is negative
+   * @param[in] outer_ball_radius The radius of the ball that will contain the
+   * generated Triangulation object
+   */
+  template <int dim>
+  void
+  implicit_function(Triangulation<dim, 3> &                  tria,
+                    const Function<3> &                      implicit_function,
+                    const CGALWrappers::AdditionalData<dim> &data =
+                      CGALWrappers::AdditionalData<dim>{},
+                    const Point<3> &interior_point    = Point<3>(),
+                    const double &  outer_ball_radius = 1.0);
+
+  /**
+   * Create a deal.II Triangulation<3> out of a deal.II Triangulation<2,3>
+   * by filling it with tetrahedra.
+   *
+   * The last optional argument @p data can be used to pass additional
+   * arguments to the CGAL::Mesh_criteria_3 class (see
+   * https://doc.cgal.org/latest/Mesh_3/index.html for more information).
+   *
+   *
+   * @param [in] surface_tria The input deal.II Triangulation<2,3>.
+   * @param [out] vol_tria The output deal.II Triangulation<3>.
+   * @param[in] data Additional parameters to pass to the CGAL::make_mesh_3
+   * function.
+   */
+  void
+  surface_mesh_to_volumetric_mesh(const Triangulation<2, 3> &surface_tria,
+                                  Triangulation<3> &         vol_tria,
+                                  const CGALWrappers::AdditionalData<3> &data =
+                                    CGALWrappers::AdditionalData<3>{});
+  //** @} */
 
   /**
    * @name Creating meshes from other meshes
    */
-  ///@{
+  //** @{ */
 
   /**
    * Given the two triangulations specified as the first two arguments, create
@@ -1630,7 +1843,8 @@ namespace GridGenerator
    * This function is most often used to compose meshes for more complicated
    * geometries if the geometry can be composed of simpler parts for which
    * functions exist to generate
-   * @ref GlossCoarseMesh "coarse meshes". For example, the channel mesh
+   * @ref GlossCoarseMesh "coarse meshes".
+   * For example, the channel mesh
    * used in step-35 could in principle be created using a mesh created by the
    * GridGenerator::hyper_cube_with_cylindrical_hole function and several
    * rectangles, and merging them using the current function. The rectangles
@@ -1650,7 +1864,7 @@ namespace GridGenerator
    * {
    *   double length = std::numeric_limits<double>::max();
    *   for (const auto &cell : tria.active_cell_iterators())
-   *     for (unsigned int n = 0; n < GeometryInfo<dim>::lines_per_cell; ++n)
+   *     for (const auto n : cell->line_indices())
    *       length = std::min(length, (cell->line(n)->vertex(0) -
    *                                  cell->line(n)->vertex(1)).norm());
    *   return length;
@@ -1661,18 +1875,17 @@ namespace GridGenerator
    * @endcode
    *
    * This will merge any vertices that are closer than any pair of vertices on
-   * the input meshes.
+   * the input meshes. If the tolerance is set to zero, vertices are not merged.
    *
    * @note The two input triangulations must be
-   * @ref GlossCoarseMesh "coarse meshes", i.e., they can not have any
+   * @ref GlossCoarseMesh "coarse meshes",
+   * i.e., they can not have any
    * refined cells.
    *
    * @note The function copies the material ids of the cells of the two input
    * triangulations into the output triangulation. If @p copy_manifold_ids is
-   * set to @p true, manifold ids will be copied. Boundary indicators are never
-   * copied. In other words, if the two coarse meshes have anything but the
-   * default boundary indicators, then you will have to set boundary indicators
-   * again by hand in the output triangulation.
+   * set to @p true, manifold ids will be copied. If @p copy_boundary_ids is
+   * set to @p true, boundary_ids are copied to all remaining faces at the boundary.
    *
    * @note This function does not attach any manifolds to @p result, nor does
    * it set any manifold ids. In particular, manifolds attached to the two
@@ -1688,7 +1901,8 @@ namespace GridGenerator
                        const Triangulation<dim, spacedim> &triangulation_2,
                        Triangulation<dim, spacedim> &      result,
                        const double duplicated_vertex_tolerance = 1.0e-12,
-                       const bool   copy_manifold_ids           = false);
+                       const bool   copy_manifold_ids           = false,
+                       const bool   copy_boundary_ids           = false);
 
   /**
    * Same as above but allows to merge more than two triangulations at once.
@@ -1701,6 +1915,7 @@ namespace GridGenerator
    *   GridGenerator::merge_triangulations({&tria_1, &tria_2, &tria_3},
    *                                       merged_triangulation,
    *                                       1.0e-10,
+   *                                       false,
    *                                       false);
    * @endcode
    */
@@ -1710,7 +1925,8 @@ namespace GridGenerator
     const std::vector<const Triangulation<dim, spacedim> *> &triangulations,
     Triangulation<dim, spacedim> &                           result,
     const double duplicated_vertex_tolerance = 1.0e-12,
-    const bool   copy_manifold_ids           = false);
+    const bool   copy_manifold_ids           = false,
+    const bool   copy_boundary_ids           = false);
 
   /**
    * \brief Replicate a given triangulation in multiple coordinate axes
@@ -1774,7 +1990,8 @@ namespace GridGenerator
    * @note This function is intended to create an adaptively refined
    * triangulation that contains the <i>most refined cells</i> from two input
    * triangulations that were derived from the <i>same</i>
-   * @ref GlossCoarseMesh "coarse mesh" by
+   * @ref GlossCoarseMesh "coarse mesh"
+   * by
    * adaptive refinement. This is an operation sometimes needed when one
    * solves for two variables of a coupled problem on separately refined
    * meshes on the same domain (for example because these variables have
@@ -1979,31 +2196,35 @@ namespace GridGenerator
    * Given an input triangulation @p in_tria, this function makes a new flat
    * triangulation @p out_tria which contains a single level with all active
    * cells of the input triangulation. If @p spacedim1 and @p spacedim2 are
-   * different, only the smallest spacedim components of the vertices are
+   * different, only the first few components of the vertex coordinates are
    * copied over. This is useful to create a Triangulation<2,3> out of a
    * Triangulation<2,2>, or to project a Triangulation<2,3> into a
-   * Triangulation<2,2>, by neglecting the z components of the vertices.
+   * Triangulation<2,2>, by neglecting the $z$ components of the vertices.
    *
    * No internal checks are performed on the vertices, which are assumed to
    * make sense topologically in the target @p spacedim2 dimensional space. If
    * this is not the case, you will encounter problems when using the
    * triangulation later on.
    *
-   * All information about cell manifold_ids and material ids are copied from
-   * one triangulation to the other, and only the boundary manifold_ids and
-   * boundary_ids are copied over from the faces of @p in_tria to the faces of
-   * @p out_tria. If you need to specify manifold ids on interior faces, they
-   * have to be specified manually after the triangulation is created.
+   * All information about cell
+   * @ref GlossManifoldIndicator "manifold indicators"
+   * and
+   * @ref GlossMaterialId "material indicators"
+   * are copied from
+   * one triangulation to the other. The same is true for the manifold
+   * indicators and, if an object is at the boundary, the boundary
+   * indicators of faces and edges of the triangulation.
    *
    * This function will fail if the input Triangulation is of type
    * parallel::distributed::Triangulation, as well as when the input
-   * Triangulation contains hanging nodes.
+   * Triangulation contains hanging nodes. In other words, this function
+   * only works for globally refined triangulations.
    *
    * @param[in] in_tria The base input for a new flat triangulation.
    * @param[out] out_tria The desired flattened triangulation constructed from
    * the in_tria.
    *
-   * @note Since @p input and @p output have different spatial dimensions no
+   * @note Since @p input and @p output have different spatial dimensions, no
    * manifold objects are copied by this function: you must attach new
    * manifold objects to @p out_tria.
    */
@@ -2017,14 +2238,16 @@ namespace GridGenerator
    * (quadrilaterals, hexahedra) to a triangulation only consisting of
    * simplices (triangles, tetrahedra).
    *
-   * As an example, the following image shows how a set of three hexahedra
-   * meshing one eighths of a sphere are subdivided into tetrahedra, and how
+   * As an example, the following image shows how a set of four hexahedra
+   * meshing one eighth of a sphere are subdivided into tetrahedra, and how
    * the curved surface is taken into account. Colors indicate how boundary
    * indicators are inherited:
    * @image html "convert_hypercube_to_simplex_mesh_visualization_octant.png"
    *
    * In general, each quadrilateral in 2d is subdivided into eight triangles,
-   * and each hexahedron in 3d into 24 tetrahedra as shown here:
+   * and each hexahedron in 3d into 24 tetrahedra, as shown here (top left
+   * for the 2d case, the rest shows vertex numbers and subdivisions for
+   * a single 3d hexahedron):
    * @image html "convert_hypercube_to_simplex_mesh_visualization.png"
    *
    * Material ID and boundary IDs are inherited upon conversion.
@@ -2040,6 +2263,8 @@ namespace GridGenerator
    *   if (i != numbers::flat_manifold_id)
    *     out_tria.set_manifold(i, in_tria.get_manifold(i));
    * @endcode
+   *
+   * @relates simplex
    */
   template <int dim, int spacedim>
   void
@@ -2255,7 +2480,7 @@ namespace GridGenerator
    *
    * @note Currently, this function only works for `dim==spacedim`.
    *
-   * @ingroup simplex
+   * @relates simplex
    */
   template <int dim, int spacedim>
   void
@@ -2278,7 +2503,7 @@ namespace GridGenerator
    * quadrilateral/hexahedral cells and subdivides these into 2/5
    * triangular/tetrahedral cells.
    *
-   * @ingroup simplex
+   * @relates simplex
    */
   template <int dim, int spacedim>
   void
@@ -2288,14 +2513,14 @@ namespace GridGenerator
                                        const double       p2       = 1.0,
                                        const bool         colorize = false);
 
-  ///@}
+  //** @} */
 
   /**
    * @name Creating lower-dimensional meshes
    *
    * Created from parts of higher-dimensional meshes.
    */
-  ///@{
+  //** @{ */
 
 #ifdef _MSC_VER
   // Microsoft's VC++ has a bug where it doesn't want to recognize that
@@ -2365,6 +2590,24 @@ namespace GridGenerator
    * the surface mesh. If left at its default, i.e., if the set is empty, then
    * the function operates on <i>all</i> boundary faces.
    *
+   * To prevent printing a very long type in the doxygen documentation the
+   * actual return type of this function is
+   *
+   * @code
+   * std::map<typename DoFHandler<dim - 1, spacedim>::cell_iterator,
+   *          typename DoFHandler<dim, spacedim>::face_iterator>
+   * @endcode
+   *
+   * when <tt>MeshType</tt> is DoFHandler and
+   *
+   * @code
+   * std::map<typename Triangulation<dim - 1, spacedim>::cell_iterator,
+   *          typename Triangulation<dim, spacedim>::face_iterator>
+   * @endcode
+   *
+   * when <tt>MeshType</tt> is Triangulation and and not the shorter stub
+   * provided here.
+   *
    * @return A map that for each cell of the surface mesh (key) returns an
    * iterator to the corresponding face of a cell of the volume mesh (value).
    * The keys include both active and non-active cells of the surface mesh.
@@ -2387,26 +2630,31 @@ namespace GridGenerator
    * @note Since @p volume_mesh and @p surface_mesh have different spatial
    * dimensions no manifold objects are copied by this function: you must
    * attach new manifold objects to @p surface_mesh.
+   *
    */
   template <template <int, int> class MeshType, int dim, int spacedim>
-#ifndef _MSC_VER
+#ifdef DOXYGEN
+  return_type
+#else
+#  ifndef _MSC_VER
   std::map<typename MeshType<dim - 1, spacedim>::cell_iterator,
            typename MeshType<dim, spacedim>::face_iterator>
-#else
+#  else
   typename ExtractBoundaryMesh<MeshType, dim, spacedim>::return_type
+#  endif
 #endif
   extract_boundary_mesh(const MeshType<dim, spacedim> &     volume_mesh,
                         MeshType<dim - 1, spacedim> &       surface_mesh,
                         const std::set<types::boundary_id> &boundary_ids =
                           std::set<types::boundary_id>());
 
-  ///@}
+  //** @} */
 
 
   /**
    * @name Exceptions
    */
-  ///@{
+  //** @{ */
 
 
   /**
@@ -2433,55 +2681,64 @@ namespace GridGenerator
   DeclExceptionMsg(ExcInvalidInputOrientation,
                    "The input to this function is oriented in a way that will"
                    " cause all cells to have negative measure.");
-  ///@}
+  //** @} */
 
 #ifndef DOXYGEN
   // These functions are only implemented with specializations; declare them
   // here
   template <>
-  void hyper_cube_with_cylindrical_hole(Triangulation<1> &,
-                                        const double,
-                                        const double,
-                                        const double,
-                                        const unsigned int,
-                                        const bool);
+  void
+  hyper_cube_with_cylindrical_hole(Triangulation<1> &,
+                                   const double,
+                                   const double,
+                                   const double,
+                                   const unsigned int,
+                                   const bool);
 
   template <>
-  void hyper_cube_with_cylindrical_hole(Triangulation<2> &,
-                                        const double,
-                                        const double,
-                                        const double,
-                                        const unsigned int,
-                                        const bool);
+  void
+  hyper_cube_with_cylindrical_hole(Triangulation<2> &,
+                                   const double,
+                                   const double,
+                                   const double,
+                                   const unsigned int,
+                                   const bool);
 
   template <>
-  void hyper_cube_with_cylindrical_hole(Triangulation<3> &,
-                                        const double,
-                                        const double,
-                                        const double,
-                                        const unsigned int,
-                                        const bool);
+  void
+  hyper_cube_with_cylindrical_hole(Triangulation<3> &,
+                                   const double,
+                                   const double,
+                                   const double,
+                                   const unsigned int,
+                                   const bool);
 
   template <>
-  void channel_with_cylinder(Triangulation<1> &,
-                             const double,
-                             const unsigned int,
-                             const double,
-                             const bool);
+  void
+  channel_with_cylinder(Triangulation<1> &,
+                        const double,
+                        const unsigned int,
+                        const double,
+                        const bool);
 
   template <>
-  void channel_with_cylinder(Triangulation<2> &,
-                             const double,
-                             const unsigned int,
-                             const double,
-                             const bool);
+  void
+  channel_with_cylinder(Triangulation<2> &,
+                        const double,
+                        const unsigned int,
+                        const double,
+                        const bool);
 
   template <>
-  void channel_with_cylinder(Triangulation<3> &,
-                             const double,
-                             const unsigned int,
-                             const double,
-                             const bool);
+  void
+  channel_with_cylinder(Triangulation<3> &,
+                        const double,
+                        const unsigned int,
+                        const double,
+                        const bool);
+
+
+
 #endif
 } // namespace GridGenerator
 

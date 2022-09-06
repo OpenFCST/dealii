@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2018 by the deal.II authors
+// Copyright (C) 2005 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -85,7 +85,8 @@ test()
   VectorTools::interpolate(dh, ff, v1);
   deallog << "V norm: " << v1.l2_norm() << std::endl;
 
-  Functions::FEFieldFunction<dim, DoFHandler<dim>, Vector<double>> fef(dh, v1);
+  Functions::FEFieldFunction<dim, Vector<double>> fef(dh, v1);
+
 
   // project the discrete function fef back
   // onto the finite element space. this

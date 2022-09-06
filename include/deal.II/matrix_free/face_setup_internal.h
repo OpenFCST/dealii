@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -28,6 +28,7 @@
 #include <deal.II/grid/tria_accessor.h>
 
 #include <deal.II/matrix_free/face_info.h>
+#include <deal.II/matrix_free/shape_info.h>
 #include <deal.II/matrix_free/task_info.h>
 
 #include <fstream>
@@ -82,6 +83,7 @@ namespace internal
         const dealii::Triangulation<dim> &triangulation,
         const unsigned int                mg_level,
         const bool                        hold_all_faces_to_owned_cells,
+        const bool                        build_inner_faces,
         std::vector<std::pair<unsigned int, unsigned int>> &cell_levels);
 
       /**
@@ -108,7 +110,8 @@ namespace internal
         const typename dealii::Triangulation<dim>::cell_iterator &cell,
         const unsigned int number_cell_interior,
         const typename dealii::Triangulation<dim>::cell_iterator &neighbor,
-        const unsigned int number_cell_exterior);
+        const unsigned int number_cell_exterior,
+        const bool         is_mixed_mesh);
 
       bool use_active_cells;
 
@@ -165,6 +168,7 @@ namespace internal
       const dealii::Triangulation<dim> &triangulation,
       const unsigned int                mg_level,
       const bool                        hold_all_faces_to_owned_cells,
+      const bool                        build_inner_faces,
       std::vector<std::pair<unsigned int, unsigned int>> &cell_levels)
     {
       use_active_cells = mg_level == numbers::invalid_unsigned_int;
@@ -299,46 +303,50 @@ namespace internal
               MPI_Status   status;
               unsigned int mysize    = inner_face.second.shared_faces.size();
               unsigned int othersize = numbers::invalid_unsigned_int;
-              MPI_Sendrecv(&mysize,
-                           1,
-                           MPI_UNSIGNED,
-                           inner_face.first,
-                           600 + my_domain,
-                           &othersize,
-                           1,
-                           MPI_UNSIGNED,
-                           inner_face.first,
-                           600 + inner_face.first,
-                           comm,
-                           &status);
+
+              int ierr = MPI_Sendrecv(&mysize,
+                                      1,
+                                      MPI_UNSIGNED,
+                                      inner_face.first,
+                                      600 + my_domain,
+                                      &othersize,
+                                      1,
+                                      MPI_UNSIGNED,
+                                      inner_face.first,
+                                      600 + inner_face.first,
+                                      comm,
+                                      &status);
+              AssertThrowMPI(ierr);
               AssertDimension(mysize, othersize);
               mysize = inner_face.second.n_hanging_faces_smaller_subdomain;
-              MPI_Sendrecv(&mysize,
-                           1,
-                           MPI_UNSIGNED,
-                           inner_face.first,
-                           700 + my_domain,
-                           &othersize,
-                           1,
-                           MPI_UNSIGNED,
-                           inner_face.first,
-                           700 + inner_face.first,
-                           comm,
-                           &status);
+              ierr   = MPI_Sendrecv(&mysize,
+                                  1,
+                                  MPI_UNSIGNED,
+                                  inner_face.first,
+                                  700 + my_domain,
+                                  &othersize,
+                                  1,
+                                  MPI_UNSIGNED,
+                                  inner_face.first,
+                                  700 + inner_face.first,
+                                  comm,
+                                  &status);
+              AssertThrowMPI(ierr);
               AssertDimension(mysize, othersize);
               mysize = inner_face.second.n_hanging_faces_larger_subdomain;
-              MPI_Sendrecv(&mysize,
-                           1,
-                           MPI_UNSIGNED,
-                           inner_face.first,
-                           800 + my_domain,
-                           &othersize,
-                           1,
-                           MPI_UNSIGNED,
-                           inner_face.first,
-                           800 + inner_face.first,
-                           comm,
-                           &status);
+              ierr   = MPI_Sendrecv(&mysize,
+                                  1,
+                                  MPI_UNSIGNED,
+                                  inner_face.first,
+                                  800 + my_domain,
+                                  &othersize,
+                                  1,
+                                  MPI_UNSIGNED,
+                                  inner_face.first,
+                                  800 + inner_face.first,
+                                  comm,
+                                  &status);
+              AssertThrowMPI(ierr);
               AssertDimension(mysize, othersize);
 #  endif
 
@@ -463,44 +471,47 @@ namespace internal
 
                 // make sure the splitting is consistent between both sides
 #  if defined(DEAL_II_WITH_MPI) && defined(DEBUG)
-              MPI_Sendrecv(&split_index,
-                           1,
-                           MPI_UNSIGNED,
-                           inner_face.first,
-                           900 + my_domain,
-                           &othersize,
-                           1,
-                           MPI_UNSIGNED,
-                           inner_face.first,
-                           900 + inner_face.first,
-                           comm,
-                           &status);
+              ierr = MPI_Sendrecv(&split_index,
+                                  1,
+                                  MPI_UNSIGNED,
+                                  inner_face.first,
+                                  900 + my_domain,
+                                  &othersize,
+                                  1,
+                                  MPI_UNSIGNED,
+                                  inner_face.first,
+                                  900 + inner_face.first,
+                                  comm,
+                                  &status);
+              AssertThrowMPI(ierr);
               AssertDimension(split_index, othersize);
-              MPI_Sendrecv(&n_faces_lower_proc,
-                           1,
-                           MPI_UNSIGNED,
-                           inner_face.first,
-                           1000 + my_domain,
-                           &othersize,
-                           1,
-                           MPI_UNSIGNED,
-                           inner_face.first,
-                           1000 + inner_face.first,
-                           comm,
-                           &status);
+              ierr = MPI_Sendrecv(&n_faces_lower_proc,
+                                  1,
+                                  MPI_UNSIGNED,
+                                  inner_face.first,
+                                  1000 + my_domain,
+                                  &othersize,
+                                  1,
+                                  MPI_UNSIGNED,
+                                  inner_face.first,
+                                  1000 + inner_face.first,
+                                  comm,
+                                  &status);
+              AssertThrowMPI(ierr);
               AssertDimension(n_faces_lower_proc, othersize);
-              MPI_Sendrecv(&n_faces_higher_proc,
-                           1,
-                           MPI_UNSIGNED,
-                           inner_face.first,
-                           1100 + my_domain,
-                           &othersize,
-                           1,
-                           MPI_UNSIGNED,
-                           inner_face.first,
-                           1100 + inner_face.first,
-                           comm,
-                           &status);
+              ierr = MPI_Sendrecv(&n_faces_higher_proc,
+                                  1,
+                                  MPI_UNSIGNED,
+                                  inner_face.first,
+                                  1100 + my_domain,
+                                  &othersize,
+                                  1,
+                                  MPI_UNSIGNED,
+                                  inner_face.first,
+                                  1100 + inner_face.first,
+                                  comm,
+                                  &status);
+              AssertThrowMPI(ierr);
               AssertDimension(n_faces_higher_proc, othersize);
 #  endif
 
@@ -576,6 +587,8 @@ namespace internal
               if (dcell->at_boundary(f) && !dcell->has_periodic_neighbor(f))
                 face_is_owned[dcell->face(f)->index()] =
                   FaceCategory::locally_active_at_boundary;
+              else if (!build_inner_faces)
+                continue;
 
               // treat boundaries of cells of different refinement level
               // inside the domain in case of multigrid separately
@@ -727,6 +740,8 @@ namespace internal
       const std::vector<std::pair<unsigned int, unsigned int>> &cell_levels,
       TaskInfo &                                                task_info)
     {
+      const bool is_mixed_mesh = triangulation.is_mixed_mesh();
+
       // step 1: create the inverse map between cell iterators and the
       // cell_level_index field
       std::map<std::pair<unsigned int, unsigned int>, unsigned int>
@@ -781,8 +796,10 @@ namespace internal
                         info.interior_face_no  = f;
                         info.exterior_face_no  = dcell->face(f)->boundary_id();
                         info.face_type =
-                          dcell->face(f)->reference_cell() !=
-                          dealii::ReferenceCells::get_hypercube<dim - 1>();
+                          is_mixed_mesh ?
+                            (dcell->face(f)->reference_cell() !=
+                             dealii::ReferenceCells::get_hypercube<dim - 1>()) :
+                            0;
                         info.subface_index =
                           GeometryInfo<dim>::max_children_per_cell;
                         info.face_orientation = 0;
@@ -831,7 +848,8 @@ namespace internal
                                           neighbor_c,
                                           map_to_vectorized[level_index],
                                           dcell,
-                                          cell));
+                                          cell,
+                                          is_mixed_mesh));
                                       }
                                     else if (face_is_owned[dcell->face(f)
                                                              ->child(c)
@@ -843,7 +861,8 @@ namespace internal
                                           neighbor_c,
                                           map_to_vectorized[level_index],
                                           dcell,
-                                          cell));
+                                          cell,
+                                          is_mixed_mesh));
                                       }
                                     else
                                       Assert(
@@ -890,7 +909,8 @@ namespace internal
                                       dcell,
                                       cell,
                                       neighbor,
-                                      map_to_vectorized[level_index]));
+                                      map_to_vectorized[level_index],
+                                      is_mixed_mesh));
                                   }
                                 else if (face_is_owned[dcell->face(f)
                                                          ->index()] ==
@@ -901,7 +921,8 @@ namespace internal
                                       dcell,
                                       cell,
                                       neighbor,
-                                      map_to_vectorized[level_index]));
+                                      map_to_vectorized[level_index],
+                                      is_mixed_mesh));
                                   }
                               }
                             else
@@ -922,7 +943,8 @@ namespace internal
                                               dcell,
                                               cell,
                                               neighbor,
-                                              refinement_edge_faces.size()));
+                                              refinement_edge_faces.size(),
+                                              is_mixed_mesh));
                               }
                           }
                       }
@@ -951,7 +973,8 @@ namespace internal
       const typename dealii::Triangulation<dim>::cell_iterator &cell,
       const unsigned int number_cell_interior,
       const typename dealii::Triangulation<dim>::cell_iterator &neighbor,
-      const unsigned int number_cell_exterior)
+      const unsigned int number_cell_exterior,
+      const bool         is_mixed_mesh)
     {
       FaceToCellTopology<1> info;
       info.cells_interior[0] = number_cell_interior;
@@ -962,8 +985,10 @@ namespace internal
       else
         info.exterior_face_no = cell->neighbor_face_no(face_no);
 
-      info.face_type = cell->face(face_no)->reference_cell() !=
-                       dealii::ReferenceCells::get_hypercube<dim - 1>();
+      info.face_type = is_mixed_mesh ?
+                         (cell->face(face_no)->reference_cell() !=
+                          dealii::ReferenceCells::get_hypercube<dim - 1>()) :
+                         0;
 
       info.subface_index = GeometryInfo<dim>::max_children_per_cell;
       Assert(neighbor->level() <= cell->level(), ExcInternalError());
@@ -1017,6 +1042,20 @@ namespace internal
         }
       else
         info.face_orientation = exterior_face_orientation;
+
+      // make sure to select correct subface index in case of non-standard
+      // orientation of the coarser neighbor face
+      if (cell->level() > neighbor->level() && exterior_face_orientation > 0)
+        {
+          const Table<2, unsigned int> orientation =
+            ShapeInfo<double>::compute_orientation_table(2);
+          const std::array<unsigned int, 8> inverted_orientations{
+            {0, 1, 2, 3, 6, 5, 4, 7}};
+          info.subface_index =
+            orientation[inverted_orientations[exterior_face_orientation]]
+                       [info.subface_index];
+        }
+
       return info;
     }
 
@@ -1152,7 +1191,7 @@ namespace internal
       std::vector<FaceToCellTopology<vectorization_width>> &faces_out,
       const std::vector<unsigned int> &                     active_fe_indices)
     {
-      FaceToCellTopology<vectorization_width> macro_face;
+      FaceToCellTopology<vectorization_width> face_batch;
       std::vector<std::vector<unsigned int>>  faces_type;
 
       unsigned int face_start = face_partition_data[0],
@@ -1201,13 +1240,13 @@ namespace internal
             new_faces(face_comparator);
           for (const auto &face_type : faces_type)
             {
-              macro_face.face_type = faces_in[face_type[0]].face_type;
-              macro_face.interior_face_no =
+              face_batch.face_type = faces_in[face_type[0]].face_type;
+              face_batch.interior_face_no =
                 faces_in[face_type[0]].interior_face_no;
-              macro_face.exterior_face_no =
+              face_batch.exterior_face_no =
                 faces_in[face_type[0]].exterior_face_no;
-              macro_face.subface_index = faces_in[face_type[0]].subface_index;
-              macro_face.face_orientation =
+              face_batch.subface_index = faces_in[face_type[0]].subface_index;
+              face_batch.face_orientation =
                 faces_in[face_type[0]].face_orientation;
               unsigned int               no_faces = face_type.size();
               std::vector<unsigned char> touched(no_faces, 0);
@@ -1237,13 +1276,13 @@ namespace internal
                                            vectorization_width + 1);
                         for (unsigned int v = 0; v < vectorization_width; ++v)
                           {
-                            macro_face.cells_interior[v] =
+                            face_batch.cells_interior[v] =
                               faces_in[face_type[f + v]].cells_interior[0];
-                            macro_face.cells_exterior[v] =
+                            face_batch.cells_exterior[v] =
                               faces_in[face_type[f + v]].cells_exterior[0];
                             touched[f + v] = 1;
                           }
-                        new_faces.insert(macro_face);
+                        new_faces.insert(face_batch);
                         f += vectorization_width - 1;
                         n_vectorized += vectorization_width;
                       }
@@ -1257,14 +1296,14 @@ namespace internal
               unsigned int v = 0;
               for (const auto f : untouched)
                 {
-                  macro_face.cells_interior[v] =
+                  face_batch.cells_interior[v] =
                     faces_in[face_type[f]].cells_interior[0];
-                  macro_face.cells_exterior[v] =
+                  face_batch.cells_exterior[v] =
                     faces_in[face_type[f]].cells_exterior[0];
                   ++v;
                   if (v == vectorization_width)
                     {
-                      new_faces.insert(macro_face);
+                      new_faces.insert(face_batch);
                       v = 0;
                     }
                 }
@@ -1277,12 +1316,12 @@ namespace internal
                       for (; v < vectorization_width; ++v)
                         {
                           // Dummy cell, not used
-                          macro_face.cells_interior[v] =
+                          face_batch.cells_interior[v] =
                             numbers::invalid_unsigned_int;
-                          macro_face.cells_exterior[v] =
+                          face_batch.cells_exterior[v] =
                             numbers::invalid_unsigned_int;
                         }
-                      new_faces.insert(macro_face);
+                      new_faces.insert(face_batch);
                     }
                   else
                     {

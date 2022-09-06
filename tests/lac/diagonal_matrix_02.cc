@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2019 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -158,7 +158,7 @@ test(const bool hanging_nodes = true)
       const double t = sparse_matrix.diag_element(glob_index);
       if (std::abs(d - t) / t > 1e-10)
         {
-          deallog << glob_index << " " << d << " != " << t << std::endl;
+          deallog << glob_index << ' ' << d << " != " << t << std::endl;
         }
     }
 

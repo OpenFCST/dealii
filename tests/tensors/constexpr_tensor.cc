@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2020 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -26,7 +26,7 @@ test_constexpr_tensor_constructors()
   constexpr dealii::Tensor<rank, dim, Number> a;
   constexpr dealii::Tensor<rank, dim, Number> b(a);
   constexpr dealii::Tensor<rank, dim, Number> c = a;
-  deallog << " Tensor<" << rank << "," << dim << ">" << std::endl;
+  deallog << " Tensor<" << rank << ',' << dim << '>' << std::endl;
   deallog << a << std::endl;
   deallog << b << std::endl;
   deallog << c << std::endl;

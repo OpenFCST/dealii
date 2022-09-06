@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -16,6 +16,13 @@
 #include <deal.II/base/geometry_info.h>
 #include <deal.II/base/polynomial.h>
 #include <deal.II/base/quadrature_lib.h>
+
+#include <deal.II/fe/fe_nothing.h>
+#include <deal.II/fe/fe_values.h>
+
+#include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/reference_cell.h>
+#include <deal.II/grid/tria.h>
 
 #include <algorithm>
 #include <cmath>
@@ -526,7 +533,7 @@ QGaussLog<1>::get_quadrature_weights(const unsigned int n)
 
 template <>
 QGaussLogR<1>::QGaussLogR(const unsigned int n,
-                          const Point<1>     origin,
+                          const Point<1> &   origin,
                           const double       alpha,
                           const bool         factor_out_singularity)
   : Quadrature<1>(
@@ -606,7 +613,7 @@ QGaussLogR<1>::QGaussLogR(const unsigned int n,
 
 template <>
 unsigned int
-QGaussOneOverR<2>::quad_size(const Point<2> singularity, const unsigned int n)
+QGaussOneOverR<2>::quad_size(const Point<2> &singularity, const unsigned int n)
 {
   const double eps = 1e-8;
   const bool   on_edge =
@@ -628,7 +635,7 @@ QGaussOneOverR<2>::quad_size(const Point<2> singularity, const unsigned int n)
 
 template <>
 QGaussOneOverR<2>::QGaussOneOverR(const unsigned int n,
-                                  const Point<2>     singularity,
+                                  const Point<2> &   singularity,
                                   const bool         factor_out_singularity)
   : Quadrature<2>(quad_size(singularity, n))
 {
@@ -863,7 +870,7 @@ QTelles<dim>::QTelles(const Quadrature<1> &base_quad,
     dim == 2 ?
       QAnisotropic<dim>(QTelles<1>(base_quad, Point<1>(singularity[0])),
                         QTelles<1>(base_quad, Point<1>(singularity[1]))) :
-      dim == 3 ?
+    dim == 3 ?
       QAnisotropic<dim>(QTelles<1>(base_quad, Point<1>(singularity[0])),
                         QTelles<1>(base_quad, Point<1>(singularity[1])),
                         QTelles<1>(base_quad, Point<1>(singularity[2]))) :
@@ -1220,31 +1227,65 @@ QSimplex<dim>::QSimplex(const Quadrature<dim> &quad)
 
 
 template <int dim>
-Quadrature<dim>
+template <int spacedim>
+Quadrature<spacedim>
 QSimplex<dim>::compute_affine_transformation(
-  const std::array<Point<dim>, dim + 1> &vertices) const
+  const std::array<Point<spacedim>, dim + 1> &vertices) const
 {
-  Tensor<2, dim> B;
+  Assert(dim <= spacedim,
+         ExcMessage("Invalid combination of dim and spacedim ."));
+  DerivativeForm<1, spacedim, dim> Bt;
   for (unsigned int d = 0; d < dim; ++d)
-    B[d] = vertices[d + 1] - vertices[0];
+    Bt[d] = vertices[d + 1] - vertices[0];
 
-  B              = transpose(B);
-  const double J = std::abs(determinant(B));
+  const auto   B = Bt.transpose();
+  const double J = std::abs(B.determinant());
 
   // if the determinant is zero, we return an empty quadrature
   if (J < 1e-12)
-    return Quadrature<dim>();
+    return Quadrature<spacedim>();
 
-  std::vector<Point<dim>> qp(this->size());
-  std::vector<double>     w(this->size());
+  std::vector<Point<spacedim>> qp(this->size());
+  std::vector<double>          w(this->size());
 
   for (unsigned int i = 0; i < this->size(); ++i)
     {
-      qp[i] = Point<dim>(vertices[0] + B * this->point(i));
-      w[i]  = J * this->weight(i);
+      qp[i] =
+        Point<spacedim>(vertices[0] + apply_transformation(B, this->point(i)));
+      w[i] = J * this->weight(i);
     }
 
-  return Quadrature<dim>(qp, w);
+  return Quadrature<spacedim>(qp, w);
+}
+
+
+
+template <int dim>
+template <int spacedim>
+Quadrature<spacedim>
+QSimplex<dim>::mapped_quadrature(
+  const std::vector<std::array<Point<spacedim>, dim + 1>> &simplices) const
+{
+  Assert(!(dim == 1 && spacedim == 1),
+         ExcMessage("This function is not supposed to work in 1D-1D case."));
+  Assert(dim <= spacedim,
+         ExcMessage("Invalid combination of dim and spacedim ."));
+
+  std::vector<Point<spacedim>> qp;
+  std::vector<double>          ws;
+  for (const auto &simplex : simplices)
+    {
+      const auto rule = this->compute_affine_transformation(simplex);
+      std::transform(rule.get_points().begin(),
+                     rule.get_points().end(),
+                     std::back_inserter(qp),
+                     [&](const Point<spacedim> &p) { return p; });
+      std::transform(rule.get_weights().begin(),
+                     rule.get_weights().end(),
+                     std::back_inserter(ws),
+                     [&](const double w) { return w; });
+    }
+  return Quadrature<spacedim>(qp, ws);
 }
 
 
@@ -1258,8 +1299,8 @@ QTrianglePolar::QTrianglePolar(const Quadrature<1> &radial_quadrature,
   this->weights.resize(base.size());
   for (unsigned int i = 0; i < base.size(); ++i)
     {
-      const auto q = base.point(i);
-      const auto w = base.weight(i);
+      const auto &q = base.point(i);
+      const auto  w = base.weight(i);
 
       const auto xhat = q[0];
       const auto yhat = q[1];
@@ -1295,8 +1336,8 @@ QDuffy::QDuffy(const Quadrature<1> &radial_quadrature,
   this->weights.resize(base.size());
   for (unsigned int i = 0; i < base.size(); ++i)
     {
-      const auto q = base.point(i);
-      const auto w = base.weight(i);
+      const auto &q = base.point(i);
+      const auto  w = base.weight(i);
 
       const auto xhat = q[0];
       const auto yhat = q[1];
@@ -1376,37 +1417,51 @@ QGaussSimplex<dim>::QGaussSimplex(const unsigned int n_points_1D)
         }
       else if (n_points_1D == 2)
         {
-          const double Q23 = 2.0 / 3.0;
-          const double Q16 = 1.0 / 6.0;
+          // The Hillion 7 scheme, as communicated by quadpy
+          //
+          // See: Numerical Integration on a Triangle, International Journal for
+          // Numerical Methods in Engineering, 1977
+          const double Q12 = 1.0 / 2.0;
+          this->quadrature_points.emplace_back(0.17855872826361643,
+                                               0.1550510257216822);
+          this->quadrature_points.emplace_back(0.07503111022260812,
+                                               0.6449489742783178);
+          this->quadrature_points.emplace_back(0.6663902460147014,
+                                               0.1550510257216822);
+          this->quadrature_points.emplace_back(0.28001991549907407,
+                                               0.6449489742783178);
 
-          this->quadrature_points.emplace_back(Q23, Q16);
-          this->quadrature_points.emplace_back(Q16, Q23);
-          this->quadrature_points.emplace_back(Q16, Q16);
-          this->weights.emplace_back(Q16);
-          this->weights.emplace_back(Q16);
-          this->weights.emplace_back(Q16);
+          this->weights.emplace_back(0.31804138174397717 * Q12);
+          this->weights.emplace_back(0.18195861825602283 * Q12);
+          this->weights.emplace_back(0.31804138174397717 * Q12);
+          this->weights.emplace_back(0.18195861825602283 * Q12);
         }
       else if (n_points_1D == 3)
         {
+          // The Hammer-Marlowe-Stroud 5 Scheme, as communicated by quadpy
+          const double p0 = 2.0 / 7.0 - std::sqrt(15.0) / 21.0;
+          const double p1 = 2.0 / 7.0 + std::sqrt(15.0) / 21.0;
+          const double p2 = 3.0 / 7.0 - 2.0 * std::sqrt(15.0) / 21.0;
+          const double p3 = 3.0 / 7.0 + 2.0 * std::sqrt(15.0) / 21.0;
+          this->quadrature_points.emplace_back(1.0 / 3.0, 1.0 / 3.0);
+          this->quadrature_points.emplace_back(p3, p0);
+          this->quadrature_points.emplace_back(p0, p3);
+          this->quadrature_points.emplace_back(p0, p0);
+          this->quadrature_points.emplace_back(p2, p1);
+          this->quadrature_points.emplace_back(p1, p2);
+          this->quadrature_points.emplace_back(p1, p1);
+
           const double q12 = 0.5;
-
-          // clang-format off
-            this->quadrature_points.emplace_back(0.3333333333330, 0.3333333333330);
-            this->quadrature_points.emplace_back(0.7974269853530, 0.1012865073230);
-            this->quadrature_points.emplace_back(0.1012865073230, 0.7974269853530);
-            this->quadrature_points.emplace_back(0.1012865073230, 0.1012865073230);
-            this->quadrature_points.emplace_back(0.0597158717898, 0.4701420641050);
-            this->quadrature_points.emplace_back(0.4701420641050, 0.0597158717898);
-            this->quadrature_points.emplace_back(0.4701420641050, 0.4701420641050);
-          // clang-format on
-
-          this->weights.emplace_back(q12 * 0.225);
-          this->weights.emplace_back(q12 * 0.125939180545);
-          this->weights.emplace_back(q12 * 0.125939180545);
-          this->weights.emplace_back(q12 * 0.125939180545);
-          this->weights.emplace_back(q12 * 0.132394152789);
-          this->weights.emplace_back(q12 * 0.132394152789);
-          this->weights.emplace_back(q12 * 0.132394152789);
+          const double w0  = 9.0 / 40.0;
+          const double w1  = 31.0 / 240.0 - std::sqrt(15.0) / 1200.0;
+          const double w2  = 31.0 / 240.0 + std::sqrt(15.0) / 1200.0;
+          this->weights.emplace_back(q12 * w0);
+          this->weights.emplace_back(q12 * w1);
+          this->weights.emplace_back(q12 * w1);
+          this->weights.emplace_back(q12 * w1);
+          this->weights.emplace_back(q12 * w2);
+          this->weights.emplace_back(q12 * w2);
+          this->weights.emplace_back(q12 * w2);
         }
       else if (n_points_1D == 4)
         {
@@ -1424,48 +1479,46 @@ QGaussSimplex<dim>::QGaussSimplex(const unsigned int n_points_1D)
           this->quadrature_points.emplace_back(Q14, Q14, Q14);
           this->weights.emplace_back(Q16);
         }
+      // The Xiao Gimbutas 03 scheme, as communicated by quadpy
+      //
+      // See: A numerical algorithm for the construction of efficient quadrature
+      // rules in two and higher dimensions, Computers & Mathematics with
+      // Applications, 2010
       else if (n_points_1D == 2)
         {
-          const double Q124 = 1.0 / 6.0 / 4.0;
+          const double Q16 = 1.0 / 6.0;
+          this->weights.emplace_back(0.1223220027573451 * Q16);
+          this->weights.emplace_back(0.1280664127107469 * Q16);
+          this->weights.emplace_back(0.1325680271444452 * Q16);
+          this->weights.emplace_back(0.1406244096604032 * Q16);
+          this->weights.emplace_back(0.2244151669175574 * Q16);
+          this->weights.emplace_back(0.2520039808095023 * Q16);
 
-          const double palpha = (5.0 + 3.0 * sqrt(5.0)) / 20.0;
-          const double pbeta  = (5.0 - sqrt(5.0)) / 20.0;
-          this->quadrature_points.emplace_back(pbeta, pbeta, pbeta);
-          this->quadrature_points.emplace_back(palpha, pbeta, pbeta);
-          this->quadrature_points.emplace_back(pbeta, palpha, pbeta);
-          this->quadrature_points.emplace_back(pbeta, pbeta, palpha);
-          this->weights.emplace_back(Q124);
-          this->weights.emplace_back(Q124);
-          this->weights.emplace_back(Q124);
-          this->weights.emplace_back(Q124);
+          this->quadrature_points.emplace_back(0.1620014916985245,
+                                               0.1838503504920977,
+                                               0.01271836631368145);
+          this->quadrature_points.emplace_back(0.01090521221118924,
+                                               0.2815238021235462,
+                                               0.3621268299455338);
+          this->quadrature_points.emplace_back(0.1901170024392839,
+                                               0.01140332944455717,
+                                               0.3586207204668839);
+          this->quadrature_points.emplace_back(0.170816925164989,
+                                               0.1528181430909273,
+                                               0.6384932999617267);
+          this->quadrature_points.emplace_back(0.1586851632274406,
+                                               0.5856628056552158,
+                                               0.1308471689520965);
+          this->quadrature_points.emplace_back(0.5712260521491151,
+                                               0.1469183900871696,
+                                               0.1403728057942107);
         }
+      // Past this point the best rules (positive weights, minimal number of
+      // points) we have right now are the Witherden-Vincent ones
       else if (n_points_1D == 3)
         {
-          const double Q16 = 1.0 / 6.0;
-
-          // clang-format off
-            this->quadrature_points.emplace_back(0.5684305841968444, 0.1438564719343852, 0.1438564719343852);
-            this->quadrature_points.emplace_back(0.1438564719343852, 0.1438564719343852, 0.1438564719343852);
-            this->quadrature_points.emplace_back(0.1438564719343852, 0.1438564719343852, 0.5684305841968444);
-            this->quadrature_points.emplace_back(0.1438564719343852, 0.5684305841968444, 0.1438564719343852);
-            this->quadrature_points.emplace_back(0.0000000000000000, 0.5000000000000000, 0.5000000000000000);
-            this->quadrature_points.emplace_back(0.5000000000000000, 0.0000000000000000, 0.5000000000000000);
-            this->quadrature_points.emplace_back(0.5000000000000000, 0.5000000000000000, 0.0000000000000000);
-            this->quadrature_points.emplace_back(0.5000000000000000, 0.0000000000000000, 0.0000000000000000);
-            this->quadrature_points.emplace_back(0.0000000000000000, 0.5000000000000000, 0.0000000000000000);
-            this->quadrature_points.emplace_back(0.0000000000000000, 0.0000000000000000, 0.5000000000000000);
-          // clang-format on
-
-          this->weights.emplace_back(0.2177650698804054 * Q16);
-          this->weights.emplace_back(0.2177650698804054 * Q16);
-          this->weights.emplace_back(0.2177650698804054 * Q16);
-          this->weights.emplace_back(0.2177650698804054 * Q16);
-          this->weights.emplace_back(0.0214899534130631 * Q16);
-          this->weights.emplace_back(0.0214899534130631 * Q16);
-          this->weights.emplace_back(0.0214899534130631 * Q16);
-          this->weights.emplace_back(0.0214899534130631 * Q16);
-          this->weights.emplace_back(0.0214899534130631 * Q16);
-          this->weights.emplace_back(0.0214899534130631 * Q16);
+          Quadrature<dim>::operator=(
+            QWitherdenVincentSimplex<dim>(n_points_1D));
         }
       else if (n_points_1D == 4)
         {
@@ -1510,7 +1563,8 @@ namespace
 
 template <int dim>
 QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
-  const unsigned int n_points_1D)
+  const unsigned int n_points_1D,
+  const bool         use_odd_order)
   : QSimplex<dim>(Quadrature<dim>())
 {
   Assert(1 <= dim && dim <= 3, ExcNotImplemented());
@@ -1518,7 +1572,7 @@ QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
   // reasonable equivalent for generic programming.
   if (dim == 1)
     {
-      Quadrature<dim>::operator=(dealii::QGauss<dim>(n_points_1D));
+      Quadrature<dim>::operator=(QGauss<dim>(n_points_1D));
       return;
     }
 
@@ -1534,6 +1588,7 @@ QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
   // instead of writing things out explicitly.
 
   // Apply a Barycentric permutation where one point is different.
+  // Equivalent to d3_aa and s31 in quadpy.
   auto process_point_1 = [&](const double a, const double w) {
     const double                b = 1.0 - dim * a;
     std::array<double, dim + 1> b_point;
@@ -1545,6 +1600,7 @@ QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
   };
 
   // Apply a Barycentric permutation where two points (in 3D) are different.
+  // Equivalent to s22 in quadpy.
   auto process_point_2 = [&](const double a, const double w) {
     Assert(dim == 3, ExcInternalError());
     const double                b = (1.0 - 2.0 * a) / 2.0;
@@ -1559,6 +1615,7 @@ QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
 
   // Apply a Barycentric permutation where three (or four) points
   // are different (since there are two inputs).
+  // Equivalent to d3_ab and s211 in quadpy.
   auto process_point_3 = [&](const double a, const double b, const double w) {
     const double                c = 1.0 - (dim - 1.0) * a - b;
     std::array<double, dim + 1> b_point;
@@ -1570,141 +1627,389 @@ QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
     b_point_permutations.push_back(all_permutations(b_point));
   };
 
-  if (n_points_1D == 1)
+  switch (n_points_1D)
     {
-      b_point_permutations.push_back({centroid});
-      b_weights.push_back(1.0);
-    }
-  else if (n_points_1D == 2)
-    {
-      // This is WV-4 in 2D and WV-3 in 3D
-      if (dim == 2)
-        {
-          process_point_1(9.1576213509770743e-02, 1.0995174365532187e-01);
-          process_point_1(4.4594849091596489e-01, 2.2338158967801147e-01);
-        }
-      else if (dim == 3)
-        {
-          process_point_1(3.281633025163817e-01, 1.362178425370874e-01);
-          process_point_1(1.080472498984286e-01, 1.137821574629126e-01);
-        }
-    }
-  else if (n_points_1D == 3)
-    {
-      // This is the WV-5 rule in both 2D and 3D
-      if (dim == 2)
-        {
-          b_weights.push_back(0.225);
-          b_point_permutations.push_back({centroid});
-
-          process_point_1(1.0128650732345634e-01, 1.2593918054482714e-01);
-          process_point_1(4.7014206410511511e-01, 1.3239415278850619e-01);
-        }
-      else if (dim == 3)
-        {
-          process_point_1(3.108859192633006e-01, 1.126879257180159e-01);
-          process_point_1(9.273525031089125e-02, 7.349304311636196e-02);
-
-          process_point_2(4.550370412564964e-02, 4.254602077708147e-02);
-        }
-    }
-  else if (n_points_1D == 4)
-    {
-      // This is the WV-7 rule in both 2D and 3D
-      if (dim == 2)
-        {
-          process_point_1(3.3730648554587850e-02, 1.6545050110792131e-02);
-          process_point_1(4.7430969250471822e-01, 7.7086646185986069e-02);
-          process_point_1(2.4157738259540357e-01, 1.2794417123015558e-01);
-          process_point_3(4.7036644652595216e-02,
-                          1.9868331479735168e-01,
-                          5.5878732903199779e-02);
-        }
-      else if (dim == 3)
-        {
-          b_point_permutations.push_back({centroid});
-          b_weights.push_back(9.548528946413085e-02);
-
-          process_point_1(3.157011497782028e-01, 4.232958120996703e-02);
-          process_point_2(5.048982259839635e-02, 3.189692783285758e-02);
-
-          process_point_3(1.888338310260010e-01,
-                          5.751716375870000e-01,
-                          3.720713072833462e-02);
-          process_point_3(2.126547254148314e-02,
-                          8.108302410985486e-01,
-                          8.110770829903342e-03);
-        }
-    }
-  else if (n_points_1D == 5)
-    {
-      // This is the WV-9 rule in both 2D and 3D
-      if (dim == 2)
-        {
-          b_point_permutations.push_back({centroid});
-          b_weights.push_back(9.7135796282798836e-02);
-
-          process_point_1(4.4729513394452691e-02, 2.5577675658698031e-02);
-          process_point_1(4.8968251919873762e-01, 3.1334700227139071e-02);
-          process_point_1(4.3708959149293664e-01, 7.7827541004774278e-02);
-          process_point_1(1.8820353561903275e-01, 7.9647738927210249e-02);
-
-          process_point_3(3.6838412054736258e-02,
-                          2.2196298916076568e-01,
-                          4.3283539377289376e-02);
-        }
-      else if (dim == 3)
-        {
-          b_point_permutations.push_back({centroid});
-          b_weights.push_back(5.801054891248025e-02);
-
-          process_point_1(6.198169755222693e-10, 6.431928175925639e-05);
-          process_point_1(1.607745353952616e-01, 2.317333846242546e-02);
-          process_point_1(3.222765218214210e-01, 2.956291233542929e-02);
-          process_point_1(4.510891834541358e-02, 8.063979979616182e-03);
-
-          process_point_2(1.122965460043761e-01, 3.813408010370246e-02);
-
-          process_point_3(4.588714487524592e-01,
-                          2.554579233041310e-03,
-                          8.384422198298552e-03);
-          process_point_3(3.377587068533860e-02,
-                          7.183503264420745e-01,
-                          1.023455935274533e-02);
-          process_point_3(1.836413698099279e-01,
-                          3.441591057817528e-02,
-                          2.052491596798814e-02);
-        }
-    }
-  else if (n_points_1D == 6)
-    {
-      // There is no WV-11 rule in 3D yet
-      if (dim == 2)
-        {
-          b_point_permutations.push_back({centroid});
-          b_weights.push_back(8.5761179732224219e-02);
-
-          process_point_1(2.8485417614371900e-02, 1.0431870512894697e-02);
-          process_point_1(4.9589190096589092e-01, 1.6606273054585369e-02);
-          process_point_1(1.0263548271224643e-01, 3.8630759237019321e-02);
-          process_point_1(4.3846592676435220e-01, 6.7316154079468296e-02);
-          process_point_1(2.1021995670317828e-01, 7.0515684111716576e-02);
-
-          process_point_3(7.3254276860644785e-03,
-                          1.4932478865208237e-01,
-                          1.0290289572953278e-02);
-          process_point_3(4.6010500165429957e-02,
-                          2.8958112563770588e-01,
-                          4.0332476640500554e-02);
-        }
-      else if (dim == 3)
-        {
-          Assert(false, ExcNotImplemented());
-        }
-    }
-  else
-    {
-      Assert(false, ExcNotImplemented());
+      case 1:
+        switch (dim)
+          {
+            case 2:
+              if (use_odd_order)
+                {
+                  // WV-1, 2D
+                  b_point_permutations.push_back({centroid});
+                  b_weights.push_back(1.0000000000000000e+00);
+                }
+              else
+                {
+                  // WV-2, 2D
+                  process_point_1(1.6666666666666669e-01,
+                                  3.3333333333333331e-01);
+                }
+              break;
+            case 3:
+              if (use_odd_order)
+                {
+                  // WV-1, 3D
+                  b_point_permutations.push_back({centroid});
+                  b_weights.push_back(1.0000000000000000e+00);
+                }
+              else
+                {
+                  // WV-2, 3D
+                  process_point_1(1.3819660112501050e-01,
+                                  2.5000000000000000e-01);
+                }
+              break;
+            default:
+              Assert(false, ExcNotImplemented());
+          }
+        break;
+      case 2:
+        switch (dim)
+          {
+            case 2:
+              // WV-4 in both cases (no WV-3 in 2D)
+              process_point_1(9.1576213509770743e-02, 1.0995174365532187e-01);
+              process_point_1(4.4594849091596489e-01, 2.2338158967801147e-01);
+              break;
+            case 3:
+              if (use_odd_order)
+                {
+                  // WV-3, 3D
+                  process_point_1(3.2816330251638171e-01,
+                                  1.3621784253708741e-01);
+                  process_point_1(1.0804724989842859e-01,
+                                  1.1378215746291261e-01);
+                }
+              else
+                {
+                  // WV-5 (no WV-4 in 3D)
+                  Quadrature<dim>::operator=(QWitherdenVincentSimplex<dim>(3));
+                }
+              break;
+            default:
+              Assert(false, ExcInternalError());
+          }
+        break;
+      case 3:
+        switch (dim)
+          {
+            case 2:
+              if (use_odd_order)
+                {
+                  // WV-5, 2D
+                  b_point_permutations.push_back({centroid});
+                  b_weights.push_back(2.2500000000000001e-01);
+                  process_point_1(1.0128650732345634e-01,
+                                  1.2593918054482714e-01);
+                  process_point_1(4.7014206410511511e-01,
+                                  1.3239415278850619e-01);
+                }
+              else
+                {
+                  // WV-6, 2D
+                  process_point_1(6.3089014491502227e-02,
+                                  5.0844906370206819e-02);
+                  process_point_1(2.4928674517091043e-01,
+                                  1.1678627572637937e-01);
+                  process_point_3(5.3145049844816938e-02,
+                                  3.1035245103378439e-01,
+                                  8.2851075618373571e-02);
+                }
+              break;
+            case 3:
+              if (use_odd_order)
+                {
+                  // WV-5, 3D
+                  process_point_1(3.1088591926330061e-01,
+                                  1.1268792571801590e-01);
+                  process_point_1(9.2735250310891248e-02,
+                                  7.3493043116361956e-02);
+                  process_point_2(4.5503704125649642e-02,
+                                  4.2546020777081472e-02);
+                }
+              else
+                {
+                  // WV-6, 3D
+                  process_point_1(4.0673958534611372e-02,
+                                  1.0077211055320640e-02);
+                  process_point_1(3.2233789014227548e-01,
+                                  5.5357181543654717e-02);
+                  process_point_1(2.1460287125915201e-01,
+                                  3.9922750258167487e-02);
+                  process_point_3(6.3661001875017442e-02,
+                                  6.0300566479164919e-01,
+                                  4.8214285714285710e-02);
+                }
+              break;
+            default:
+              Assert(false, ExcInternalError());
+          }
+        break;
+      case 4:
+        switch (dim)
+          {
+            case 2:
+              if (use_odd_order)
+                {
+                  // WV-7, 2D
+                  process_point_1(3.3730648554587850e-02,
+                                  1.6545050110792131e-02);
+                  process_point_1(4.7430969250471822e-01,
+                                  7.7086646185986069e-02);
+                  process_point_1(2.4157738259540357e-01,
+                                  1.2794417123015558e-01);
+                  process_point_3(4.7036644652595216e-02,
+                                  1.9868331479735168e-01,
+                                  5.5878732903199779e-02);
+                }
+              else
+                {
+                  // WV-8, 2D
+                  b_point_permutations.push_back({centroid});
+                  b_weights.push_back(1.4431560767778717e-01);
+                  process_point_1(5.0547228317030957e-02,
+                                  3.2458497623198079e-02);
+                  process_point_1(4.5929258829272313e-01,
+                                  9.5091634267284619e-02);
+                  process_point_1(1.7056930775176021e-01,
+                                  1.0321737053471824e-01);
+                  process_point_3(8.3947774099575878e-03,
+                                  2.6311282963463811e-01,
+                                  2.7230314174434993e-02);
+                }
+              break;
+            case 3:
+              if (use_odd_order)
+                {
+                  // WV-7, 3D
+                  b_point_permutations.push_back({centroid});
+                  b_weights.push_back(9.5485289464130846e-02);
+                  process_point_1(3.1570114977820279e-01,
+                                  4.2329581209967028e-02);
+                  process_point_2(5.0489822598396350e-02,
+                                  3.1896927832857580e-02);
+                  process_point_3(1.8883383102600099e-01,
+                                  5.7517163758699996e-01,
+                                  3.7207130728334620e-02);
+                  process_point_3(2.1265472541483140e-02,
+                                  8.1083024109854862e-01,
+                                  8.1107708299033420e-03);
+                }
+              else
+                {
+                  // WV-8, 3D
+                  process_point_1(1.0795272496221089e-01,
+                                  2.6426650908408830e-02);
+                  process_point_1(1.8510948778258660e-01,
+                                  5.2031747563738531e-02);
+                  process_point_1(4.2316543684767283e-02,
+                                  7.5252561535401989e-03);
+                  process_point_1(3.1418170912403898e-01,
+                                  4.1763782856934897e-02);
+                  process_point_2(4.3559132858383021e-01,
+                                  3.6280930261308818e-02);
+                  process_point_3(2.1433930127130570e-02,
+                                  7.1746406342630831e-01,
+                                  7.1569028908444327e-03);
+                  process_point_3(2.0413933387602909e-01,
+                                  5.8379737830214440e-01,
+                                  1.5453486150960340e-02);
+                }
+              break;
+            default:
+              Assert(false, ExcInternalError());
+          }
+        break;
+      case 5:
+        switch (dim)
+          {
+            case 2:
+              if (use_odd_order)
+                {
+                  // WV-9, 2D
+                  b_point_permutations.push_back({centroid});
+                  b_weights.push_back(9.7135796282798836e-02);
+                  process_point_1(4.4729513394452691e-02,
+                                  2.5577675658698031e-02);
+                  process_point_1(4.8968251919873762e-01,
+                                  3.1334700227139071e-02);
+                  process_point_1(4.3708959149293664e-01,
+                                  7.7827541004774278e-02);
+                  process_point_1(1.8820353561903275e-01,
+                                  7.9647738927210249e-02);
+                  process_point_3(3.6838412054736258e-02,
+                                  2.2196298916076568e-01,
+                                  4.3283539377289376e-02);
+                }
+              else
+                {
+                  // WV-10, 2D
+                  b_point_permutations.push_back({centroid});
+                  b_weights.push_back(8.1743329146285973e-02);
+                  process_point_1(3.2055373216943517e-02,
+                                  1.3352968813149567e-02);
+                  process_point_1(1.4216110105656438e-01,
+                                  4.5957963604744731e-02);
+                  process_point_3(2.8367665339938453e-02,
+                                  1.6370173373718250e-01,
+                                  2.5297757707288385e-02);
+                  process_point_3(2.9619889488729734e-02,
+                                  3.6914678182781102e-01,
+                                  3.4184648162959429e-02);
+                  process_point_3(1.4813288578382056e-01,
+                                  3.2181299528883545e-01,
+                                  6.3904906396424044e-02);
+                }
+              break;
+            case 3:
+              if (use_odd_order)
+                {
+                  // WV-9, 3D
+                  b_point_permutations.push_back({centroid});
+                  b_weights.push_back(5.8010548912480253e-02);
+                  process_point_1(6.1981697552226933e-10,
+                                  6.4319281759256394e-05);
+                  process_point_1(1.6077453539526160e-01,
+                                  2.3173338462425461e-02);
+                  process_point_1(3.2227652182142102e-01,
+                                  2.9562912335429289e-02);
+                  process_point_1(4.5108918345413578e-02,
+                                  8.0639799796161822e-03);
+                  process_point_2(1.1229654600437609e-01,
+                                  3.8134080103702457e-02);
+                  process_point_3(4.5887144875245922e-01,
+                                  2.5545792330413102e-03,
+                                  8.3844221982985519e-03);
+                  process_point_3(3.3775870685338598e-02,
+                                  7.1835032644207453e-01,
+                                  1.0234559352745330e-02);
+                  process_point_3(1.8364136980992790e-01,
+                                  3.4415910578175279e-02,
+                                  2.0524915967988139e-02);
+                }
+              else
+                {
+                  // WV-10, 3D
+                  b_point_permutations.push_back({centroid});
+                  b_weights.push_back(4.7399773556020743e-02);
+                  process_point_1(3.1225006869518868e-01,
+                                  2.6937059992268701e-02);
+                  process_point_1(1.1430965385734609e-01,
+                                  9.8691597167933822e-03);
+                  process_point_3(4.1043073921896539e-01,
+                                  1.6548602561961109e-01,
+                                  1.1393881220195230e-02);
+                  process_point_3(6.1380088247906528e-03,
+                                  9.4298876734520487e-01,
+                                  3.6194434433925362e-04);
+                  process_point_3(1.2105018114558939e-01,
+                                  4.7719037990428043e-01,
+                                  2.5739731980456069e-02);
+                  process_point_3(3.2779468216442620e-02,
+                                  5.9425626948000698e-01,
+                                  1.0135871679755789e-02);
+                  process_point_3(3.2485281564823047e-02,
+                                  8.0117728465834437e-01,
+                                  6.5761472770359038e-03);
+                  process_point_3(1.7497934218393901e-01,
+                                  6.2807184547536599e-01,
+                                  1.2907035798861989e-02);
+                }
+              break;
+            default:
+              Assert(false, ExcNotImplemented());
+          }
+        break;
+      case 6:
+        // There is no WV-11 rule in 3D yet
+        Assert(dim == 2, ExcNotImplemented());
+        if (use_odd_order)
+          {
+            // WV-11, 2D
+            b_point_permutations.push_back({centroid});
+            b_weights.push_back(8.5761179732224219e-02);
+            process_point_1(2.8485417614371900e-02, 1.0431870512894697e-02);
+            process_point_1(4.9589190096589092e-01, 1.6606273054585369e-02);
+            process_point_1(1.0263548271224643e-01, 3.8630759237019321e-02);
+            process_point_1(4.3846592676435220e-01, 6.7316154079468296e-02);
+            process_point_1(2.1021995670317828e-01, 7.0515684111716576e-02);
+            process_point_3(7.3254276860644785e-03,
+                            1.4932478865208237e-01,
+                            1.0290289572953278e-02);
+            process_point_3(4.6010500165429957e-02,
+                            2.8958112563770588e-01,
+                            4.0332476640500554e-02);
+          }
+        else
+          {
+            // WV-12, 2D
+            process_point_1(2.4646363436335583e-02, 7.9316425099736389e-03);
+            process_point_1(4.8820375094554153e-01, 2.4266838081452032e-02);
+            process_point_1(1.0925782765935427e-01, 2.8486052068877544e-02);
+            process_point_1(4.4011164865859309e-01, 4.9918334928060942e-02);
+            process_point_1(2.7146250701492608e-01, 6.2541213195902765e-02);
+            process_point_3(2.1382490256170616e-02,
+                            1.2727971723358933e-01,
+                            1.5083677576511438e-02);
+            process_point_3(2.3034156355267121e-02,
+                            2.9165567973834094e-01,
+                            2.1783585038607559e-02);
+            process_point_3(1.1629601967792658e-01,
+                            2.5545422863851736e-01,
+                            4.3227363659414209e-02);
+          }
+        break;
+      case 7:
+        // There is no WV-13 rule in 3D yet
+        Assert(dim == 2, ExcNotImplemented());
+        if (use_odd_order)
+          {
+            // WV-13, 2D
+            b_point_permutations.push_back({centroid});
+            b_weights.push_back(6.7960036586831640e-02);
+            process_point_1(2.1509681108843159e-02, 6.0523371035391717e-03);
+            process_point_1(4.8907694645253935e-01, 2.3994401928894731e-02);
+            process_point_1(4.2694141425980042e-01, 5.5601967530453329e-02);
+            process_point_1(2.2137228629183292e-01, 5.8278485119199981e-02);
+            process_point_3(5.1263891023823893e-03,
+                            2.7251581777342970e-01,
+                            9.5906810035432631e-03);
+            process_point_3(2.4370186901093827e-02,
+                            1.1092204280346341e-01,
+                            1.4965401105165668e-02);
+            process_point_3(8.7895483032197297e-02,
+                            1.6359740106785048e-01,
+                            2.4179039811593819e-02);
+            process_point_3(6.8012243554206653e-02,
+                            3.0844176089211778e-01,
+                            3.4641276140848373e-02);
+          }
+        else
+          {
+            // WV-14, 2D
+            process_point_1(1.9390961248701044e-02, 4.9234036024000819e-03);
+            process_point_1(6.1799883090872587e-02, 1.4433699669776668e-02);
+            process_point_1(4.8896391036217862e-01, 2.1883581369428889e-02);
+            process_point_1(4.1764471934045394e-01, 3.2788353544125348e-02);
+            process_point_1(1.7720553241254344e-01, 4.2162588736993016e-02);
+            process_point_1(2.7347752830883865e-01, 5.1774104507291585e-02);
+            process_point_3(1.2683309328720416e-03,
+                            1.1897449769695684e-01,
+                            5.0102288385006719e-03);
+            process_point_3(1.4646950055654417e-02,
+                            2.9837288213625779e-01,
+                            1.4436308113533840e-02);
+            process_point_3(5.7124757403647919e-02,
+                            1.7226668782135557e-01,
+                            2.4665753212563674e-02);
+            process_point_3(9.2916249356971847e-02,
+                            3.3686145979634496e-01,
+                            3.8571510787060684e-02);
+          }
+        break;
+      default:
+        Assert(false, ExcNotImplemented());
     }
 
   Assert(b_point_permutations.size() == b_weights.size(), ExcInternalError());
@@ -1722,6 +2027,81 @@ QWitherdenVincentSimplex<dim>::QWitherdenVincentSimplex(
                     c_point.begin_raw());
           this->quadrature_points.emplace_back(c_point);
         }
+    }
+}
+
+
+
+namespace
+{
+  template <int dim>
+  Quadrature<dim>
+  setup_qiterated_1D(const Quadrature<dim> &, const unsigned int)
+  {
+    Assert(false, ExcInternalError());
+    return Quadrature<dim>();
+  }
+
+
+
+  Quadrature<1>
+  setup_qiterated_1D(const Quadrature<1> &base_quad,
+                     const unsigned int   n_copies)
+  {
+    return QIterated<1>(base_quad, n_copies);
+  }
+} // namespace
+
+
+
+template <int dim>
+QIteratedSimplex<dim>::QIteratedSimplex(const Quadrature<dim> &base_quad,
+                                        const unsigned int     n_copies)
+{
+  switch (dim)
+    {
+      case 1:
+        static_cast<Quadrature<dim> &>(*this) =
+          setup_qiterated_1D(base_quad, n_copies);
+        break;
+      case 2:
+      case 3:
+        {
+          const auto n_refinements =
+            static_cast<unsigned int>(std::round(std::log2(n_copies)));
+          Assert((1u << n_refinements) == n_copies,
+                 ExcMessage("The number of copies must be a power of 2."));
+          Triangulation<dim> tria;
+          const auto reference_cell = ReferenceCells::get_simplex<dim>();
+          GridGenerator::reference_cell(tria, reference_cell);
+          tria.refine_global(n_refinements);
+          const Mapping<dim> &mapping =
+            reference_cell.template get_default_linear_mapping<dim>();
+          FE_Nothing<dim> fe(reference_cell);
+
+          FEValues<dim>           fe_values(mapping,
+                                  fe,
+                                  base_quad,
+                                  update_quadrature_points | update_JxW_values);
+          std::vector<Point<dim>> points;
+          std::vector<double>     weights;
+          for (const auto &cell : tria.active_cell_iterators())
+            {
+              fe_values.reinit(cell);
+              for (unsigned int qp = 0; qp < base_quad.size(); ++qp)
+                {
+                  points.push_back(fe_values.quadrature_point(qp));
+                  weights.push_back(fe_values.JxW(qp));
+                }
+            }
+
+          static_cast<Quadrature<dim> &>(*this) =
+            Quadrature<dim>(points, weights);
+
+          break;
+        }
+      default:
+        Assert(false, ExcNotImplemented());
     }
 }
 
@@ -1838,6 +2218,10 @@ template class QSimplex<1>;
 template class QSimplex<2>;
 template class QSimplex<3>;
 
+template class QIteratedSimplex<1>;
+template class QIteratedSimplex<2>;
+template class QIteratedSimplex<3>;
+
 template class QSplit<1>;
 template class QSplit<2>;
 template class QSplit<3>;
@@ -1858,3 +2242,41 @@ template class QWitherdenVincentSimplex<2>;
 template class QWitherdenVincentSimplex<3>;
 
 DEAL_II_NAMESPACE_CLOSE
+
+namespace dealii
+{
+  template Quadrature<2>
+  QSimplex<1>::compute_affine_transformation(
+    const std::array<Point<2>, 1 + 1> &vertices) const;
+
+  template Quadrature<3>
+  QSimplex<1>::compute_affine_transformation(
+    const std::array<Point<3>, 1 + 1> &vertices) const;
+
+  template Quadrature<3>
+  QSimplex<2>::compute_affine_transformation(
+    const std::array<Point<3>, 2 + 1> &vertices) const;
+} // namespace dealii
+
+namespace dealii
+{
+  template Quadrature<2>
+  QSimplex<1>::mapped_quadrature(
+    const std::vector<std::array<Point<2>, 1 + 1>> &simplices) const;
+
+  template Quadrature<3>
+  QSimplex<1>::mapped_quadrature(
+    const std::vector<std::array<Point<3>, 1 + 1>> &simplices) const;
+
+  template Quadrature<2>
+  QSimplex<2>::mapped_quadrature(
+    const std::vector<std::array<Point<2>, 2 + 1>> &simplices) const;
+
+  template Quadrature<3>
+  QSimplex<2>::mapped_quadrature(
+    const std::vector<std::array<Point<3>, 2 + 1>> &simplices) const;
+
+  template Quadrature<3>
+  QSimplex<3>::mapped_quadrature(
+    const std::vector<std::array<Point<3>, 3 + 1>> &simplices) const;
+} // namespace dealii

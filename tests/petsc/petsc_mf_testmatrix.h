@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2018 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -124,9 +124,9 @@ inline void
 PetscFDMatrix::vmult_add(dealii::PETScWrappers::VectorBase &      dst,
                          const dealii::PETScWrappers::VectorBase &src) const
 {
-  for (unsigned int i = 0; i <= ny - 2; i++)
+  for (unsigned int i = 0; i <= ny - 2; ++i)
     {
-      for (unsigned int j = 0; j <= nx - 2; j++)
+      for (unsigned int j = 0; j <= nx - 2; ++j)
         {
           // Number of the row to be entered
           unsigned int row = j + (nx - 1) * i;

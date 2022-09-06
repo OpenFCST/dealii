@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2009 - 2020 by the deal.II authors
+ * Copyright (C) 2009 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -30,6 +30,7 @@
 #include <deal.II/lac/precondition.h>
 
 #include <deal.II/fe/fe_q.h>
+#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/grid_generator.h>
@@ -472,13 +473,14 @@ namespace Step37
   // appearing on locally owned cells (plus those referenced via hanging node
   // constraints) are necessary. However, in deal.II we often set all the
   // degrees of freedom on ghosted elements as ghosted vector entries, called
-  // the @ref GlossLocallyRelevantDof "locally relevant DoFs described in the
-  // glossary". In that case, the MPI-local index of a ghosted vector entry
-  // can in general be different in the two possible ghost sets, despite
-  // referring to the same global index. To avoid problems, FEEvaluation
-  // checks that the partitioning of the vector used for the matrix-vector
-  // product does indeed match with the partitioning of the indices in
-  // MatrixFree by a check called
+  // the
+  // @ref GlossLocallyRelevantDof "locally relevant DoFs described in the glossary".
+  // In that case, the MPI-local index of a ghosted vector entry can in
+  // general be different in the two possible ghost sets, despite referring
+  // to the same global index. To avoid problems, FEEvaluation checks that
+  // the partitioning of the vector used for the matrix-vector product does
+  // indeed match with the partitioning of the indices in MatrixFree by a
+  // check called
   // LinearAlgebra::distributed::Vector::partitioners_are_compatible. To
   // facilitate things, the MatrixFreeOperators::Base class includes a
   // mechanism to fit the ghost set to the correct layout. This happens in the
@@ -720,29 +722,26 @@ namespace Step37
   // grid, we also need to specifically enable the multigrid hierarchy.
   template <int dim>
   LaplaceProblem<dim>::LaplaceProblem()
-    :
 #ifdef DEAL_II_WITH_P4EST
-    triangulation(
-      MPI_COMM_WORLD,
-      Triangulation<dim>::limit_level_difference_at_vertices,
-      parallel::distributed::Triangulation<dim>::construct_multigrid_hierarchy)
-    ,
+    : triangulation(MPI_COMM_WORLD,
+                    Triangulation<dim>::limit_level_difference_at_vertices,
+                    parallel::distributed::Triangulation<
+                      dim>::construct_multigrid_hierarchy)
 #else
-    triangulation(Triangulation<dim>::limit_level_difference_at_vertices)
-    ,
+    : triangulation(Triangulation<dim>::limit_level_difference_at_vertices)
 #endif
-    fe(degree_finite_element)
+    , fe(degree_finite_element)
     , dof_handler(triangulation)
     , setup_time(0.)
     , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
-    ,
     // The LaplaceProblem class holds an additional output stream that
     // collects detailed timings about the setup phase. This stream, called
     // time_details, is disabled by default through the @p false argument
     // specified here. For detailed timings, removing the @p false argument
     // prints all the details.
-    time_details(std::cout,
-                 false && Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
+    , time_details(std::cout,
+                   false &&
+                     Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
   {}
 
 
@@ -792,8 +791,8 @@ namespace Step37
     pcout << "Number of degrees of freedom: " << dof_handler.n_dofs()
           << std::endl;
 
-    IndexSet locally_relevant_dofs;
-    DoFTools::extract_locally_relevant_dofs(dof_handler, locally_relevant_dofs);
+    const IndexSet locally_relevant_dofs =
+      DoFTools::extract_locally_relevant_dofs(dof_handler);
 
     constraints.clear();
     constraints.reinit(locally_relevant_dofs);
@@ -803,7 +802,7 @@ namespace Step37
     constraints.close();
     setup_time += time.wall_time();
     time_details << "Distribute DoFs & B.C.     (CPU/wall) " << time.cpu_time()
-                 << "s/" << time.wall_time() << "s" << std::endl;
+                 << "s/" << time.wall_time() << 's' << std::endl;
     time.restart();
 
     {
@@ -829,7 +828,7 @@ namespace Step37
 
     setup_time += time.wall_time();
     time_details << "Setup matrix-free system   (CPU/wall) " << time.cpu_time()
-                 << "s/" << time.wall_time() << "s" << std::endl;
+                 << "s/" << time.wall_time() << 's' << std::endl;
     time.restart();
 
     // Next, initialize the matrices for the multigrid method on all the
@@ -844,18 +843,15 @@ namespace Step37
     const unsigned int nlevels = triangulation.n_global_levels();
     mg_matrices.resize(0, nlevels - 1);
 
-    std::set<types::boundary_id> dirichlet_boundary;
-    dirichlet_boundary.insert(0);
+    const std::set<types::boundary_id> dirichlet_boundary_ids = {0};
     mg_constrained_dofs.initialize(dof_handler);
     mg_constrained_dofs.make_zero_boundary_constraints(dof_handler,
-                                                       dirichlet_boundary);
+                                                       dirichlet_boundary_ids);
 
     for (unsigned int level = 0; level < nlevels; ++level)
       {
-        IndexSet relevant_dofs;
-        DoFTools::extract_locally_relevant_level_dofs(dof_handler,
-                                                      level,
-                                                      relevant_dofs);
+        const IndexSet relevant_dofs =
+          DoFTools::extract_locally_relevant_level_dofs(dof_handler, level);
         AffineConstraints<double> level_constraints;
         level_constraints.reinit(relevant_dofs);
         level_constraints.add_lines(
@@ -883,7 +879,7 @@ namespace Step37
       }
     setup_time += time.wall_time();
     time_details << "Setup matrix-free levels   (CPU/wall) " << time.cpu_time()
-                 << "s/" << time.wall_time() << "s" << std::endl;
+                 << "s/" << time.wall_time() << 's' << std::endl;
   }
 
 
@@ -920,7 +916,7 @@ namespace Step37
 
     setup_time += time.wall_time();
     time_details << "Assemble right hand side   (CPU/wall) " << time.cpu_time()
-                 << "s/" << time.wall_time() << "s" << std::endl;
+                 << "s/" << time.wall_time() << 's' << std::endl;
   }
 
 
@@ -1108,8 +1104,8 @@ namespace Step37
   // optimized for speed rather than disk usage. The default setting (which
   // optimizes for disk usage) makes saving the output take about 4 times as
   // long as running the linear solver, while setting
-  // DataOutBase::VtkFlags::compression_level to
-  // DataOutBase::VtkFlags::best_speed lowers this to only one fourth the time
+  // DataOutBase::CompressionLevel to
+  // best_speed lowers this to only one fourth the time
   // of the linear solve.
   //
   // We disable the output when the mesh gets too large. A variant of this
@@ -1131,7 +1127,7 @@ namespace Step37
     data_out.build_patches(mapping);
 
     DataOutBase::VtkFlags flags;
-    flags.compression_level = DataOutBase::VtkFlags::best_speed;
+    flags.compression_level = DataOutBase::CompressionLevel::best_speed;
     data_out.set_flags(flags);
     data_out.write_vtu_with_pvtu_record(
       "./", "solution", cycle, MPI_COMM_WORLD, 3);
@@ -1159,7 +1155,7 @@ namespace Step37
 
       pcout << "Vectorization over " << n_vect_doubles
             << " doubles = " << n_vect_bits << " bits ("
-            << Utilities::System::get_current_vectorization_level() << ")"
+            << Utilities::System::get_current_vectorization_level() << ')'
             << std::endl;
     }
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2019 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -35,8 +35,8 @@ template <int, int>
 class FiniteElement;
 #endif
 
-/*!@addtogroup feaccess */
-/*@{*/
+/** @addtogroup feaccess */
+/** @{ */
 
 /**
  * The enum type given to the constructors of FEValues, FEFaceValues and
@@ -325,7 +325,8 @@ operator|=(UpdateFlags &f1, const UpdateFlags f2)
  *
  * @ref UpdateFlags
  */
-inline UpdateFlags operator&(const UpdateFlags f1, const UpdateFlags f2)
+inline UpdateFlags
+operator&(const UpdateFlags f1, const UpdateFlags f2)
 {
   return static_cast<UpdateFlags>(static_cast<unsigned int>(f1) &
                                   static_cast<unsigned int>(f2));
@@ -581,7 +582,7 @@ namespace internal
       HessianVector shape_hessians;
 
       /**
-       * Store the 3nd derivatives of the shape functions at the quadrature
+       * Store the 3rd derivatives of the shape functions at the quadrature
        * points.  See the description of the data type for the layout of the
        * data in this field.
        */
@@ -622,7 +623,7 @@ namespace internal
 } // namespace internal
 
 
-/*@}*/
+/** @} */
 
 
 

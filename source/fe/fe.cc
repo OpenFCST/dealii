@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -609,11 +609,11 @@ FiniteElement<dim, spacedim>::face_to_cell_index(const unsigned int face_index,
 
       // then get the number of this vertex on the cell and translate
       // this to a DoF number on the cell
-      return (this->reference_cell().face_to_cell_vertices(face,
-                                                           face_vertex,
-                                                           face_orientation +
-                                                             2 * face_rotation +
-                                                             4 * face_flip) *
+      return (this->reference_cell().face_to_cell_vertices(
+                face,
+                face_vertex,
+                (face_orientation ? 1 : 0) + (face_rotation ? 2 : 0) +
+                  (face_flip ? 4 : 0)) *
                 this->n_dofs_per_vertex() +
               dof_index_on_vertex);
     }
@@ -628,14 +628,15 @@ FiniteElement<dim, spacedim>::face_to_cell_index(const unsigned int face_index,
       const unsigned int face_line         = index / this->n_dofs_per_line();
       const unsigned int dof_index_on_line = index % this->n_dofs_per_line();
 
-      return (this->get_first_line_index() +
-              this->reference_cell().face_to_cell_lines(face,
-                                                        face_line,
-                                                        face_orientation +
-                                                          2 * face_rotation +
-                                                          4 * face_flip) *
-                this->n_dofs_per_line() +
-              dof_index_on_line);
+      return (
+        this->get_first_line_index() +
+        this->reference_cell().face_to_cell_lines(face,
+                                                  face_line,
+                                                  (face_orientation ? 1 : 0) +
+                                                    (face_rotation ? 2 : 0) +
+                                                    (face_flip ? 4 : 0)) *
+          this->n_dofs_per_line() +
+        dof_index_on_line);
     }
   else
     // DoF is on a quad
@@ -689,8 +690,10 @@ FiniteElement<dim, spacedim>::adjust_quad_dof_index_for_face_orientation(
          ExcInternalError());
   return index +
          adjust_quad_dof_index_for_face_orientation_table
-           [this->n_unique_quads() == 1 ? 0 : face](
-             index, 4 * face_orientation + 2 * face_flip + face_rotation);
+           [this->n_unique_quads() == 1 ? 0 : face](index,
+                                                    (face_orientation ? 4 : 0) +
+                                                      (face_flip ? 2 : 0) +
+                                                      (face_rotation ? 1 : 0));
 }
 
 
@@ -837,14 +840,15 @@ bool
 FiniteElement<dim, spacedim>::constraints_are_implemented(
   const internal::SubfaceCase<dim> &subface_case) const
 {
-  // TODO: the implementation makes the assumption that all faces have the
-  // same number of dofs
-  AssertDimension(this->n_unique_faces(), 1);
-  const unsigned int face_no = 0;
-
   if (subface_case == internal::SubfaceCase<dim>::case_isotropic)
-    return (this->n_dofs_per_face(face_no) == 0) ||
-           (interface_constraints.m() != 0);
+    {
+      unsigned int n_dofs_on_faces = 0;
+
+      for (const auto face_no : this->reference_cell().face_indices())
+        n_dofs_on_faces += this->n_dofs_per_face(face_no);
+
+      return (n_dofs_on_faces == 0) || (interface_constraints.m() != 0);
+    }
   else
     return false;
 }
@@ -1021,8 +1025,8 @@ FiniteElement<dim, spacedim>::compare_for_domination(
 
 template <int dim, int spacedim>
 bool
-FiniteElement<dim, spacedim>::
-operator==(const FiniteElement<dim, spacedim> &f) const
+FiniteElement<dim, spacedim>::operator==(
+  const FiniteElement<dim, spacedim> &f) const
 {
   // Compare fields in roughly increasing order of how expensive the
   // comparison is
@@ -1036,8 +1040,8 @@ operator==(const FiniteElement<dim, spacedim> &f) const
 
 template <int dim, int spacedim>
 bool
-FiniteElement<dim, spacedim>::
-operator!=(const FiniteElement<dim, spacedim> &f) const
+FiniteElement<dim, spacedim>::operator!=(
+  const FiniteElement<dim, spacedim> &f) const
 {
   return !(*this == f);
 }
@@ -1332,7 +1336,7 @@ FiniteElement<dim, spacedim>::fill_fe_face_values(
                                                                      spacedim>
     &output_data) const
 {
-  // base class version, implement overriden function in derived classes
+  // base class version, implement overridden function in derived classes
   AssertDimension(quadrature.size(), 1);
   fill_fe_face_values(cell,
                       face_no,

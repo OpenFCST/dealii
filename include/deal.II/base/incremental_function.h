@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2019 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -20,7 +20,7 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/function.h>
-#include <deal.II/base/thread_management.h>
+#include <deal.II/base/mutex.h>
 
 #include <deal.II/lac/vector.h>
 
@@ -56,7 +56,7 @@ namespace Functions
      * Export the value of the template parameter as a static member constant.
      * This is sometimes useful in the context of template programming.
      */
-    static const unsigned int dimension = dim;
+    static constexpr unsigned int dimension = dim;
 
     /**
      * The scalar-valued real type used for representing time.

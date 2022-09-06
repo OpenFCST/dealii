@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -39,6 +39,7 @@
 #include <deal.II/lac/solver_control.h>
 #include <deal.II/lac/trilinos_precondition.h>
 #include <deal.II/lac/trilinos_sparse_matrix.h>
+#include <deal.II/lac/trilinos_sparsity_pattern.h>
 
 #include <deal.II/matrix_free/fe_evaluation.h>
 #include <deal.II/matrix_free/matrix_free.h>
@@ -73,7 +74,8 @@ public:
   reinit(const Mapping<dim> &             mapping,
          const DoFHandler<dim> &          dof_handler,
          const Quadrature<dim> &          quad,
-         const AffineConstraints<number> &constraints)
+         const AffineConstraints<number> &constraints,
+         const unsigned int mg_level = numbers::invalid_unsigned_int)
   {
     // Clear internal data structures (if operator is reused).
     this->system_matrix.clear();
@@ -87,6 +89,7 @@ public:
     // functions so that we only need to set the flag `update_gradients`.
     typename MatrixFree<dim, number>::AdditionalData data;
     data.mapping_update_flags = update_gradients;
+    data.mg_level             = mg_level;
 
     matrix_free.reinit(mapping, dof_handler, constraints, quad, data);
   }
@@ -94,7 +97,11 @@ public:
   virtual types::global_dof_index
   m() const
   {
-    return matrix_free.get_dof_handler().n_dofs();
+    if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
+      return this->matrix_free.get_dof_handler().n_dofs(
+        this->matrix_free.get_mg_level());
+    else
+      return this->matrix_free.get_dof_handler().n_dofs();
   }
 
   Number
@@ -127,6 +134,7 @@ public:
   compute_inverse_diagonal(VectorType &diagonal) const
   {
     // compute diagonal
+    matrix_free.initialize_dof_vector(diagonal);
     MatrixFreeTools::compute_diagonal(matrix_free,
                                       diagonal,
                                       &Operator::do_cell_integral_local,
@@ -147,10 +155,19 @@ public:
         const auto &dof_handler = this->matrix_free.get_dof_handler();
 
         TrilinosWrappers::SparsityPattern dsp(
-          dof_handler.locally_owned_dofs(),
+          this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int ?
+            dof_handler.locally_owned_mg_dofs(
+              this->matrix_free.get_mg_level()) :
+            dof_handler.locally_owned_dofs(),
           matrix_free.get_task_info().communicator);
 
-        DoFTools::make_sparsity_pattern(dof_handler, dsp, this->constraints);
+        if (this->matrix_free.get_mg_level() != numbers::invalid_unsigned_int)
+          MGTools::make_sparsity_pattern(dof_handler,
+                                         dsp,
+                                         this->matrix_free.get_mg_level(),
+                                         this->constraints);
+        else
+          DoFTools::make_sparsity_pattern(dof_handler, dsp, this->constraints);
 
         dsp.compress();
         system_matrix.reinit(dsp);
@@ -300,7 +317,7 @@ mg_solve(SolverControl &                       solver_control,
   MGLevelObject<typename SmootherType::AdditionalData> smoother_data(min_level,
                                                                      max_level);
 
-  for (unsigned int level = min_level; level <= max_level; level++)
+  for (unsigned int level = min_level; level <= max_level; ++level)
     {
       smoother_data[level].preconditioner =
         std::make_shared<SmootherPreconditionerType>();

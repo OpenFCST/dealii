@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2010 - 2018 by the deal.II authors
+// Copyright (C) 2010 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -57,7 +57,7 @@ public:
   virtual void
   vector_value(const Point<dim> &p, Vector<double> &values) const
   {
-    for (unsigned int i = 0; i < dim; i++)
+    for (unsigned int i = 0; i < dim; ++i)
       values(i) = p(i);
   }
 };
@@ -90,13 +90,11 @@ main()
   tria.set_manifold(1, surface_description);
   tria.set_manifold(0, surface_description);
 
-  std::set<types::boundary_id> boundary_ids;
-  boundary_ids.insert(0);
-
+  const std::set<types::boundary_id> boundary_ids = {0};
   GridGenerator::extract_boundary_mesh(volume_mesh, tria, boundary_ids);
 
   // test for the position
-  MappingQ<2, 3> mapping(mapping_degree, true);
+  MappingQ<2, 3> mapping(mapping_degree);
 
   FESystem<2, 3>   fe_test(FE_Q<2, 3>(fe_degree), 3);
   DoFHandler<2, 3> dh_test(tria);
@@ -111,11 +109,11 @@ main()
 
   std::vector<std::string> solution_names(3, "position");
 
-  DataOut<2, DoFHandler<2, 3>> data_out;
+  DataOut<2, 3> data_out;
   data_out.attach_dof_handler(dh_test);
   data_out.add_data_vector(position,
                            solution_names,
-                           DataOut<2, DoFHandler<2, 3>>::type_dof_data,
+                           DataOut<2, 3>::type_dof_data,
                            data_component_interpretation);
   data_out.build_patches(mapping, 2);
 

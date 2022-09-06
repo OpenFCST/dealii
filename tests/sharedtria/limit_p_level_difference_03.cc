@@ -15,7 +15,7 @@
 
 
 // verify restrictions on level differences imposed by
-// DoFHandler::prepare_coarsening_and_refinement()
+// hp::Refinement::limit_p_level_difference()
 // on h-refined grids
 
 
@@ -26,6 +26,8 @@
 #include <deal.II/dofs/dof_handler.h>
 
 #include <deal.II/fe/fe_q.h>
+
+#include <deal.II/grid/filtered_iterator.h>
 
 #include <deal.II/hp/fe_collection.h>
 #include <deal.II/hp/refinement.h>

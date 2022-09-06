@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2018 by the deal.II authors
+// Copyright (C) 2005 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -75,7 +75,7 @@ test(std::string filename)
 
   VectorTools::interpolate(dof_handler, func, interpolated_one);
 
-  DataOut<dim, DoFHandler<dim, spacedim>> dataout;
+  DataOut<dim, spacedim> dataout;
   dataout.attach_dof_handler(dof_handler);
   dataout.add_data_vector(interpolated_one, "test");
   dataout.build_patches();
