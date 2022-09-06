@@ -131,10 +131,10 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
   std::string line;
 
   // verify that the third and fourth lines match
-  // expectations. the first line is not checked to allow use of 
-	// different vtk versions and the second line of the file may 
-	// essentially be anything the author of the file chose to 
-	// identify what's in there, so we just ensure that we can read it.
+  // expectations. the first line is not checked to allow use of
+  // different vtk versions and the second line of the file may
+  // essentially be anything the author of the file chose to
+  // identify what's in there, so we just ensure that we can read it.
   {
     std::string text[4];
     text[0] = "# vtk DataFile Version 3.0";
@@ -419,9 +419,9 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
       for (unsigned int i = 0; i < n_ints; ++i)
         in >> tmp_int;
 
-      
-      //Processing the CELL_DATA and FIELD_DATA sections
-      
+
+      // Processing the CELL_DATA and FIELD_DATA sections
+
       // Ignore everything up to CELL_DATA
       while (in >> keyword)
         {
@@ -430,23 +430,23 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
               unsigned int n_ids;
               in >> n_ids;
 
-            AssertThrow(n_ids == n_geometric_objects,
-                        ExcMessage("The VTK reader found a CELL_DATA statement "
-                                   "that lists a total of " +
-                                   Utilities::int_to_string(n_ids) +
-                                   " cell data objects, but this needs to "
-                                   "equal the number of cells (which is " +
-                                   Utilities::int_to_string(cells.size()) +
-                                   ") plus the number of quads (" +
-                                   Utilities::int_to_string(
-                                     subcelldata.boundary_quads.size()) +
-                                   " in 3d or the number of lines (" +
-                                   Utilities::int_to_string(
-                                     subcelldata.boundary_lines.size()) +
-                                   ") in 2d."));
+              AssertThrow(
+                n_ids == n_geometric_objects,
+                ExcMessage(
+                  "The VTK reader found a CELL_DATA statement "
+                  "that lists a total of " +
+                  Utilities::int_to_string(n_ids) +
+                  " cell data objects, but this needs to "
+                  "equal the number of cells (which is " +
+                  Utilities::int_to_string(cells.size()) +
+                  ") plus the number of quads (" +
+                  Utilities::int_to_string(subcelldata.boundary_quads.size()) +
+                  " in 3d or the number of lines (" +
+                  Utilities::int_to_string(subcelldata.boundary_lines.size()) +
+                  ") in 2d."));
 
-            const std::vector<std::string> data_sets{"MaterialID",
-                                                     "ManifoldID"};
+              const std::vector<std::string> data_sets{"MaterialID",
+                                                       "ManifoldID"};
 
               in >> keyword;
               for (unsigned int i = 0; i < data_sets.size(); ++i)
@@ -572,7 +572,7 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
                 }
             }
 
-          
+
           // Addition of FIELD DATA:
 
 
