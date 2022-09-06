@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2018 - 2020 by the deal.II authors
+ * Copyright (C) 2018 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -119,7 +119,7 @@ test(const unsigned numRefinementLevels = 2)
     corner[d] = -L;
 
   MappingQ1<dim> mapping;
-  for (unsigned int ilevel = 0; ilevel < numRefinementLevels; ilevel++)
+  for (unsigned int ilevel = 0; ilevel < numRefinementLevels; ++ilevel)
     {
       // pick an corner cell and refine
       for (auto &cell : triangulation.active_cell_iterators())
@@ -183,8 +183,8 @@ test(const unsigned numRefinementLevels = 2)
                                       /*direction*/ d,
                                       periodicity_vectorDof);
 
-  DoFTools::make_periodicity_constraints<DoFHandler<dim>>(periodicity_vectorDof,
-                                                          constraints);
+  DoFTools::make_periodicity_constraints<dim, dim>(periodicity_vectorDof,
+                                                   constraints);
   constraints.close();
 
   const std::vector<IndexSet> &locally_owned_dofs =
@@ -210,9 +210,9 @@ test(const unsigned numRefinementLevels = 2)
   if (locally_relevant_dofs.is_element(i) && constraints.is_constrained(i))
     {
       deallog << "Coordinates:" << std::endl;
-      deallog << i << "@" << supportPoints[i] << std::endl;
+      deallog << i << '@' << supportPoints[i] << std::endl;
       for (auto c : *constraints.get_constraint_entries(i))
-        deallog << c.first << "@" << supportPoints[c.first] << std::endl;
+        deallog << c.first << '@' << supportPoints[c.first] << std::endl;
     }
 }
 

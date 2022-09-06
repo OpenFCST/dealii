@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2020 by the deal.II authors
+ * Copyright (C) 2020 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -37,7 +37,7 @@
 #include <deal.II/grid/grid_refinement.h>
 
 #include <deal.II/fe/mapping_q.h>
-#include <deal.II/fe/fe_point_evaluation.h>
+#include <deal.II/matrix_free/fe_point_evaluation.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_values.h>
 
@@ -470,7 +470,7 @@ namespace Step19
         if (particle_handler.n_particles_in_cell(cell) > 0)
           for (const auto &particle : particle_handler.particles_in_cell(cell))
             {
-              const Point<dim> reference_location =
+              const Point<dim> &reference_location =
                 particle.get_reference_location();
               for (const unsigned int i : fe_values.dof_indices())
                 cell_rhs(i) +=
@@ -539,7 +539,7 @@ namespace Step19
 
   // Let us now turn to the functions that deal with particles. The first one
   // is about the creation of particles. As mentioned in the introduction,
-  // we want to create a particle at points of the cathode if the the electric
+  // we want to create a particle at points of the cathode if the electric
   // field $\mathbf E=\nabla V$ exceeds a certain threshold, i.e., if
   // $|\mathbf E| \ge E_\text{threshold}$, and if furthermore the electric field
   // points into the domain (i.e., if $\mathbf E \cdot \mathbf n < 0$). As is
@@ -613,7 +613,7 @@ namespace Step19
                 if ((E * fe_face_values.normal_vector(q_point) < 0) &&
                     (E.norm() > Constants::E_threshold))
                   {
-                    const Point<dim> location =
+                    const Point<dim> &location =
                       fe_face_values.quadrature_point(q_point);
 
                     Particles::Particle<dim> new_particle;
@@ -652,7 +652,7 @@ namespace Step19
     const double dt = time.get_next_step_size();
 
     Vector<double>            solution_values(fe.n_dofs_per_cell());
-    FEPointEvaluation<1, dim> evaluator(mapping, fe);
+    FEPointEvaluation<1, dim> evaluator(mapping, fe, update_gradients);
 
     for (const auto &cell : dof_handler.active_cell_iterators())
       if (particle_handler.n_particles_in_cell(cell) > 0)
@@ -670,9 +670,8 @@ namespace Step19
           // Then we can ask the FEPointEvaluation object for the gradients of
           // the solution (i.e., the electric field $\mathbf E$) at these
           // locations and loop over the individual particles:
-          evaluator.evaluate(cell,
-                             particle_positions,
-                             make_array_view(solution_values),
+          evaluator.reinit(cell, particle_positions);
+          evaluator.evaluate(make_array_view(solution_values),
                              EvaluationFlags::gradients);
 
           {
@@ -682,7 +681,8 @@ namespace Step19
                  particle != particles_in_cell.end();
                  ++particle, ++particle_index)
               {
-                const Tensor<1, dim> E = evaluator.get_gradient(particle_index);
+                const Tensor<1, dim> &E =
+                  evaluator.get_gradient(particle_index);
 
                 // Having now obtained the electric field at the location of one
                 // of the particles, we use this to update first the velocity
@@ -707,7 +707,7 @@ namespace Step19
                 const Tensor<1, dim> new_velocity =
                   old_velocity + acceleration * dt;
 
-                particle->set_properties(make_array_view(new_velocity));
+                particle->set_properties(new_velocity);
 
                 // With the new velocity, we can then also update the location
                 // of the particle and tell the particle about it.
@@ -903,12 +903,14 @@ namespace Step19
 
 
   // With this, the `output_results()` function becomes relatively
-  // straightforward: We use the DataOut class as we have in almost every one of
-  // the previous tutorial programs to output the solution (the "electric
-  // potential") and we use the postprocessor defined above to also output its
-  // gradient (the "electric field"). This all is then written into a file in
-  // VTU format after also associating the current time and time step number
-  // with this file.
+  // straightforward: We use the DataOut class as we have in almost
+  // every one of the previous tutorial programs to output the
+  // solution (the "electric potential") and we use the postprocessor
+  // defined above to also output its gradient (the "electric
+  // field"). This all is then written into a file in VTU format after
+  // also associating the current time and time step number with this
+  // file, and providing physical units for the two fields to be
+  // output.
   template <int dim>
   void CathodeRaySimulator<dim>::output_results() const
   {
@@ -920,8 +922,13 @@ namespace Step19
       data_out.add_data_vector(solution, electric_field);
       data_out.build_patches();
 
-      data_out.set_flags(
-        DataOutBase::VtkFlags(time.get_current_time(), time.get_step_number()));
+      DataOutBase::VtkFlags output_flags;
+      output_flags.time  = time.get_current_time();
+      output_flags.cycle = time.get_step_number();
+      output_flags.physical_units["electric_potential"] = "V";
+      output_flags.physical_units["electric_field"]     = "V/m";
+
+      data_out.set_flags(output_flags);
 
       std::ofstream output("solution-" +
                            Utilities::int_to_string(time.get_step_number(), 4) +
@@ -936,15 +943,19 @@ namespace Step19
     // properties -- namely, as a single vector indicating the velocity, rather
     // than as `dim` scalar properties. The rest is then the same as above:
     {
-      Particles::DataOut<dim, dim> particle_out;
+      Particles::DataOut<dim> particle_out;
       particle_out.build_patches(
         particle_handler,
         std::vector<std::string>(dim, "velocity"),
         std::vector<DataComponentInterpretation::DataComponentInterpretation>(
           dim, DataComponentInterpretation::component_is_part_of_vector));
 
-      particle_out.set_flags(
-        DataOutBase::VtkFlags(time.get_current_time(), time.get_step_number()));
+      DataOutBase::VtkFlags output_flags;
+      output_flags.time                       = time.get_current_time();
+      output_flags.cycle                      = time.get_step_number();
+      output_flags.physical_units["velocity"] = "m/s";
+
+      particle_out.set_flags(output_flags);
 
       std::ofstream output("particles-" +
                            Utilities::int_to_string(time.get_step_number(), 4) +

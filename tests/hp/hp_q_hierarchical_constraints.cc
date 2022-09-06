@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -114,7 +114,7 @@ test(const bool apply_constrains, const unsigned int hp)
   if (apply_constrains)
     deallog << hp_string << std::endl;
 
-  for (unsigned int i = 0; i < n_dofs; i++)
+  for (unsigned int i = 0; i < n_dofs; ++i)
     {
       v    = 0.;
       v[i] = 1.;
@@ -126,7 +126,7 @@ test(const bool apply_constrains, const unsigned int hp)
         }
 
 #ifdef FEQH_DEBUG_OUTPUT
-      DataOut<dim, DoFHandler<dim>> data_out;
+      DataOut<dim> data_out;
       data_out.attach_dof_handler(dof_handler);
 
       data_out.add_data_vector(v, "shape_function");
@@ -135,8 +135,8 @@ test(const bool apply_constrains, const unsigned int hp)
       data_out.build_patches(20);
 
       std::ostringstream filename;
-      filename << "shape_" << dim << "d"
-               << (apply_constrains ? "_constrained" : "") << hp_string << "_"
+      filename << "shape_" << dim << 'd'
+               << (apply_constrains ? "_constrained" : "") << hp_string << '_'
                << i << ".vtk";
 
       std::ofstream output(filename.str().c_str());

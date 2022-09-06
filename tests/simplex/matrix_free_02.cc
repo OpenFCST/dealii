@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -35,6 +35,7 @@
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria.h>
 
+#include <deal.II/lac/dynamic_sparsity_pattern.h>
 #include <deal.II/lac/la_parallel_vector.h>
 #include <deal.II/lac/precondition.h>
 #include <deal.II/lac/solver_cg.h>
@@ -204,12 +205,15 @@ test(const unsigned version, const unsigned int degree, const bool do_helmholtz)
                                       quads,
                                       VectorTools::NormType::L2_norm);
 
-    return {reduction_control.last_step(),
-            reduction_control.last_value(),
-            x.linfty_norm(),
-            VectorTools::compute_global_error(tria,
-                                              difference,
-                                              VectorTools::NormType::L2_norm)};
+    std::tuple<unsigned int, double, double, double> result(
+      reduction_control.last_step(),
+      reduction_control.last_value(),
+      x.linfty_norm(),
+      VectorTools::compute_global_error(tria,
+                                        difference,
+                                        VectorTools::NormType::L2_norm));
+
+    return result;
   };
 
   const auto mf_algo = [&]() {
@@ -305,15 +309,15 @@ test(const unsigned version, const unsigned int degree, const bool do_helmholtz)
 
     deallog << "mesh=";
     if (version == 0)
-      deallog << "P";
+      deallog << 'P';
     else if (version == 1)
-      deallog << "Q";
+      deallog << 'Q';
     else if (version == 2)
-      deallog << "M";
+      deallog << 'M';
     deallog << " : ";
 
-    deallog << "dim=" << dim << " ";
-    deallog << "degree=" << degree << " ";
+    deallog << "dim=" << dim << ' ';
+    deallog << "degree=" << degree << ' ';
     deallog << "Type=";
 
     if (do_helmholtz)
@@ -324,7 +328,7 @@ test(const unsigned version, const unsigned int degree, const bool do_helmholtz)
 
     deallog << "Convergence step " << std::get<0>(result_mf) << " value "
             << std::get<1>(result_mf) << " max " << std::get<2>(result_mf)
-            << " norm " << std::get<3>(result_mf) << "." << std::endl;
+            << " norm " << std::get<3>(result_mf) << '.' << std::endl;
   };
 
   compare(mf_algo(), mb_algo());

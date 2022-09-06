@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2018 by the deal.II authors
+// Copyright (C) 1999 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -31,9 +31,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup mg */
-/*@{*/
-
+/**
+ * @addtogroup mg
+ * @{
+ */
 
 /**
  * Multilevel matrix base. This class sets up the interface needed by
@@ -293,7 +294,7 @@ public:
   apply(const unsigned int level, VectorType &u, const VectorType &rhs) const;
 };
 
-/*@}*/
+/** @} */
 
 DEAL_II_NAMESPACE_CLOSE
 

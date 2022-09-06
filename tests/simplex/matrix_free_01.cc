@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -33,6 +33,7 @@
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria.h>
 
+#include <deal.II/lac/dynamic_sparsity_pattern.h>
 #include <deal.II/lac/la_parallel_vector.h>
 #include <deal.II/lac/precondition.h>
 #include <deal.II/lac/solver_cg.h>
@@ -286,8 +287,8 @@ test(const unsigned int v, const unsigned int degree, const bool do_helmholtz)
     Assert(std::abs(result_mf.second - result_mb.second) < 1e-8,
            ExcNotImplemented());
 
-    deallog << "dim=" << dim << " ";
-    deallog << "degree=" << degree << " ";
+    deallog << "dim=" << dim << ' ';
+    deallog << "degree=" << degree << ' ';
     deallog << "Type=";
 
     if (do_helmholtz)
@@ -298,7 +299,7 @@ test(const unsigned int v, const unsigned int degree, const bool do_helmholtz)
               << " : ";
 
     deallog << "Convergence step " << result_mf.first << " value "
-            << result_mf.second << "." << std::endl;
+            << result_mf.second << '.' << std::endl;
   };
 
   compare(mf_algo(), mb_algo());

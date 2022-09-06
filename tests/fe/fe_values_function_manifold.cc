@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -27,7 +27,7 @@
 
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_values.h>
-#include <deal.II/fe/mapping_q_generic.h>
+#include <deal.II/fe/mapping_q.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/manifold.h>
@@ -238,7 +238,7 @@ protected:
   FE_Q<dim>                      finite_element;
   DoFHandler<dim>                dof_handler;
   QGauss<dim>                    cell_quadrature;
-  MappingQGeneric<dim>           cell_mapping;
+  MappingQ<dim>                  cell_mapping;
 
   AffineConstraints<double> all_constraints;
   SparsityPattern           sparsity_pattern;

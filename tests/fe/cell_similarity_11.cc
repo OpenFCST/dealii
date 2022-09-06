@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2020 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -83,7 +83,7 @@ test(const Triangulation<dim> &tr)
           deallog << "[ ";
           for (unsigned int d = 0; d < dim; ++d)
             for (unsigned int e = 0; e < dim; ++e)
-              deallog << fe_values.jacobian(q)[d][e] << " ";
+              deallog << fe_values.jacobian(q)[d][e] << ' ';
           deallog << " ] ";
         }
       deallog << std::endl;
@@ -92,7 +92,7 @@ test(const Triangulation<dim> &tr)
         {
           deallog << "[ ";
           for (unsigned int d = 0; d < dim; ++d)
-            deallog << fe_values.shape_grad(fe.dofs_per_cell / 2, q)[d] << " ";
+            deallog << fe_values.shape_grad(fe.dofs_per_cell / 2, q)[d] << ' ';
           deallog << " ] ";
         }
       deallog << std::endl;

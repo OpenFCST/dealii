@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -75,7 +75,7 @@ private:
     FEFaceEvaluation<dim, -1, 0, 1, number> ref(data, true);
     FEFaceEvaluation<dim, -1, 0, 1, number> check(data, true);
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         ref.reinit(face);
         check.reinit(face);
@@ -93,19 +93,19 @@ private:
                 if (std::abs(diff[v]) > 1e-12)
                   {
                     deallog << "Error detected on face" << face << ", v=" << v
-                            << "!" << std::endl;
+                            << '!' << std::endl;
                     deallog << "ref: ";
                     for (unsigned int i = 0; i < ref.dofs_per_cell; ++i)
-                      deallog << ref.get_dof_value(i)[v] << " ";
+                      deallog << ref.get_dof_value(i)[v] << ' ';
                     deallog << std::endl;
                     deallog << "done: " << check.get_value(q)[v]
                             << " instead of " << ref.get_value(q)[v]
                             << std::endl;
 
                     deallog
-                      << data.get_face_info(face).cells_interior[v] << " "
-                      << (int)data.get_face_info(face).interior_face_no << " "
-                      << (int)data.get_face_info(face).face_orientation << " "
+                      << data.get_face_info(face).cells_interior[v] << ' '
+                      << (int)data.get_face_info(face).interior_face_no << ' '
+                      << (int)data.get_face_info(face).face_orientation << ' '
                       << (int)data.get_face_info(face).subface_index
                       << std::endl;
                     deallog << std::endl;
@@ -141,19 +141,19 @@ private:
                 if (std::abs(diff[v]) > 1e-12)
                   {
                     deallog << "Error detected on face" << face << ", v=" << v
-                            << "!" << std::endl;
+                            << '!' << std::endl;
                     deallog << "ref: ";
                     for (unsigned int i = 0; i < ref.dofs_per_cell; ++i)
-                      deallog << refr.get_dof_value(i)[v] << " ";
+                      deallog << refr.get_dof_value(i)[v] << ' ';
                     deallog << std::endl;
                     deallog << "done: " << check.get_value(q)[v]
                             << " instead of " << ref.get_value(q)[v]
                             << std::endl;
 
                     deallog
-                      << data.get_face_info(face).cells_exterior[v] << " "
-                      << (int)data.get_face_info(face).exterior_face_no << " "
-                      << (int)data.get_face_info(face).face_orientation << " "
+                      << data.get_face_info(face).cells_exterior[v] << ' '
+                      << (int)data.get_face_info(face).exterior_face_no << ' '
+                      << (int)data.get_face_info(face).face_orientation << ' '
                       << (int)data.get_face_info(face).subface_index
                       << std::endl;
                     deallog << std::endl;
@@ -221,7 +221,7 @@ test()
     data.mapping_update_flags_boundary_faces =
       (update_gradients | update_JxW_values);
 
-    mf_data.reinit(dof, constraints, quad, data);
+    mf_data.reinit(MappingQ1<dim>{}, dof, constraints, quad, data);
   }
 
   MatrixFreeTest<dim, fe_degree, number> mf(mf_data);

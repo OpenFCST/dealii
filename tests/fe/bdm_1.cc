@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2018 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -57,7 +57,7 @@ plot_shape_functions(const unsigned int degree)
             for (unsigned int i = 0; i < fe_bdm.dofs_per_cell; ++i)
               {
                 for (unsigned int c = 0; c < dim; ++c)
-                  deallog << " " << fe_bdm.shape_value_component(i, p, c);
+                  deallog << ' ' << fe_bdm.shape_value_component(i, p, c);
                 deallog << "  ";
               }
             deallog << std::endl << "grad " << p;

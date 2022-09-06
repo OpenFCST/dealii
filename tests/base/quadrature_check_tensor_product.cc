@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2018 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -49,7 +49,7 @@ check_tensor_product(const std::vector<Quadrature<1>> &quadratures,
           AssertThrow(q_basis[0].size() == q_points.size(), ExcInternalError());
           for (unsigned int q = 0; q < quadrature.size(); ++q)
             {
-              std::cout << q_points[q] << " " << q_basis[0].get_points()[q]
+              std::cout << q_points[q] << ' ' << q_basis[0].get_points()[q]
                         << std::endl;
               AssertThrow(std::abs(
                             (q_points[q] - q_basis[0].get_points()[q]).norm()) <

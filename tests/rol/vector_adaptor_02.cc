@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -113,7 +113,7 @@ test(const double x, const double y)
 
   Teuchos::RCP<const VectorType> xg = x_rol.getVector();
   std::cout << "The solution to minimization problem is: ";
-  std::cout << (*xg)[0] << " " << (*xg)[1] << std::endl;
+  std::cout << (*xg)[0] << ' ' << (*xg)[1] << std::endl;
 }
 
 int

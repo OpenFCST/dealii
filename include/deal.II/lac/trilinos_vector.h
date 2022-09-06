@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -21,7 +21,7 @@
 
 #ifdef DEAL_II_WITH_TRILINOS
 #  include <deal.II/base/index_set.h>
-#  include <deal.II/base/mpi.h>
+#  include <deal.II/base/mpi_stub.h>
 #  include <deal.II/base/subscriptor.h>
 #  include <deal.II/base/utilities.h>
 
@@ -31,19 +31,14 @@
 #  include <deal.II/lac/vector_type_traits.h>
 
 #  include <Epetra_ConfigDefs.h>
+#  include <Epetra_FEVector.h>
+#  include <Epetra_LocalMap.h>
+#  include <Epetra_Map.h>
+#  include <Epetra_MpiComm.h>
 
 #  include <memory>
 #  include <utility>
 #  include <vector>
-#  ifdef DEAL_II_WITH_MPI // only if MPI is installed
-#    include <Epetra_MpiComm.h>
-#    include <mpi.h>
-#  else
-#    include <Epetra_SerialComm.h>
-#  endif
-#  include <Epetra_FEVector.h>
-#  include <Epetra_LocalMap.h>
-#  include <Epetra_Map.h>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -398,7 +393,6 @@ namespace TrilinosWrappers
      *
      * @ingroup TrilinosWrappers
      * @ingroup Vectors
-     *         2008, 2009, 2017
      */
     class Vector : public Subscriptor
     {
@@ -419,7 +413,7 @@ namespace TrilinosWrappers
       /**
        * @name 1: Basic Object-handling
        */
-      //@{
+      /** @{ */
       /**
        * Default constructor that generates an empty (zero size) vector. The
        * function <tt>reinit()</tt> will have to give the vector the correct
@@ -741,7 +735,7 @@ namespace TrilinosWrappers
        *
        * @deprecated This function is deprecated.
        */
-      DEAL_II_DEPRECATED_EARLY
+      DEAL_II_DEPRECATED
       size_type
       local_size() const;
 
@@ -825,7 +819,8 @@ namespace TrilinosWrappers
        * Return the scalar (inner) product of two vectors. The vectors must have
        * the same size.
        */
-      TrilinosScalar operator*(const Vector &vec) const;
+      TrilinosScalar
+      operator*(const Vector &vec) const;
 
       /**
        * Return the square of the $l_2$-norm.
@@ -914,13 +909,13 @@ namespace TrilinosWrappers
        */
       bool
       is_non_negative() const;
-      //@}
+      /** @} */
 
 
       /**
        * @name 2: Data-Access
        */
-      //@{
+      /** @{ */
 
       /**
        * Provide access to a given element, both read and write.
@@ -947,14 +942,16 @@ namespace TrilinosWrappers
        *
        * Exactly the same as operator().
        */
-      reference operator[](const size_type index);
+      reference
+      operator[](const size_type index);
 
       /**
        * Provide read-only access to an element.
        *
        * Exactly the same as operator().
        */
-      TrilinosScalar operator[](const size_type index) const;
+      TrilinosScalar
+      operator[](const size_type index) const;
 
       /**
        * Instead of getting individual elements of a vector via operator(),
@@ -1042,13 +1039,13 @@ namespace TrilinosWrappers
       const_iterator
       end() const;
 
-      //@}
+      /** @} */
 
 
       /**
        * @name 3: Modification of vectors
        */
-      //@{
+      /** @{ */
 
       /**
        * A collective set operation: instead of setting individual elements of a
@@ -1191,12 +1188,12 @@ namespace TrilinosWrappers
        */
       void
       equ(const TrilinosScalar a, const Vector &V);
-      //@}
+      /** @} */
 
       /**
        * @name 4: Mixed stuff
        */
-      //@{
+      /** @{ */
 
       /**
        * Return a const reference to the underlying Trilinos Epetra_MultiVector
@@ -1260,7 +1257,7 @@ namespace TrilinosWrappers
        */
       const MPI_Comm &
       get_mpi_communicator() const;
-      //@}
+      /** @} */
 
       /**
        * Exception
@@ -1288,7 +1285,7 @@ namespace TrilinosWrappers
         << " of a distributed vector, but this element is not stored "
         << "on the current processor. Note: There are " << arg2
         << " elements stored "
-        << "on the current processor from within the range [" << arg3 << ","
+        << "on the current processor from within the range [" << arg3 << ','
         << arg4 << "] but Trilinos vectors need not store contiguous "
         << "ranges on each processor, and not every element in "
         << "this range may in fact be stored locally."
@@ -1498,14 +1495,16 @@ namespace TrilinosWrappers
 
 
 
-    inline internal::VectorReference Vector::operator[](const size_type index)
+    inline internal::VectorReference
+    Vector::operator[](const size_type index)
     {
       return operator()(index);
     }
 
 
 
-    inline TrilinosScalar Vector::operator[](const size_type index) const
+    inline TrilinosScalar
+    Vector::operator[](const size_type index) const
     {
       return operator()(index);
     }
@@ -1549,7 +1548,7 @@ namespace TrilinosWrappers
     inline Vector::iterator
     Vector::end()
     {
-      return (*vector)[0] + local_size();
+      return (*vector)[0] + locally_owned_size();
     }
 
 
@@ -1565,7 +1564,7 @@ namespace TrilinosWrappers
     inline Vector::const_iterator
     Vector::end() const
     {
-      return (*vector)[0] + local_size();
+      return (*vector)[0] + locally_owned_size();
     }
 
 
@@ -1578,8 +1577,7 @@ namespace TrilinosWrappers
       // writing to this vector at all.
       Assert(!has_ghost_elements(), ExcGhostsPresent());
 
-      Assert(indices.size() == values.size(),
-             ExcDimensionMismatch(indices.size(), values.size()));
+      AssertDimension(indices.size(), values.size());
 
       set(indices.size(), indices.data(), values.data());
     }
@@ -1594,8 +1592,7 @@ namespace TrilinosWrappers
       // writing to this vector at all.
       Assert(!has_ghost_elements(), ExcGhostsPresent());
 
-      Assert(indices.size() == values.size(),
-             ExcDimensionMismatch(indices.size(), values.size()));
+      AssertDimension(indices.size(), values.size());
 
       set(indices.size(), indices.data(), values.begin());
     }
@@ -1650,8 +1647,7 @@ namespace TrilinosWrappers
       // if we have ghost values, do not allow
       // writing to this vector at all.
       Assert(!has_ghost_elements(), ExcGhostsPresent());
-      Assert(indices.size() == values.size(),
-             ExcDimensionMismatch(indices.size(), values.size()));
+      AssertDimension(indices.size(), values.size());
 
       add(indices.size(), indices.data(), values.data());
     }
@@ -1665,8 +1661,7 @@ namespace TrilinosWrappers
       // if we have ghost values, do not allow
       // writing to this vector at all.
       Assert(!has_ghost_elements(), ExcGhostsPresent());
-      Assert(indices.size() == values.size(),
-             ExcDimensionMismatch(indices.size(), values.size()));
+      AssertDimension(indices.size(), values.size());
 
       add(indices.size(), indices.data(), values.begin());
     }
@@ -1783,7 +1778,8 @@ namespace TrilinosWrappers
 
 
 
-    inline TrilinosScalar Vector::operator*(const Vector &vec) const
+    inline TrilinosScalar
+    Vector::operator*(const Vector &vec) const
     {
       Assert(vector->Map().SameAs(vec.vector->Map()),
              ExcDifferentParallelPartitioning());
@@ -1881,7 +1877,7 @@ namespace TrilinosWrappers
 
       TrilinosScalar  norm    = 0;
       TrilinosScalar  sum     = 0;
-      const size_type n_local = local_size();
+      const size_type n_local = locally_owned_size();
 
       // loop over all the elements because
       // Trilinos does not support lp norms
@@ -1961,7 +1957,7 @@ namespace TrilinosWrappers
     inline Vector &
     Vector::operator+=(const Vector &v)
     {
-      Assert(size() == v.size(), ExcDimensionMismatch(size(), v.size()));
+      AssertDimension(size(), v.size());
       Assert(vector->Map().SameAs(v.vector->Map()),
              ExcDifferentParallelPartitioning());
 
@@ -1976,7 +1972,7 @@ namespace TrilinosWrappers
     inline Vector &
     Vector::operator-=(const Vector &v)
     {
-      Assert(size() == v.size(), ExcDimensionMismatch(size(), v.size()));
+      AssertDimension(size(), v.size());
       Assert(vector->Map().SameAs(v.vector->Map()),
              ExcDifferentParallelPartitioning());
 
@@ -1996,7 +1992,7 @@ namespace TrilinosWrappers
       Assert(!has_ghost_elements(), ExcGhostsPresent());
       AssertIsFinite(s);
 
-      size_type n_local = local_size();
+      size_type n_local = locally_owned_size();
       for (size_type i = 0; i < n_local; ++i)
         (*vector)[0][i] += s;
     }
@@ -2009,8 +2005,7 @@ namespace TrilinosWrappers
       // if we have ghost values, do not allow
       // writing to this vector at all.
       Assert(!has_ghost_elements(), ExcGhostsPresent());
-      Assert(local_size() == v.local_size(),
-             ExcDimensionMismatch(local_size(), v.local_size()));
+      AssertDimension(locally_owned_size(), v.locally_owned_size());
 
       AssertIsFinite(a);
 
@@ -2029,10 +2024,8 @@ namespace TrilinosWrappers
       // if we have ghost values, do not allow
       // writing to this vector at all.
       Assert(!has_ghost_elements(), ExcGhostsPresent());
-      Assert(local_size() == v.local_size(),
-             ExcDimensionMismatch(local_size(), v.local_size()));
-      Assert(local_size() == w.local_size(),
-             ExcDimensionMismatch(local_size(), w.local_size()));
+      AssertDimension(locally_owned_size(), v.locally_owned_size());
+      AssertDimension(locally_owned_size(), w.locally_owned_size());
 
       AssertIsFinite(a);
       AssertIsFinite(b);
@@ -2050,13 +2043,14 @@ namespace TrilinosWrappers
       // if we have ghost values, do not allow
       // writing to this vector at all.
       Assert(!has_ghost_elements(), ExcGhostsPresent());
-      Assert(size() == v.size(), ExcDimensionMismatch(size(), v.size()));
+      AssertDimension(size(), v.size());
 
       AssertIsFinite(s);
 
       // We assume that the vectors have the same Map
       // if the local size is the same and if the vectors are not ghosted
-      if (local_size() == v.local_size() && !v.has_ghost_elements())
+      if (locally_owned_size() == v.locally_owned_size() &&
+          !v.has_ghost_elements())
         {
           Assert(this->vector->Map().SameAs(v.vector->Map()) == true,
                  ExcDifferentParallelPartitioning());
@@ -2080,13 +2074,14 @@ namespace TrilinosWrappers
       // if we have ghost values, do not allow
       // writing to this vector at all.
       Assert(!has_ghost_elements(), ExcGhostsPresent());
-      Assert(size() == v.size(), ExcDimensionMismatch(size(), v.size()));
+      AssertDimension(size(), v.size());
       AssertIsFinite(s);
       AssertIsFinite(a);
 
       // We assume that the vectors have the same Map
       // if the local size is the same and if the vectors are not ghosted
-      if (local_size() == v.local_size() && !v.has_ghost_elements())
+      if (locally_owned_size() == v.locally_owned_size() &&
+          !v.has_ghost_elements())
         {
           Assert(this->vector->Map().SameAs(v.vector->Map()) == true,
                  ExcDifferentParallelPartitioning());
@@ -2110,8 +2105,7 @@ namespace TrilinosWrappers
       // if we have ghost values, do not allow
       // writing to this vector at all.
       Assert(!has_ghost_elements(), ExcGhostsPresent());
-      Assert(local_size() == factors.local_size(),
-             ExcDimensionMismatch(local_size(), factors.local_size()));
+      AssertDimension(locally_owned_size(), factors.locally_owned_size());
 
       const int ierr = vector->Multiply(1.0, *(factors.vector), *vector, 0.0);
       AssertThrow(ierr == 0, ExcTrilinosError(ierr));
@@ -2173,17 +2167,9 @@ namespace TrilinosWrappers
     {
       static MPI_Comm comm;
 
-#    ifdef DEAL_II_WITH_MPI
-
       const Epetra_MpiComm *mpi_comm =
         dynamic_cast<const Epetra_MpiComm *>(&vector->Map().Comm());
       comm = mpi_comm->Comm();
-
-#    else
-
-      comm = MPI_COMM_SELF;
-
-#    endif
 
       return comm;
     }
@@ -2222,7 +2208,7 @@ namespace TrilinosWrappers
 
 } /* end of namespace TrilinosWrappers */
 
-/*@}*/
+/** @} */
 
 
 namespace internal

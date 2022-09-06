@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2000 - 2019 by the deal.II authors
+ * Copyright (C) 2000 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -184,7 +184,7 @@ namespace Step17
     virtual void vector_value(const Point<dim> &p,
                               Vector<double> &  values) const override
     {
-      Assert(values.size() == dim, ExcDimensionMismatch(values.size(), dim));
+      AssertDimension(values.size(), dim);
       Assert(dim >= 2, ExcInternalError());
 
       Point<dim> point_1, point_2;
@@ -209,8 +209,7 @@ namespace Step17
     {
       const unsigned int n_points = points.size();
 
-      Assert(value_list.size() == n_points,
-             ExcDimensionMismatch(value_list.size(), n_points));
+      AssertDimension(value_list.size(), n_points);
 
       for (unsigned int p = 0; p < n_points; ++p)
         RightHandSide<dim>::vector_value(points[p], value_list[p]);
@@ -980,7 +979,7 @@ namespace Step17
           pcout << (p == 0 ? ' ' : '+')
                 << (DoFTools::count_dofs_with_subdomain_association(dof_handler,
                                                                     p));
-        pcout << ")" << std::endl;
+        pcout << ')' << std::endl;
 
         assemble_system();
         const unsigned int n_iterations = solve();

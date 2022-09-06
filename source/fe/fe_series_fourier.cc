@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -27,14 +27,16 @@ DEAL_II_NAMESPACE_OPEN
 
 namespace
 {
-  void set_k_vectors(Table<1, Tensor<1, 1>> &k_vectors, const unsigned int N)
+  void
+  set_k_vectors(Table<1, Tensor<1, 1>> &k_vectors, const unsigned int N)
   {
     k_vectors.reinit(TableIndices<1>(N));
     for (unsigned int i = 0; i < N; ++i)
       k_vectors(i)[0] = 2. * numbers::PI * i;
   }
 
-  void set_k_vectors(Table<2, Tensor<1, 2>> &k_vectors, const unsigned int N)
+  void
+  set_k_vectors(Table<2, Tensor<1, 2>> &k_vectors, const unsigned int N)
   {
     k_vectors.reinit(TableIndices<2>(N, N));
     for (unsigned int i = 0; i < N; ++i)
@@ -45,7 +47,8 @@ namespace
         }
   }
 
-  void set_k_vectors(Table<3, Tensor<1, 3>> &k_vectors, const unsigned int N)
+  void
+  set_k_vectors(Table<3, Tensor<1, 3>> &k_vectors, const unsigned int N)
   {
     k_vectors.reinit(TableIndices<3>(N, N, N));
     for (unsigned int i = 0; i < N; ++i)
@@ -223,23 +226,9 @@ namespace FESeries
 
 
   template <int dim, int spacedim>
-  Fourier<dim, spacedim>::Fourier(
-    const unsigned int                     n_coefficients_per_direction,
-    const hp::FECollection<dim, spacedim> &fe_collection,
-    const hp::QCollection<dim> &           q_collection)
-    : Fourier<dim, spacedim>(
-        std::vector<unsigned int>(fe_collection.size(),
-                                  n_coefficients_per_direction),
-        fe_collection,
-        q_collection)
-  {}
-
-
-
-  template <int dim, int spacedim>
   inline bool
-  Fourier<dim, spacedim>::
-  operator==(const Fourier<dim, spacedim> &fourier) const
+  Fourier<dim, spacedim>::operator==(
+    const Fourier<dim, spacedim> &fourier) const
   {
     return (
       (n_coefficients_per_direction == fourier.n_coefficients_per_direction) &&
@@ -317,8 +306,8 @@ namespace FESeries
     Assert(local_dof_values.size() == matrix.n(),
            ExcDimensionMismatch(local_dof_values.size(), matrix.n()));
 
-    for (unsigned int i = 0; i < unrolled_coefficients.size(); i++)
-      for (unsigned int j = 0; j < local_dof_values.size(); j++)
+    for (unsigned int i = 0; i < unrolled_coefficients.size(); ++i)
+      for (unsigned int j = 0; j < local_dof_values.size(); ++j)
         unrolled_coefficients[i] += matrix[i][j] * local_dof_values[j];
 
     fourier_coefficients.fill(unrolled_coefficients.begin());

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2020 by the deal.II authors
+// Copyright (C) 2009 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -66,7 +66,7 @@ test()
                                                    dof_handler.begin_active(),
                                                  endc = dof_handler.end();
 
-  for (; cell != endc; cell++)
+  for (; cell != endc; ++cell)
     {
       Point<dim> center = cell->center();
       if (std::sqrt(center.square()) < 0.25)

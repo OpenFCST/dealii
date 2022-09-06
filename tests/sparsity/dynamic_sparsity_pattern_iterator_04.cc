@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -72,7 +72,7 @@ iterate(DynamicSparsityPattern &sp)
       {
         DynamicSparsityPattern::iterator col     = sp.begin(row),
                                          end_col = sp.end(row);
-        deallog << "row " << row << ":" << std::endl;
+        deallog << "row " << row << ':' << std::endl;
         for (; col != end_col; ++col)
           {
             deallog << "row= " << col->row() << ", col= " << col->column()

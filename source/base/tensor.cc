@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2019 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,13 +18,16 @@
 #include <deal.II/lac/exceptions.h>
 #include <deal.II/lac/lapack_templates.h>
 
+#include <array>
+
 DEAL_II_NAMESPACE_OPEN
 
 namespace
 {
   template <int dim, typename Number>
-  void calculate_svd_in_place(Tensor<2, dim, Number> &A_in_VT_out,
-                              Tensor<2, dim, Number> &U)
+  void
+  calculate_svd_in_place(Tensor<2, dim, Number> &A_in_VT_out,
+                         Tensor<2, dim, Number> &U)
   {
     // inputs: A
     // outputs: V^T, U

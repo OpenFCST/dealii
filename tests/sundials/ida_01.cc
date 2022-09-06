@@ -1,6 +1,6 @@
 //-----------------------------------------------------------
 //
-//    Copyright (C) 2017 - 2018 by the deal.II authors
+//    Copyright (C) 2017 - 2022 by the deal.II authors
 //
 //    This file is part of the deal.II library.
 //
@@ -24,7 +24,8 @@
 
 
 /**
- * Solve the Harmonic oscillator problem.
+ * Solve the Harmonic oscillator problem, using a direct solver for the
+ * jacobian system.
  *
  * u'' = -k^2 u
  * u (0) = 0
@@ -66,7 +67,6 @@ public:
     , A(2, 2)
     , Jinv(2, 2)
     , kappa(_kappa)
-    , out("output")
   {
     using VectorType = Vector<double>;
 
@@ -98,8 +98,16 @@ public:
       return 0;
     };
 
+    // Used only in ver < 4.0.0
     time_stepper.solve_jacobian_system = [&](const VectorType &src,
                                              VectorType &      dst) -> int {
+      Jinv.vmult(dst, src);
+      return 0;
+    };
+
+    // Used in ver >= 4.0.0
+    time_stepper.solve_with_jacobian =
+      [&](const VectorType &src, VectorType &dst, const double) -> int {
       Jinv.vmult(dst, src);
       return 0;
     };
@@ -108,8 +116,8 @@ public:
                                    const VectorType & sol,
                                    const VectorType & sol_dot,
                                    const unsigned int step_number) -> int {
-      out << t << " " << sol[0] << " " << sol[1] << " " << sol_dot[0] << " "
-          << sol_dot[1] << std::endl;
+      deallog << t << ' ' << sol[0] << ' ' << sol[1] << ' ' << sol_dot[0] << ' '
+              << sol_dot[1] << std::endl;
       return 0;
     };
   }
@@ -130,16 +138,14 @@ private:
   FullMatrix<double> A;
   FullMatrix<double> Jinv;
   double             kappa;
-
-  std::ofstream out;
 };
 
 
 int
-main(int argc, char **argv)
+main()
 {
-  Utilities::MPI::MPI_InitFinalize mpi_initialization(
-    argc, argv, numbers::invalid_unsigned_int);
+  initlog();
+  deallog << std::setprecision(10);
 
   SUNDIALS::IDA<Vector<double>>::AdditionalData data;
   ParameterHandler                              prm;
@@ -149,7 +155,7 @@ main(int argc, char **argv)
   // prm.print_parameters(ofile, ParameterHandler::ShortText);
   // ofile.close();
 
-  std::ifstream ifile(SOURCE_DIR "/ida_01.prm");
+  std::ifstream ifile(SOURCE_DIR "/ida_01_in.prm");
   prm.parse_input(ifile);
 
 

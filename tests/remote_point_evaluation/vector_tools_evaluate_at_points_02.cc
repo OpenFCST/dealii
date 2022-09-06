@@ -24,10 +24,10 @@
 #include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe_dgq.h>
-#include <deal.II/fe/fe_point_evaluation.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/mapping_fe.h>
-#include <deal.II/fe/mapping_q_generic.h>
+#include <deal.II/fe/mapping_q.h>
+#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_in.h>
@@ -38,6 +38,8 @@
 #include <deal.II/lac/solver_control.h>
 #include <deal.II/lac/trilinos_sparse_matrix.h>
 #include <deal.II/lac/trilinos_sparsity_pattern.h>
+
+#include <deal.II/matrix_free/fe_point_evaluation.h>
 
 #include <deal.II/numerics/data_out.h>
 #include <deal.II/numerics/vector_tools.h>
@@ -94,9 +96,9 @@ print(const Mapping<dim> &                              mapping,
   const auto &tria = dof_handler.get_triangulation();
 
   Vector<double> ranks(tria.n_active_cells());
-  for (const auto &cell : tria.active_cell_iterators())
-    if (cell->is_locally_owned())
-      ranks(cell->active_cell_index()) = cell->subdomain_id();
+  for (const auto &cell :
+       tria.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+    ranks(cell->active_cell_index()) = cell->subdomain_id();
   data_out.add_data_vector(ranks, "rank");
   data_out.add_data_vector(result, "result");
 
@@ -179,11 +181,11 @@ public:
       solution_other.update_ghost_values();
       Utilities::MPI::RemotePointEvaluation<dim> evaluation_cache;
       const auto                                 evaluation_point_results =
-        VectorTools::evaluate_at_points<1>(mapping_other,
-                                           dof_handler_other,
-                                           solution_other,
-                                           evaluation_points,
-                                           evaluation_cache);
+        VectorTools::point_values<1>(mapping_other,
+                                     dof_handler_other,
+                                     solution_other,
+                                     evaluation_points,
+                                     evaluation_cache);
       solution_other.zero_out_ghosts();
       for (unsigned int i = 0; i < evaluation_points.size(); ++i)
         {
@@ -293,18 +295,18 @@ test()
   const unsigned int n_refinements_1 = 4;
   const unsigned int n_refinements_2 = 4;
 
-  const MappingQGeneric<dim> mapping_1(1);
-  const FE_Q<dim>            fe_1(2);
-  const QGauss<dim>          quad_1(3);
+  const MappingQ<dim> mapping_1(1);
+  const FE_Q<dim>     fe_1(2);
+  const QGauss<dim>   quad_1(3);
 
 #if false
   const MappingFE<dim>     mapping_2(Simplex::FE_P<dim>(1));
   const Simplex::FE_P<dim> fe_2(2);
   const Simplex::QGauss<dim>        quad_2(3);
 #else
-  const MappingQGeneric<dim> mapping_2(1);
-  const FE_Q<dim>            fe_2(2);
-  const QGauss<dim>          quad_2(3);
+  const MappingQ<dim> mapping_2(1);
+  const FE_Q<dim>     fe_2(2);
+  const QGauss<dim>   quad_2(3);
 #endif
 
   parallel::distributed::Triangulation<dim> tria_1(MPI_COMM_WORLD);

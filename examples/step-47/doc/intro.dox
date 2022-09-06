@@ -216,13 +216,19 @@ this scheme for the biharmonic equation is typically called the $C^0$ IP
 (or C0IP) method, since it uses $C^0$ (continuous but not continuously
 differentiable) shape functions with an interior penalty formulation.
 
+It is worth noting that the C0IP method is not the only one that has
+been developed for the biharmonic equation. step-82 shows an
+alternative method.
+
 
 <h3> Derivation of the C0IP method </h3>
 
 We base this program on the $C^0$ IP method presented by Susanne
 Brenner and Li-Yeng Sung in the paper "C$^0$ Interior Penalty Method
 for Linear Fourth Order Boundary Value Problems on polygonal
-domains'' @cite Brenner2005 , where the method is
+domains"
+@cite Brenner2005
+where the method is
 derived for the biharmonic equation with "clamped" boundary
 conditions.
 

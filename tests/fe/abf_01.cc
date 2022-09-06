@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -15,10 +15,8 @@
 
 
 
-// Show the shape functions of the Raviart-Thomas element on the unit cell
+// Show the shape functions of the ABF element on the unit cell
 // Plots are gnuplot compatible if lines with desired prefix are selected.
-
-#include <deal.II/fe/fe_raviart_thomas.h>
 
 #include "../tests.h"
 
@@ -30,11 +28,7 @@
 
 #include <deal.II/dofs/dof_tools.h>
 
-#include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_abf.h>
-#include <deal.II/fe/fe_dgq.h>
-#include <deal.II/fe/fe_q.h>
-#include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_q.h>
 
@@ -61,7 +55,8 @@
  * Check the value of the derivative field.
  */
 
-void EvaluateDerivative(DoFHandler<2> *dof_handler, Vector<double> &solution)
+void
+EvaluateDerivative(DoFHandler<2> *dof_handler, Vector<double> &solution)
 {
   // This quadrature rule determines the points, where the
   // derivative will be evaluated.
@@ -545,7 +540,8 @@ project(const Mapping<dim> &             mapping,
 }
 
 
-int create_alternate_unitsquare(Triangulation<2> &tria)
+int
+create_alternate_unitsquare(Triangulation<2> &tria)
 {
   std::vector<Point<2>> points;
 
@@ -633,7 +629,7 @@ main(int /*argc*/, char ** /*argv*/)
   hn_constraints.clear();
   DoFTools::make_hanging_node_constraints(*dof_handler, hn_constraints);
   hn_constraints.close();
-  MappingQGeneric<2> map_default(1);
+  MappingQ<2> map_default(1);
   project(map_default,
           *dof_handler,
           hn_constraints,

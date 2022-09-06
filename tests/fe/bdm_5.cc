@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2018 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -31,7 +31,7 @@ template <int dim>
 void
 test(const unsigned int degree)
 {
-  deallog << "FE_BDM<" << dim << "> (" << degree << ")" << std::endl;
+  deallog << "FE_BDM<" << dim << "> (" << degree << ')' << std::endl;
 
   FE_BDM<dim> fe_rt(degree);
 

@@ -1,6 +1,6 @@
 //-----------------------------------------------------------
 //
-//    Copyright (C) 2017 - 2020 by the deal.II authors
+//    Copyright (C) 2017 - 2022 by the deal.II authors
 //
 //    This file is part of the deal.II library.
 //
@@ -401,7 +401,7 @@ public:
   initialize(const std::string &filename        = "",
              const std::string &output_filename = "",
              const ParameterHandler::OutputStyle
-                                                 output_style_for_output_filename = ParameterHandler::Short,
+               output_style_for_output_filename      = ParameterHandler::Short,
              ParameterHandler &                  prm = ParameterAcceptor::prm,
              const ParameterHandler::OutputStyle output_style_for_filename =
                ParameterHandler::DefaultStyle);
@@ -437,7 +437,7 @@ public:
   /**
    * Declare parameter call back. This signal is triggered right after
    * declare_parameters() has been called, to allow users to prepare their
-   * variables right after parameters have been decalred. The default
+   * variables right after parameters have been declared. The default
    * implementation is empty.
    */
   boost::signals2::signal<void()> declare_parameters_call_back;

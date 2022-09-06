@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2018 by the deal.II authors
+// Copyright (C) 2013 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -80,8 +80,7 @@ test(const Triangulation<dim> &tr, const hp::FECollection<dim> &fe)
 
   deallog << "FE=" << fe[0].get_name() << std::endl;
 
-  std::set<types::boundary_id> boundary_ids;
-  boundary_ids.insert(0);
+  const std::set<types::boundary_id> boundary_ids = {0};
 
   AffineConstraints<double> cm;
   VectorTools::compute_no_normal_flux_constraints(dof, 0, boundary_ids, cm);
@@ -100,7 +99,7 @@ test(const Triangulation<dim> &tr, const hp::FECollection<dim> &fe)
     if (std::fabs(v(i)) < 1e-12)
       v(i) = 0;
 
-  DataOut<dim, DoFHandler<dim>> data_out;
+  DataOut<dim> data_out;
   data_out.attach_dof_handler(dh);
 
   std::vector<DataComponentInterpretation::DataComponentInterpretation>
@@ -108,8 +107,9 @@ test(const Triangulation<dim> &tr, const hp::FECollection<dim> &fe)
       dim, DataComponentInterpretation::component_is_part_of_vector);
 
   data_out.add_data_vector(v,
+
                            "x",
-                           DataOut<dim, DoFHandler<dim>>::type_dof_data,
+                           DataOut<dim>::type_dof_data,
                            data_component_interpretation);
   data_out.build_patches(fe[0].degree);
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2018 by the deal.II authors
+// Copyright (C) 1999 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -213,7 +213,7 @@ public:
   DeclException1(ExcRateColumnAlreadyExists,
                  std::string,
                  << "Rate column <" << arg1 << "> does already exist.");
-  //@}
+  /** @} */
 };
 
 

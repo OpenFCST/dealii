@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -80,9 +80,8 @@ namespace Particles
     auto particle = particles.begin();
     for (unsigned int i = 0; particle != particles.end(); ++particle, ++i)
       {
-        patches[i].vertices[0]    = particle->get_location();
-        patches[i].patch_index    = i;
-        patches[i].n_subdivisions = 1;
+        patches[i].vertices[0] = particle->get_location();
+        patches[i].patch_index = i;
 
         // We have one more data components than dataset_names (the particle id)
         patches[i].data.reinit(n_data_components, 1);

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -206,7 +206,7 @@ private:
     FEFaceEvaluation<dim, -1, 0, 1, number> fe_eval(data, true);
     FEFaceEvaluation<dim, -1, 0, 1, number> fe_eval_neighbor(data, false);
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval_neighbor.reinit(face);
@@ -253,7 +253,7 @@ private:
     const std::pair<unsigned int, unsigned int> &     face_range) const
   {
     FEFaceEvaluation<dim, -1, 0, 1, number> fe_eval(data, true);
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval.read_dof_values(src);
@@ -282,7 +282,7 @@ private:
   compute_inverse_diagonal()
   {
     data.initialize_dof_vector(inverse_diagonal_entries);
-    unsigned int dummy;
+    unsigned int dummy = 0;
     data.loop(&LaplaceOperator::local_diagonal_cell,
               &LaplaceOperator::local_diagonal_face,
               &LaplaceOperator::local_diagonal_boundary,
@@ -340,7 +340,7 @@ private:
     AlignedVector<VectorizedArray<number>>  local_diagonal_vector(
       phi.dofs_per_cell);
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         phi.reinit(face);
         phi_outer.reinit(face);
@@ -428,7 +428,7 @@ private:
     AlignedVector<VectorizedArray<number>>  local_diagonal_vector(
       phi.dofs_per_cell);
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         phi.reinit(face);
 
@@ -596,9 +596,11 @@ do_test(const DoFHandler<dim> &dof, const unsigned n_q_points_1d)
   mg_constrained_dofs.initialize(dof);
   mg_constrained_dofs.make_zero_boundary_constraints(dof, {0});
 
-  MGTransferMF<dim, LevelMatrixType> mg_transfer(mg_matrices,
-                                                 mg_constrained_dofs);
-  mg_transfer.build(dof);
+  MGTransferMatrixFree<dim, number> mg_transfer(mg_constrained_dofs);
+
+  mg_transfer.build(dof, [&](const unsigned int level, auto &vec) {
+    mg_matrices[level].initialize_dof_vector(vec);
+  });
 
   mg::Matrix<LinearAlgebra::distributed::Vector<double>> mg_matrix(mg_matrices);
 
@@ -606,7 +608,7 @@ do_test(const DoFHandler<dim> &dof, const unsigned n_q_points_1d)
     mg_matrix, mg_coarse, mg_transfer, mg_smoother, mg_smoother);
   PreconditionMG<dim,
                  LinearAlgebra::distributed::Vector<double>,
-                 MGTransferMF<dim, LevelMatrixType>>
+                 MGTransferMatrixFree<dim, number>>
     preconditioner(dof, mg, mg_transfer);
 
   {

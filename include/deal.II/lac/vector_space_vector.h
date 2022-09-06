@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2020 by the deal.II authors
+// Copyright (C) 2015 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -40,8 +40,9 @@ namespace LinearAlgebra
 
 namespace LinearAlgebra
 {
-  /*! @addtogroup Vectors
-   *@{
+  /**
+   * @addtogroup Vectors
+   * @{
    */
 
   /**
@@ -115,7 +116,8 @@ namespace LinearAlgebra
     /**
      * Return the scalar product of two vectors.
      */
-    virtual Number operator*(const VectorSpaceVector<Number> &V) const = 0;
+    virtual Number
+    operator*(const VectorSpaceVector<Number> &V) const = 0;
 
     /**
      * Add @p a to all components. Note that @p a is a scalar not a vector.
@@ -267,7 +269,7 @@ namespace LinearAlgebra
      */
     virtual ~VectorSpaceVector() = default;
   };
-  /*@}*/
+  /** @} */
 } // namespace LinearAlgebra
 
 // ---------------------------- Free functions --------------------------

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -20,7 +20,7 @@
 
 #include <deal.II/base/conditional_ostream.h>
 #include <deal.II/base/mpi.h>
-#include <deal.II/base/thread_management.h>
+#include <deal.II/base/mutex.h>
 #include <deal.II/base/utilities.h>
 
 #include <chrono>
@@ -361,7 +361,13 @@ private:
  * entered several times. By changing the options in OutputFrequency and
  * OutputType, the user can choose whether output should be generated every
  * time a section is joined or just in the end of the program. Moreover, it is
- * possible to show CPU times, wall times or both.
+ * possible to show CPU times, wall times, or both.
+ *
+ * The class is used in a substantial number of tutorial programs that collect
+ * timing data. step-77 is an example of a relatively simple sequential program
+ * that uses it. step-40 and several others mentioned below use it for parallel
+ * computations.
+ *
  *
  * <h3>Usage</h3>
  *
@@ -753,27 +759,11 @@ public:
   enter_subsection(const std::string &section_name);
 
   /**
-   * Same as @p enter_subsection.
-   *
-   * @deprecated Use enter_subsection() instead.
-   */
-  DEAL_II_DEPRECATED void
-  enter_section(const std::string &section_name);
-
-  /**
    * Leave a section. If no name is given, the last section that was entered
    * is left.
    */
   void
   leave_subsection(const std::string &section_name = "");
-
-  /**
-   * Same as @p leave_subsection.
-   *
-   * @deprecated Use leave_subsection() instead.
-   */
-  DEAL_II_DEPRECATED void
-  exit_section(const std::string &section_name = "");
 
   /**
    * Get a map with the collected data of the specified type for each subsection
@@ -882,7 +872,7 @@ private:
   /**
    * A list of the sections that have been entered and not exited. The list is
    * kept in the order in which sections have been entered, but elements may
-   * be removed in the middle if an argument is given to the exit_section()
+   * be removed in the middle if an argument is given to the leave_subsection()
    * function.
    */
   std::list<std::string> active_sections;
@@ -952,20 +942,6 @@ Timer::print_accumulated_wall_time_data(StreamType &stream) const
 }
 
 
-
-inline void
-TimerOutput::enter_section(const std::string &section_name)
-{
-  enter_subsection(section_name);
-}
-
-
-
-inline void
-TimerOutput::exit_section(const std::string &section_name)
-{
-  leave_subsection(section_name);
-}
 
 inline TimerOutput::Scope::Scope(dealii::TimerOutput &timer_,
                                  const std::string &  section_name_)

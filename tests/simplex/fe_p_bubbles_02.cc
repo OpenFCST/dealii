@@ -51,7 +51,7 @@ compute_nodal_quadrature(const FiniteElement<dim, spacedim> &fe)
   const Quadrature<dim> q_gauss =
     type.get_gauss_type_quadrature<dim>(fe.tensor_degree() + 1);
   Triangulation<dim, spacedim> tria;
-  GridGenerator::reference_cell(type, tria);
+  GridGenerator::reference_cell(tria, type);
   const Mapping<dim, spacedim> &mapping =
     type.template get_default_linear_mapping<dim, spacedim>();
 
@@ -100,7 +100,7 @@ test_interpolate()
     }
 
   deallog << "dim = " << dim << std::endl;
-  for (unsigned int degree = 0; degree < 3; ++degree)
+  for (unsigned int degree = 1; degree < 3; ++degree)
     {
       deallog << "degree = " << degree << std::endl;
       double old_error = -1.0;
@@ -165,7 +165,7 @@ test_lumped_project()
 
 
   deallog << "dim = " << dim << std::endl;
-  for (unsigned int degree = 0; degree < 3; ++degree)
+  for (unsigned int degree = 1; degree < 3; ++degree)
     {
       deallog << "degree = " << degree << std::endl;
       double old_error = -1.0;

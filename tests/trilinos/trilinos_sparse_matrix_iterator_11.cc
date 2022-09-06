@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -38,7 +38,8 @@ test()
   // attach a sparse matrix to it
   TrilinosWrappers::SparseMatrix A(sparsity);
 
-  TrilinosWrappers::SparseMatrix::iterator k = A.begin(), j = ++A.begin();
+  TrilinosWrappers::SparseMatrix::iterator k = A.begin(),
+                                           j = std::next(A.begin());
 
   AssertThrow(k < j, ExcInternalError());
   AssertThrow(j > k, ExcInternalError());

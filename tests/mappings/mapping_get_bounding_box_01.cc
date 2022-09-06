@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2006 - 2020 by the deal.II authors
+// Copyright (C) 2006 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,7 +19,6 @@
 #include <deal.II/base/utilities.h>
 
 #include <deal.II/fe/mapping_q.h>
-#include <deal.II/fe/mapping_q_generic.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_tools_cache.h>
@@ -38,8 +37,8 @@ void
 test_bounding_boxes(const Mapping<dim, spacedim> &mapping,
                     const unsigned int            degree)
 {
-  deallog << "Testing " << boost::core::demangle(typeid(mapping).name()) << "("
-          << degree << ")" << std::endl;
+  deallog << "Testing " << boost::core::demangle(typeid(mapping).name()) << '('
+          << degree << ')' << std::endl;
 
   Triangulation<dim, spacedim> triangulation;
   GridGenerator::hyper_ball(triangulation);
@@ -73,8 +72,8 @@ main()
     test_bounding_boxes(mapping, degree);
   }
   {
-    unsigned int       degree = 2;
-    MappingQGeneric<2> mapping(degree);
+    unsigned int degree = 2;
+    MappingQ<2>  mapping(degree);
     test_bounding_boxes(mapping, degree);
   }
 }

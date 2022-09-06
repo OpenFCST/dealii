@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2000 - 2020 by the deal.II authors
+ * Copyright (C) 2000 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -287,9 +287,9 @@ namespace Step18
   {
     // Again first compute the curl of the velocity field. This time, it is a
     // real vector:
-    const Point<3> curl(grad_u[2][1] - grad_u[1][2],
-                        grad_u[0][2] - grad_u[2][0],
-                        grad_u[1][0] - grad_u[0][1]);
+    const Tensor<1, 3> curl({grad_u[2][1] - grad_u[1][2],
+                             grad_u[0][2] - grad_u[2][0],
+                             grad_u[1][0] - grad_u[0][1]});
 
     // From this vector, using its magnitude, compute the tangent of the angle
     // of rotation, and from it the actual angle of rotation with respect to
@@ -317,7 +317,7 @@ namespace Step18
     // Otherwise compute the real rotation matrix. For this, again we rely on
     // a predefined function to compute the rotation matrix of the local
     // coordinate system.
-    const Point<3> axis = curl / tan_angle;
+    const Tensor<1, 3> axis = curl / tan_angle;
     return Physics::Transformations::Rotations::rotation_matrix_3d(axis,
                                                                    -angle);
   }
@@ -559,7 +559,7 @@ namespace Step18
   inline void BodyForce<dim>::vector_value(const Point<dim> & /*p*/,
                                            Vector<double> &values) const
   {
-    Assert(values.size() == dim, ExcDimensionMismatch(values.size(), dim));
+    AssertDimension(values.size(), dim);
 
     const double g   = 9.81;
     const double rho = 7700;
@@ -577,8 +577,7 @@ namespace Step18
   {
     const unsigned int n_points = points.size();
 
-    Assert(value_list.size() == n_points,
-           ExcDimensionMismatch(value_list.size(), n_points));
+    AssertDimension(value_list.size(), n_points);
 
     for (unsigned int p = 0; p < n_points; ++p)
       BodyForce<dim>::vector_value(points[p], value_list[p]);
@@ -650,7 +649,7 @@ namespace Step18
   IncrementalBoundaryValues<dim>::vector_value(const Point<dim> & /*p*/,
                                                Vector<double> &values) const
   {
-    Assert(values.size() == dim, ExcDimensionMismatch(values.size(), dim));
+    AssertDimension(values.size(), dim);
 
     values    = 0;
     values(2) = -present_timestep * velocity;
@@ -665,8 +664,7 @@ namespace Step18
   {
     const unsigned int n_points = points.size();
 
-    Assert(value_list.size() == n_points,
-           ExcDimensionMismatch(value_list.size(), n_points));
+    AssertDimension(value_list.size(), n_points);
 
     for (unsigned int p = 0; p < n_points; ++p)
       IncrementalBoundaryValues<dim>::vector_value(points[p], value_list[p]);
@@ -802,7 +800,8 @@ namespace Step18
   {
     dof_handler.distribute_dofs(fe);
     locally_owned_dofs = dof_handler.locally_owned_dofs();
-    DoFTools::extract_locally_relevant_dofs(dof_handler, locally_relevant_dofs);
+    locally_relevant_dofs =
+      DoFTools::extract_locally_relevant_dofs(dof_handler);
 
     // The next step is to set up constraints due to hanging nodes. This has
     // been handled many times before:
@@ -1054,7 +1053,7 @@ namespace Step18
     // which vector components it should apply to; this is a vector of bools
     // for each vector component and because we only want to restrict vertical
     // motion, it has only its last component set:
-    FEValuesExtractors::Scalar                z_component(dim - 1);
+    const FEValuesExtractors::Scalar          z_component(dim - 1);
     std::map<types::global_dof_index, double> boundary_values;
     VectorTools::interpolate_boundary_values(dof_handler,
                                              0,
@@ -1316,7 +1315,7 @@ namespace Step18
           pcout << (p == 0 ? ' ' : '+')
                 << (GridTools::count_cells_with_subdomain_association(
                      triangulation, p));
-        pcout << ")" << std::endl;
+        pcout << ')' << std::endl;
 
         setup_system();
 
@@ -1326,7 +1325,7 @@ namespace Step18
           pcout << (p == 0 ? ' ' : '+')
                 << (DoFTools::count_dofs_with_subdomain_association(dof_handler,
                                                                     p));
-        pcout << ")" << std::endl;
+        pcout << ')' << std::endl;
 
         solve_timestep();
       }

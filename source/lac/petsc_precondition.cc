@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2020 by the deal.II authors
+// Copyright (C) 2004 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -307,48 +307,6 @@ namespace PETScWrappers
   }
 
 
-  /* ----------------- PreconditionEisenstat -------------------- */
-
-  PreconditionEisenstat::AdditionalData::AdditionalData(const double omega)
-    : omega(omega)
-  {}
-
-
-
-  PreconditionEisenstat::PreconditionEisenstat(
-    const MatrixBase &    matrix,
-    const AdditionalData &additional_data)
-  {
-    initialize(matrix, additional_data);
-  }
-
-
-  void
-  PreconditionEisenstat::initialize(const MatrixBase &    matrix_,
-                                    const AdditionalData &additional_data_)
-  {
-    clear();
-
-    matrix          = static_cast<Mat>(matrix_);
-    additional_data = additional_data_;
-
-    create_pc();
-
-    PetscErrorCode ierr = PCSetType(pc, const_cast<char *>(PCEISENSTAT));
-    AssertThrow(ierr == 0, ExcPETScError(ierr));
-
-    // then set flags as given
-    ierr = PCEisenstatSetOmega(pc, additional_data.omega);
-    AssertThrow(ierr == 0, ExcPETScError(ierr));
-
-    ierr = PCSetFromOptions(pc);
-    AssertThrow(ierr == 0, ExcPETScError(ierr));
-
-    ierr = PCSetUp(pc);
-    AssertThrow(ierr == 0, ExcPETScError(ierr));
-  }
-
-
   /* ----------------- PreconditionICC -------------------- */
 
 
@@ -463,6 +421,7 @@ namespace PETScWrappers
 
 
 
+#  ifdef DEAL_II_PETSC_WITH_HYPRE
   namespace
   {
     /**
@@ -537,6 +496,7 @@ namespace PETScWrappers
       return string_type;
     }
   } // namespace
+#  endif
 
   PreconditionBoomerAMG::PreconditionBoomerAMG(
     const MPI_Comm &      comm,

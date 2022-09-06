@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2018 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -76,7 +76,7 @@ namespace
 
 
 
-  // Generate an hyper_shell over an EllipticalManifold having an abitrary
+  // Generate an hyper_shell over an EllipticalManifold having an arbitrary
   // center, and the major axis oriented in the direction of the x-axis.
   //
   // inner_radius and outer_radius parameters correspond to the
@@ -84,11 +84,12 @@ namespace
   //
   // Eccentricity must be in range ]0,1[
   //
-  void build_simple_hyper_shell(Triangulation<2, 2> &grid,
-                                const Point<2> &     center,
-                                const double         inner_radius,
-                                const double         outer_radius,
-                                const double         eccentricity)
+  void
+  build_simple_hyper_shell(Triangulation<2, 2> &grid,
+                           const Point<2> &     center,
+                           const double         inner_radius,
+                           const double         outer_radius,
+                           const double         eccentricity)
   {
     unsigned int          cell[][4] = {{5, 6, 0, 1},
                               {6, 7, 1, 2},

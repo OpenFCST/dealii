@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2012 - 2020 by the deal.II authors
+// Copyright (C) 2012 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -39,6 +39,7 @@
 #cmakedefine DEAL_II_WITH_ARPACK
 #cmakedefine DEAL_II_WITH_ARBORX
 #cmakedefine DEAL_II_WITH_ASSIMP
+#cmakedefine DEAL_II_WITH_CGAL
 #cmakedefine DEAL_II_WITH_COMPLEX_VALUES
 #cmakedefine DEAL_II_WITH_CUDA
 #cmakedefine DEAL_II_WITH_GINKGO
@@ -56,7 +57,6 @@
 #cmakedefine DEAL_II_WITH_P4EST
 #cmakedefine DEAL_II_WITH_PETSC
 #cmakedefine DEAL_II_WITH_SCALAPACK
-#cmakedefine DEAL_II_WITH_SIMPLEX_SUPPORT
 #cmakedefine DEAL_II_WITH_SLEPC
 #cmakedefine DEAL_II_WITH_SUNDIALS
 #cmakedefine DEAL_II_WITH_SYMENGINE
@@ -67,12 +67,16 @@
 #cmakedefine DEAL_II_WITH_ZLIB
 
 #ifdef DEAL_II_WITH_TBB
-/*
- * Backward compatibility setting:
- * FIXME: Update once transition to taskflow is complete
+/**
+ * For backwards compatibility, continue defining DEAL_II_WITH_THREADS when the
+ * library is configured with TBB.
  */
 #define DEAL_II_WITH_THREADS
+
 #define TBB_SUPPRESS_DEPRECATED_MESSAGES 1
+
+#cmakedefine DEAL_II_TBB_WITH_ONEAPI
+
 #endif
 
 /***********************************************************************
@@ -80,6 +84,8 @@
  *
  * For documentation see cmake/checks/check_03_compiler_bugs.cmake
  */
+
+#cmakedefine DEAL_II_DELETED_MOVE_CONSTRUCTOR_BUG
 
 /***********************************************************************
  * Compiler features:
@@ -163,7 +169,10 @@
  * deprecated prior to a release until <em>after</em> that release has been
  * finalized - see DEAL_II_EARLY_DEPRECATIONS for more information.
  */
+#ifndef DEAL_II_DEPRECATED_EARLY
+// guard to allow user to override DEAL_II_DEPRECATED_EARLY
 #cmakedefine DEAL_II_DEPRECATED_EARLY @DEAL_II_DEPRECATED_EARLY@
+#endif
 #cmakedefine DEAL_II_FALLTHROUGH @DEAL_II_FALLTHROUGH@
 #cmakedefine DEAL_II_CONSTEXPR @DEAL_II_CONSTEXPR@
 
@@ -202,6 +211,9 @@
 #cmakedefine DEAL_II_ADOLC_WITH_ADVANCED_BRANCHING
 #cmakedefine DEAL_II_ADOLC_WITH_TAPELESS_REFCOUNTING
 
+/* cmake/modules/FindARBORX.cmake */
+#cmakedefine DEAL_II_ARBORX_WITH_MPI
+
 /* cmake/modules/FindARPACK.cmake */
 #cmakedefine DEAL_II_ARPACK_WITH_PARPACK
 
@@ -219,6 +231,12 @@
 /* cmake/modules/FindSYMENGINE.cmake */
 #cmakedefine DEAL_II_SYMENGINE_WITH_LLVM
 
+/* cmake/configure/configure_20_boost.cmake */
+#cmakedefine DEAL_II_BOOST_HAS_BROKEN_HEADER_DEPRECATIONS
+
+/* cmake/configure/configure_50_cgal.cmake */
+#cmakedefine DEAL_II_CGAL_HAS_DEPRECATED_BOOST_INCLUDES
+
 /* cmake/configure/configure_2_trilinos.cmake */
 #cmakedefine DEAL_II_TRILINOS_CXX_SUPPORTS_SACADO_COMPLEX_RAD
 #cmakedefine DEAL_II_TRILINOS_WITH_EPETRAEXT
@@ -229,6 +247,12 @@
 #cmakedefine DEAL_II_TRILINOS_WITH_TPETRA
 #cmakedefine DEAL_II_TRILINOS_WITH_ZOLTAN
 
+#if defined(DEAL_II_BOOST_HAS_BROKEN_HEADER_DEPRECATIONS) || \
+  defined(DEAL_II_CGAL_HAS_DEPRECATED_BOOST_INCLUDES)
+#  ifndef BOOST_ALLOW_DEPRECATED_HEADERS
+#    define BOOST_ALLOW_DEPRECATED_HEADERS
+#  endif
+#endif
 
 /***********************************************************************
  * Various macros for version number query and comparison:
@@ -241,6 +265,12 @@
  * deal.II:
  */
 
+/**
+ * Returns true if the used deal.II version is greater or equal than the 
+ * version specified by the three arguments. The internal implementation 
+ * assumes that the number of minor and subminor versions is not larger 
+ * than 100.
+ */
 #define DEAL_II_VERSION_GTE(major,minor,subminor) \
  ((DEAL_II_VERSION_MAJOR * 10000 + \
     DEAL_II_VERSION_MINOR * 100 + \
@@ -267,6 +297,23 @@
  */
 #ifdef DEAL_II_WITH_GMSH
 #  define DEAL_II_GMSH_EXECUTABLE_PATH "@GMSH_EXECUTABLE@"
+#endif
+
+/**
+ * OpenCASCADE:
+ */
+
+#ifdef DEAL_II_WITH_OPENCASCADE
+#  define DEAL_II_OPENCASCADE_VERSION_MAJOR @OPENCASCADE_VERSION_MAJOR@
+#  define DEAL_II_OPENCASCADE_VERSION_MINOR @OPENCASCADE_VERSION_MINOR@
+#  define DEAL_II_OPENCASCADE_VERSION_SUBMINOR @OPENCASCADE_VERSION_SUBMINOR@
+
+#  define DEAL_II_OPENCASCADE_VERSION_GTE(major,minor,subminor) \
+ ((DEAL_II_OPENCASCADE_VERSION_MAJOR * 10000 + \
+    DEAL_II_OPENCASCADE_VERSION_MINOR * 100 + \
+      DEAL_II_OPENCASCADE_VERSION_SUBMINOR) \
+    >=  \
+    (major)*10000 + (minor)*100 + (subminor))
 #endif
 
 /*
@@ -427,6 +474,7 @@ _Pragma("GCC diagnostic ignored \"-Wmisleading-indentation\"")          \
 _Pragma("GCC diagnostic ignored \"-Wmissing-field-initializers\"")      \
 _Pragma("GCC diagnostic ignored \"-Wnested-anon-types\"")               \
 _Pragma("GCC diagnostic ignored \"-Wnon-virtual-dtor\"")                \
+_Pragma("GCC diagnostic ignored \"-Wnonnull\"")                         \
 _Pragma("GCC diagnostic ignored \"-Woverflow\"")                        \
 _Pragma("GCC diagnostic ignored \"-Woverloaded-virtual\"")              \
 _Pragma("GCC diagnostic ignored \"-Wpedantic\"")                        \
@@ -441,6 +489,7 @@ _Pragma("GCC diagnostic ignored \"-Wunused-function\"")                 \
 _Pragma("GCC diagnostic ignored \"-Wunused-parameter\"")                \
 _Pragma("GCC diagnostic ignored \"-Wunused-private-field\"")            \
 _Pragma("GCC diagnostic ignored \"-Wunused-variable\"")                 \
+_Pragma("GCC diagnostic ignored \"-Wuse-after-free\"")                  \
 _Pragma("GCC diagnostic warning \"-Wpragmas\"")                   /*!*/
 
 #  define DEAL_II_ENABLE_EXTRA_DIAGNOSTICS                              \

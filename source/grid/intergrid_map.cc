@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2019 by the deal.II authors
+// Copyright (C) 1999 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -153,8 +153,8 @@ InterGridMap<MeshType>::set_entries_to_cell(const cell_iterator &src_cell,
 
 
 template <class MeshType>
-typename InterGridMap<MeshType>::cell_iterator InterGridMap<MeshType>::
-                                               operator[](const cell_iterator &source_cell) const
+typename InterGridMap<MeshType>::cell_iterator
+InterGridMap<MeshType>::operator[](const cell_iterator &source_cell) const
 {
   Assert(source_cell.state() == IteratorState::valid,
          ExcInvalidKey(source_cell));

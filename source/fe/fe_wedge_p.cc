@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -80,8 +80,10 @@ namespace
   }
 } // namespace
 
+
+
 template <int dim, int spacedim>
-FE_Wedge<dim, spacedim>::FE_Wedge(
+FE_WedgePoly<dim, spacedim>::FE_WedgePoly(
   const unsigned int                                degree,
   const internal::GenericDoFsPerObject &            dpos,
   const typename FiniteElementData<dim>::Conformity conformity)
@@ -103,14 +105,57 @@ FE_Wedge<dim, spacedim>::FE_Wedge(
 {
   AssertDimension(dim, 3);
 
-  if (degree == 1)
+  Assert(1 <= degree && degree <= 2, ExcNotImplemented());
+
+  FE_SimplexP<2> fe_triangle(degree);
+  FE_Q<1>        fe_line(degree);
+  FE_Q<2>        fe_quad(degree);
+
+  for (unsigned int i = 0; i < this->n_dofs_per_cell(); ++i)
     {
-      this->unit_support_points.emplace_back(0.0, 0.0, 0.0);
-      this->unit_support_points.emplace_back(1.0, 0.0, 0.0);
-      this->unit_support_points.emplace_back(0.0, 1.0, 0.0);
-      this->unit_support_points.emplace_back(0.0, 0.0, 1.0);
-      this->unit_support_points.emplace_back(1.0, 0.0, 1.0);
-      this->unit_support_points.emplace_back(0.0, 1.0, 1.0);
+      const auto pair = this->degree == 1 ? internal::wedge_table_1[i] :
+                                            internal::wedge_table_2[i];
+
+      this->unit_support_points.emplace_back(
+        fe_triangle.get_unit_support_points()[pair[0]][0],
+        fe_triangle.get_unit_support_points()[pair[0]][1],
+        fe_line.get_unit_support_points()[pair[1]][0]);
+    }
+
+  this->unit_face_support_points.resize(this->reference_cell().n_faces());
+
+  for (const auto f : this->reference_cell().face_indices())
+    if (this->reference_cell().face_reference_cell(f) ==
+        ReferenceCells::Triangle)
+      for (const auto &p : fe_triangle.get_unit_support_points())
+        this->unit_face_support_points[f].emplace_back(p[0], p[1]);
+    else if (this->reference_cell().face_reference_cell(f) ==
+             ReferenceCells::Quadrilateral)
+      for (const auto &p : fe_quad.get_unit_support_points())
+        this->unit_face_support_points[f].emplace_back(p[0], p[1]);
+    else
+      Assert(false, ExcInternalError());
+}
+
+
+
+template <int dim, int spacedim>
+void
+FE_WedgePoly<dim, spacedim>::
+  convert_generalized_support_point_values_to_dof_values(
+    const std::vector<Vector<double>> &support_point_values,
+    std::vector<double> &              nodal_values) const
+{
+  AssertDimension(support_point_values.size(),
+                  this->get_unit_support_points().size());
+  AssertDimension(support_point_values.size(), nodal_values.size());
+  AssertDimension(this->dofs_per_cell, nodal_values.size());
+
+  for (unsigned int i = 0; i < this->dofs_per_cell; ++i)
+    {
+      AssertDimension(support_point_values[i].size(), 1);
+
+      nodal_values[i] = support_point_values[i](0);
     }
 }
 
@@ -118,9 +163,9 @@ FE_Wedge<dim, spacedim>::FE_Wedge(
 
 template <int dim, int spacedim>
 FE_WedgeP<dim, spacedim>::FE_WedgeP(const unsigned int degree)
-  : FE_Wedge<dim, spacedim>(degree,
-                            get_dpo_vector_fe_wedge_p(degree),
-                            FiniteElementData<dim>::H1)
+  : FE_WedgePoly<dim, spacedim>(degree,
+                                get_dpo_vector_fe_wedge_p(degree),
+                                FiniteElementData<dim>::H1)
 {}
 
 
@@ -287,9 +332,9 @@ FE_WedgeP<dim, spacedim>::hp_quad_dof_identities(
 
 template <int dim, int spacedim>
 FE_WedgeDGP<dim, spacedim>::FE_WedgeDGP(const unsigned int degree)
-  : FE_Wedge<dim, spacedim>(degree,
-                            get_dpo_vector_fe_wedge_dgp(degree),
-                            FiniteElementData<dim>::L2)
+  : FE_WedgePoly<dim, spacedim>(degree,
+                                get_dpo_vector_fe_wedge_dgp(degree),
+                                FiniteElementData<dim>::L2)
 {}
 
 

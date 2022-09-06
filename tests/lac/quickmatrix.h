@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2018 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -71,7 +71,7 @@ QuickMatrix<number>::vmult(Vector<number2> &d, const Vector<number2> &s) const
   // Middle rows
 
   unsigned int start = 0;
-  for (unsigned int y = 1; y < top; y++)
+  for (unsigned int y = 1; y < top; ++y)
     {
       start += step;
       d(start) =

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2002 - 2020 by the deal.II authors
+// Copyright (C) 2002 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -189,7 +189,8 @@ namespace internal
       /**
        * Index operator. Performs a range check.
        */
-      Accessor<N, T, C, P - 1> operator[](const size_type i) const;
+      Accessor<N, T, C, P - 1>
+      operator[](const size_type i) const;
 
       /**
        * Exception for range check. Do not use global exception since this way
@@ -200,7 +201,7 @@ namespace internal
                      size_type,
                      size_type,
                      << "Index " << N - P + 1 << "has a value of " << arg1
-                     << " but needs to be in the range [" << arg2 << "," << arg3
+                     << " but needs to be in the range [" << arg2 << ',' << arg3
                      << "[.");
 
     private:
@@ -285,7 +286,8 @@ namespace internal
       /**
        * Index operator. Performs a range check.
        */
-      reference operator[](const size_type) const;
+      reference
+      operator[](const size_type) const;
 
       /**
        * Return the length of one row, i.e. the number of elements
@@ -372,6 +374,65 @@ namespace internal
  * here. Furthermore, you may want to store, say, the gradients of shape
  * functions, so the data type is not a single scalar value, but a tensor
  * itself.
+ *
+ *
+ * <h3>Dealing with large data sets</h3>
+ *
+ * The Table classes (derived from this class) are frequently used to store
+ * large data tables. A modest example is given in step-53 where we store a
+ * $380 \times 220$ table of geographic elevation data for a region of
+ * Africa, and this data requires about 670 kB if memory; however,
+ * tables that store three- or more-dimensional data (say, information about
+ * the density, pressure, and temperature in the earth interior on a regular
+ * grid of `(latitude, longitude, depth)` points) can easily run into hundreds
+ * of megabytes or more. These tables are then often provided to classes
+ * such as InterpolatedTensorProductGridData or InterpolatedUniformGridData.
+ *
+ * If you need to load such tables on single-processor (or multi-threaded)
+ * jobs, then there is nothing you can do about the size of these tables: The
+ * table just has to fit into memory. But, if your program is parallelized
+ * via MPI, then a typical first implementation would create a table object
+ * on every process and fill it on every MPI process by reading the data
+ * from a file. This is inefficient from two perspectives:
+ * - You will have a lot of processes that are all trying to read from
+ *   the same file at the same time.
+ * - In most cases, the data stored on every process is the same, and
+ *   while every process needs to be able to read from a table, it is not
+ *   necessary that every process stores its own table: All MPI processes
+ *   that happen to be located on the same machine might as well store
+ *   only one copy and make it available to each other via
+ *   [shared memory](https://en.wikipedia.org/wiki/Shared_memory); in
+ *   this model, only one MPI process per machine needs to store the data, and
+ *   all other processes could then access it.
+ *
+ * Both of these use cases are enabled by the
+ * TableBase::replicate_across_communicator() function that is internally based
+ * on AlignedVector::replicate_across_communicator(). This function allows for
+ * workflows like the following where we put that MPI process with rank zero in
+ * charge of reading the data (but it could have been any other "root rank" as
+ * well):
+ * @code
+ *    const unsigned int N=..., M=...;     // table sizes, assumed known
+ *    Table<2,double>    data_table;
+ *    const unsigned int root_rank = 0;
+ *
+ *    if (Utilities::MPI::this_mpi_process(mpi_communicator) == root_rank)
+ *    {
+ *      data_table.resize (N,M);
+ *
+ *      std::ifstream input_file ("data_file.dat");
+ *      ...;                               // read the data from the file
+ *    }
+ *
+ *    // Now distribute to all processes
+ *    data_table.replicate_across_communicator (mpi_communicator, root_rank);
+ * @endcode
+ *
+ * The last call in this code snippet makes sure that the data is made
+ * available on all non-root processes, either by re-creating a copy of
+ * the table in the other processes' memory space or, if possible,
+ * by creating copies in shared memory once for all processes located
+ * on each of the machines used by the MPI job.
  *
  * @ingroup data
  */
@@ -485,6 +546,12 @@ public:
          const bool             omit_default_initialization = false);
 
   /**
+   * Set all dimensions to zero.
+   */
+  void
+  clear();
+
+  /**
    * Size of the table in direction <tt>i</tt>.
    */
   size_type
@@ -571,6 +638,94 @@ public:
    */
   typename AlignedVector<T>::const_reference
   operator()(const TableIndices<N> &indices) const;
+
+  /**
+   * This function replicates the state found on the process indicated by
+   * @p root_process across all processes of the MPI communicator. The current
+   * state found on any of the processes other than @p root_process is lost
+   * in this process. One can imagine this operation to act like a call to
+   * Utilities::MPI::broadcast() from the root process to all other processes,
+   * though in practice the function may try to move the data into shared
+   * memory regions on each of the machines that host MPI processes and
+   * let all MPI processes on this machine then access this shared memory
+   * region instead of keeping their own copy. See the general documentation
+   * of this class for a code example.
+   *
+   * The intent of this function is to quickly exchange large arrays from
+   * one process to others, rather than having to compute or create it on
+   * all processes. This is specifically the case for data loaded from
+   * disk -- say, large data tables -- that are more easily dealt with by
+   * reading once and then distributing across all processes in an MPI
+   * universe, than letting each process read the data from disk itself.
+   * Specifically, the use of shared memory regions allows for replicating
+   * the data only once per multicore machine in the MPI universe, rather
+   * than replicating data once for each MPI process. This results in
+   * large memory savings if the data is large on today's machines that
+   * can easily house several dozen MPI processes per shared memory
+   * space.
+   *
+   * This function does not imply a model of keeping data on different processes
+   * in sync, as LinearAlgebra::distributed::Vector and other vector classes do
+   * where there exists a notion of certain elements of the vector owned by each
+   * process and possibly ghost elements that are mirrored from its owning
+   * process to other processes. Rather, the elements of the current object are
+   * simply copied to the other processes, and it is useful to think of this
+   * operation as creating a set of `const` AlignedVector objects on all
+   * processes that should not be changed any more after the replication
+   * operation, as this is the only way to ensure that the vectors remain the
+   * same on all processes. This is particularly true because of the use of
+   * shared memory regions where any modification of a vector element on one MPI
+   * process may also result in a modification of elements visible on other
+   * processes, assuming they are located within one shared memory node.
+   *
+   * @note The use of shared memory between MPI processes requires
+   *   that the detected MPI installation supports the necessary operations.
+   *   This is the case for MPI 3.0 and higher.
+   *
+   * @note This function is not cheap. It needs to create sub-communicators
+   *   of the provided @p communicator object, which is generally an expensive
+   *   operation. Likewise, the generation of shared memory spaces is not
+   *   a cheap operation. As a consequence, this function primarily makes
+   *   sense when the goal is to share large read-only data tables among
+   *   processes; examples are data tables that are loaded at start-up
+   *   time and then used over the course of the run time of the program.
+   *   In such cases, the start-up cost of running this function can be
+   *   amortized over time, and the potential memory savings from not having to
+   *   store the table on each process may be substantial on machines with
+   *   large core counts on which many MPI processes run on the same machine.
+   *
+   * @note This function only makes sense if the data type `T` is
+   *   "self-contained", i.e., all of its information is stored in its
+   *   member variables, and if none of the member variables are pointers
+   *   to other parts of the memory. This is because if a type `T` does
+   *   have pointers to other parts of memory, then moving `T` into
+   *   a shared memory space does not result in the other processes having
+   *   access to data that the object points to with its member variable
+   *   pointers: These continue to live only on one process, and are
+   *   typically in memory areas not accessible to the other processes.
+   *   As a consequence, the usual use case for this function is to share
+   *   arrays of simple objects such as `double`s or `int`s.
+   *
+   * @note After calling this function, objects on different MPI processes
+   *   share a common state. That means that certain operations become
+   *   "collective", i.e., they must be called on all participating
+   *   processors at the same time. In particular, you can no longer call
+   *   resize(), reserve(), or clear() on one MPI process -- you have to do
+   *   so on all processes at the same time, because they have to communicate
+   *   for these operations. If you do not do so, you will likely get
+   *   a deadlock that may be difficult to debug. By extension, this rule of
+   *   only collectively resizing extends to this function itself: You can
+   *   not call it twice in a row because that implies that first all but the
+   *   `root_process` throw away their data, which is not a collective
+   *   operation. Generally, these restrictions on what can and can not be
+   *   done hint at the correctness of the comments above: You should treat
+   *   an AlignedVector on which the current function has been called as
+   *   `const`, on which no further operations can be performed until
+   *   the destructor is called.
+   */
+  void
+  replicate_across_communicator(const MPI_Comm &   communicator,
+                                const unsigned int root_process);
 
   /**
    * Swap the contents of this table and the other table @p v. One could do
@@ -663,18 +818,14 @@ protected:
  * @ingroup data
  */
 template <int N, typename T>
-class Table : public TableBase<N, T>
-{};
+class Table;
 
 
 /**
  * A class representing a one-dimensional table, i.e. a vector-like class.
- * Since the C++ library has a vector class, there is probably not much need
- * for this particular class, but since it is so simple to implement on top of
- * the template base class, we provide it anyway.
- *
- * For the rationale of this class, and a description of the interface, see
- * the base class.
+ * The majority of the interface of this class is implemented in the
+ * TableBase base class. See there for an outline of the rationale for and
+ * interface of this class.
  *
  * @ingroup data
  */
@@ -750,7 +901,8 @@ public:
    * Access operator. Since this is a one-dimensional object, this simply
    * accesses the requested data element. Returns a read-write reference.
    */
-  typename AlignedVector<T>::reference operator[](const size_type i);
+  typename AlignedVector<T>::reference
+  operator[](const size_type i);
 
   /**
    * Access operator. Since this is a one-dimensional object, this simply
@@ -767,18 +919,9 @@ public:
   operator()(const size_type i);
 
   /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
+   * Make the variations of `operator()` from the base class available.
    */
-  typename AlignedVector<T>::reference
-  operator()(const TableIndices<1> &indices);
-
-  /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
-   */
-  typename AlignedVector<T>::const_reference
-  operator()(const TableIndices<1> &indices) const;
+  using TableBase<1, T>::operator();
 };
 
 
@@ -1093,12 +1236,13 @@ namespace MatrixTableIterators
 /**
  * A class representing a two-dimensional table, i.e. a matrix of objects (not
  * necessarily only numbers).
+ * The majority of the interface of this class is implemented in the
+ * TableBase base class. See there for an outline of the rationale for and
+ * interface of this class.
  *
- * For the rationale of this class, and a description of the interface, see
- * the base class. Since this serves as the base class of the full matrix
- * classes in this library, and to keep a minimal compatibility with a
- * predecessor class (<tt>vector2d</tt>), some additional functions are
- * provided.
+ * This class also serves as the base class for the FullMatrix class
+ * and consequently has a number of functions that are specific to
+ * matrices and their needs.
  *
  * @ingroup data
  */
@@ -1242,19 +1386,9 @@ public:
   operator()(const size_type i, const size_type j);
 
   /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
+   * Make the variations of `operator()` from the base class available.
    */
-  typename AlignedVector<T>::reference
-  operator()(const TableIndices<2> &indices);
-
-  /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
-   */
-  typename AlignedVector<T>::const_reference
-  operator()(const TableIndices<2> &indices) const;
-
+  using TableBase<2, T>::operator();
 
   /**
    * Number of rows. This function really makes only sense since we have a
@@ -1343,9 +1477,9 @@ protected:
 /**
  * A class representing a three-dimensional table of objects (not necessarily
  * only numbers).
- *
- * For the rationale of this class, and a description of the interface, see
- * the base class.
+ * The majority of the interface of this class is implemented in the
+ * TableBase base class.See there for an outline of the rationale for and
+ * interface of this class.
  *
  * @ingroup data
  */
@@ -1416,6 +1550,18 @@ public:
         const bool      C_style_indexing = true);
 
   /**
+   * Reinitialize the object. Passes down to the base class
+   * by converting the arguments to the data type requested by the base class.
+   */
+  void
+  reinit(const size_type size1,
+         const size_type size2,
+         const size_type size3,
+         const bool      omit_default_initialization = false);
+
+  using TableBase<3, T>::reinit;
+
+  /**
    * Access operator. Generate an object that accesses the requested two-
    * dimensional subobject of this three-dimensional table. Range checks are
    * performed.
@@ -1455,18 +1601,9 @@ public:
   operator()(const size_type i, const size_type j, const size_type k);
 
   /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
+   * Make the variations of `operator()` from the base class available.
    */
-  typename AlignedVector<T>::reference
-  operator()(const TableIndices<3> &indices);
-
-  /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
-   */
-  typename AlignedVector<T>::const_reference
-  operator()(const TableIndices<3> &indices) const;
+  using TableBase<3, T>::operator();
 };
 
 
@@ -1474,9 +1611,9 @@ public:
 /**
  * A class representing a four-dimensional table of objects (not necessarily
  * only numbers).
- *
- * For the rationale of this class, and a description of the interface, see
- * the base class.
+ * The majority of the interface of this class is implemented in the
+ * TableBase base class. See there for an outline of the rationale for and
+ * interface of this class.
  *
  * @ingroup data
  */
@@ -1548,18 +1685,9 @@ public:
              const size_type l);
 
   /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
+   * Make the variations of `operator()` from the base class available.
    */
-  typename AlignedVector<T>::reference
-  operator()(const TableIndices<4> &indices);
-
-  /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
-   */
-  typename AlignedVector<T>::const_reference
-  operator()(const TableIndices<4> &indices) const;
+  using TableBase<4, T>::operator();
 };
 
 
@@ -1567,9 +1695,9 @@ public:
 /**
  * A class representing a five-dimensional table of objects (not necessarily
  * only numbers).
- *
- * For the rationale of this class, and a description of the interface, see
- * the base class.
+ * The majority of the interface of this class is implemented in the
+ * TableBase base class. See there for an outline of the rationale for and
+ * interface of this class.
  *
  * @ingroup data
  */
@@ -1644,18 +1772,9 @@ public:
              const size_type m);
 
   /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
+   * Make the variations of `operator()` from the base class available.
    */
-  typename AlignedVector<T>::reference
-  operator()(const TableIndices<5> &indices);
-
-  /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
-   */
-  typename AlignedVector<T>::const_reference
-  operator()(const TableIndices<5> &indices) const;
+  using TableBase<5, T>::operator();
 };
 
 
@@ -1663,9 +1782,9 @@ public:
 /**
  * A class representing a six-dimensional table of objects (not necessarily
  * only numbers).
- *
- * For the rationale of this class, and a description of the interface, see
- * the base class.
+ * The majority of the interface of this class is implemented in the
+ * TableBase base class. See there for an outline of the rationale for and
+ * interface of this class.
  *
  * @ingroup data
  */
@@ -1742,27 +1861,18 @@ public:
              const size_type n);
 
   /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
+   * Make the variations of `operator()` from the base class available.
    */
-  typename AlignedVector<T>::reference
-  operator()(const TableIndices<6> &indices);
-
-  /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
-   */
-  typename AlignedVector<T>::const_reference
-  operator()(const TableIndices<6> &indices) const;
+  using TableBase<6, T>::operator();
 };
 
 
 /**
  * A class representing a seven-dimensional table of objects (not necessarily
  * only numbers).
- *
- * For the rationale of this class, and a description of the interface, see
- * the base class.
+ * The majority of the interface of this class is implemented in the
+ * TableBase base class. See there for an outline of the rationale for and
+ * interface of this class.
  *
  * @ingroup data
  */
@@ -1842,18 +1952,9 @@ public:
              const size_type o);
 
   /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
+   * Make the variations of `operator()` from the base class available.
    */
-  typename AlignedVector<T>::reference
-  operator()(const TableIndices<7> &indices);
-
-  /**
-   * Make the corresponding operator () from the TableBase base class
-   * available also in this class.
-   */
-  typename AlignedVector<T>::const_reference
-  operator()(const TableIndices<7> &indices) const;
+  using TableBase<7, T>::operator();
 };
 
 
@@ -2065,10 +2166,9 @@ TableBase<N, T>::TableBase(const TableIndices<N> &sizes,
 template <int N, typename T>
 TableBase<N, T>::TableBase(const TableBase<N, T> &src)
   : Subscriptor()
-{
-  reinit(src.table_size, true);
-  values = src.values;
-}
+  , values(src.values)
+  , table_size(src.table_size)
+{}
 
 
 
@@ -2128,8 +2228,8 @@ namespace internal
 
 
     template <int N, typename T, bool C, unsigned int P>
-    inline Accessor<N, T, C, P - 1> Accessor<N, T, C, P>::
-                                    operator[](const size_type i) const
+    inline Accessor<N, T, C, P - 1>
+    Accessor<N, T, C, P>::operator[](const size_type i) const
     {
       AssertIndexRange(i, table.size()[N - P]);
 
@@ -2171,8 +2271,8 @@ namespace internal
 
 
     template <int N, typename T, bool C>
-    inline typename Accessor<N, T, C, 1>::reference Accessor<N, T, C, 1>::
-                                                    operator[](const size_type i) const
+    inline typename Accessor<N, T, C, 1>::reference
+    Accessor<N, T, C, 1>::operator[](const size_type i) const
     {
       AssertIndexRange(i, table.size()[N - 1]);
       return *(data + i);
@@ -2284,6 +2384,21 @@ TableBase<N, T>::fill(const T &value)
 
 template <int N, typename T>
 inline void
+TableBase<N, T>::replicate_across_communicator(const MPI_Comm &   communicator,
+                                               const unsigned int root_process)
+{
+  // Replicate first the actual data, then also exchange the
+  // extents of the table
+  values.replicate_across_communicator(communicator, root_process);
+
+  table_size =
+    Utilities::MPI::broadcast(communicator, table_size, root_process);
+}
+
+
+
+template <int N, typename T>
+inline void
 TableBase<N, T>::reinit(const TableIndices<N> &new_sizes,
                         const bool             omit_default_initialization)
 {
@@ -2322,6 +2437,16 @@ TableBase<N, T>::reinit(const TableIndices<N> &new_sizes,
     }
   else
     values.resize_fast(new_size);
+}
+
+
+
+template <int N, typename T>
+inline void
+TableBase<N, T>::clear()
+{
+  values.clear();
+  table_size = TableIndices<N>();
 }
 
 
@@ -2540,8 +2665,8 @@ inline Table<1, T>::Table(const size_type size,
 
 
 template <typename T>
-inline typename AlignedVector<T>::const_reference Table<1, T>::
-                                                  operator[](const size_type i) const
+inline typename AlignedVector<T>::const_reference
+Table<1, T>::operator[](const size_type i) const
 {
   AssertIndexRange(i, this->table_size[0]);
   return this->values[i];
@@ -2550,8 +2675,8 @@ inline typename AlignedVector<T>::const_reference Table<1, T>::
 
 
 template <typename T>
-inline typename AlignedVector<T>::reference Table<1, T>::
-                                            operator[](const size_type i)
+inline typename AlignedVector<T>::reference
+Table<1, T>::operator[](const size_type i)
 {
   AssertIndexRange(i, this->table_size[0]);
   return this->values[i];
@@ -2575,24 +2700,6 @@ Table<1, T>::operator()(const size_type i)
 {
   AssertIndexRange(i, this->table_size[0]);
   return this->values[i];
-}
-
-
-
-template <typename T>
-inline typename AlignedVector<T>::const_reference
-Table<1, T>::operator()(const TableIndices<1> &indices) const
-{
-  return TableBase<1, T>::operator()(indices);
-}
-
-
-
-template <typename T>
-inline typename AlignedVector<T>::reference
-Table<1, T>::operator()(const TableIndices<1> &indices)
-{
-  return TableBase<1, T>::operator()(indices);
 }
 
 
@@ -2632,7 +2739,7 @@ Table<2, T>::reinit(const size_type size1,
 
 template <typename T>
 inline dealii::internal::TableBaseAccessors::Accessor<2, T, true, 1>
-  Table<2, T>::operator[](const size_type i) const
+Table<2, T>::operator[](const size_type i) const
 {
   AssertIndexRange(i, this->table_size[0]);
   return dealii::internal::TableBaseAccessors::Accessor<2, T, true, 1>(
@@ -2643,7 +2750,7 @@ inline dealii::internal::TableBaseAccessors::Accessor<2, T, true, 1>
 
 template <typename T>
 inline dealii::internal::TableBaseAccessors::Accessor<2, T, false, 1>
-  Table<2, T>::operator[](const size_type i)
+Table<2, T>::operator[](const size_type i)
 {
   AssertIndexRange(i, this->table_size[0]);
   return dealii::internal::TableBaseAccessors::Accessor<2, T, false, 1>(
@@ -2670,24 +2777,6 @@ Table<2, T>::operator()(const size_type i, const size_type j)
   AssertIndexRange(i, this->table_size[0]);
   AssertIndexRange(j, this->table_size[1]);
   return this->values[size_type(i) * this->table_size[1] + j];
-}
-
-
-
-template <typename T>
-inline typename AlignedVector<T>::const_reference
-Table<2, T>::operator()(const TableIndices<2> &indices) const
-{
-  return TableBase<2, T>::operator()(indices);
-}
-
-
-
-template <typename T>
-inline typename AlignedVector<T>::reference
-Table<2, T>::operator()(const TableIndices<2> &indices)
-{
-  return TableBase<2, T>::operator()(indices);
 }
 
 
@@ -3162,8 +3251,21 @@ inline Table<3, T>::Table(const size_type size1,
 
 
 template <typename T>
+inline void
+Table<3, T>::reinit(const size_type size1,
+                    const size_type size2,
+                    const size_type size3,
+                    const bool      omit_default_initialization)
+{
+  this->TableBase<3, T>::reinit(TableIndices<3>(size1, size2, size3),
+                                omit_default_initialization);
+}
+
+
+
+template <typename T>
 inline dealii::internal::TableBaseAccessors::Accessor<3, T, true, 2>
-  Table<3, T>::operator[](const size_type i) const
+Table<3, T>::operator[](const size_type i) const
 {
   AssertIndexRange(i, this->table_size[0]);
   const size_type subobject_size =
@@ -3176,7 +3278,7 @@ inline dealii::internal::TableBaseAccessors::Accessor<3, T, true, 2>
 
 template <typename T>
 inline dealii::internal::TableBaseAccessors::Accessor<3, T, false, 2>
-  Table<3, T>::operator[](const size_type i)
+Table<3, T>::operator[](const size_type i)
 {
   AssertIndexRange(i, this->table_size[0]);
   const size_type subobject_size =
@@ -3189,8 +3291,9 @@ inline dealii::internal::TableBaseAccessors::Accessor<3, T, false, 2>
 
 template <typename T>
 inline typename AlignedVector<T>::const_reference
-Table<3, T>::
-operator()(const size_type i, const size_type j, const size_type k) const
+Table<3, T>::operator()(const size_type i,
+                        const size_type j,
+                        const size_type k) const
 {
   AssertIndexRange(i, this->table_size[0]);
   AssertIndexRange(j, this->table_size[1]);
@@ -3217,24 +3320,6 @@ Table<3, T>::operator()(const size_type i, const size_type j, const size_type k)
 
 
 template <typename T>
-inline typename AlignedVector<T>::const_reference
-Table<3, T>::operator()(const TableIndices<3> &indices) const
-{
-  return TableBase<3, T>::operator()(indices);
-}
-
-
-
-template <typename T>
-inline typename AlignedVector<T>::reference
-Table<3, T>::operator()(const TableIndices<3> &indices)
-{
-  return TableBase<3, T>::operator()(indices);
-}
-
-
-
-template <typename T>
 inline Table<4, T>::Table(const size_type size1,
                           const size_type size2,
                           const size_type size3,
@@ -3246,7 +3331,7 @@ inline Table<4, T>::Table(const size_type size1,
 
 template <typename T>
 inline dealii::internal::TableBaseAccessors::Accessor<4, T, true, 3>
-  Table<4, T>::operator[](const size_type i) const
+Table<4, T>::operator[](const size_type i) const
 {
   AssertIndexRange(i, this->table_size[0]);
   const size_type subobject_size =
@@ -3259,7 +3344,7 @@ inline dealii::internal::TableBaseAccessors::Accessor<4, T, true, 3>
 
 template <typename T>
 inline dealii::internal::TableBaseAccessors::Accessor<4, T, false, 3>
-  Table<4, T>::operator[](const size_type i)
+Table<4, T>::operator[](const size_type i)
 {
   AssertIndexRange(i, this->table_size[0]);
   const size_type subobject_size =
@@ -3311,24 +3396,6 @@ Table<4, T>::operator()(const size_type i,
 
 
 template <typename T>
-inline typename AlignedVector<T>::const_reference
-Table<4, T>::operator()(const TableIndices<4> &indices) const
-{
-  return TableBase<4, T>::operator()(indices);
-}
-
-
-
-template <typename T>
-inline typename AlignedVector<T>::reference
-Table<4, T>::operator()(const TableIndices<4> &indices)
-{
-  return TableBase<4, T>::operator()(indices);
-}
-
-
-
-template <typename T>
 inline Table<5, T>::Table(const size_type size1,
                           const size_type size2,
                           const size_type size3,
@@ -3341,7 +3408,7 @@ inline Table<5, T>::Table(const size_type size1,
 
 template <typename T>
 inline dealii::internal::TableBaseAccessors::Accessor<5, T, true, 4>
-  Table<5, T>::operator[](const size_type i) const
+Table<5, T>::operator[](const size_type i) const
 {
   AssertIndexRange(i, this->table_size[0]);
   const size_type subobject_size = size_type(this->table_size[1]) *
@@ -3355,7 +3422,7 @@ inline dealii::internal::TableBaseAccessors::Accessor<5, T, true, 4>
 
 template <typename T>
 inline dealii::internal::TableBaseAccessors::Accessor<5, T, false, 4>
-  Table<5, T>::operator[](const size_type i)
+Table<5, T>::operator[](const size_type i)
 {
   AssertIndexRange(i, this->table_size[0]);
   const size_type subobject_size = size_type(this->table_size[1]) *
@@ -3416,24 +3483,6 @@ Table<5, T>::operator()(const size_type i,
 
 
 template <typename T>
-inline typename AlignedVector<T>::const_reference
-Table<5, T>::operator()(const TableIndices<5> &indices) const
-{
-  return TableBase<5, T>::operator()(indices);
-}
-
-
-
-template <typename T>
-inline typename AlignedVector<T>::reference
-Table<5, T>::operator()(const TableIndices<5> &indices)
-{
-  return TableBase<5, T>::operator()(indices);
-}
-
-
-
-template <typename T>
 inline Table<6, T>::Table(const size_type size1,
                           const size_type size2,
                           const size_type size3,
@@ -3457,7 +3506,7 @@ inline Table<6, T>::Table(const size_type size1,
 
 template <typename T>
 inline dealii::internal::TableBaseAccessors::Accessor<6, T, true, 5>
-  Table<6, T>::operator[](const size_type i) const
+Table<6, T>::operator[](const size_type i) const
 {
   AssertIndexRange(i, this->table_size[0]);
   const size_type subobject_size = size_type(this->table_size[1]) *
@@ -3471,7 +3520,7 @@ inline dealii::internal::TableBaseAccessors::Accessor<6, T, true, 5>
 
 template <typename T>
 inline dealii::internal::TableBaseAccessors::Accessor<6, T, false, 5>
-  Table<6, T>::operator[](const size_type i)
+Table<6, T>::operator[](const size_type i)
 {
   AssertIndexRange(i, this->table_size[0]);
   const size_type subobject_size = size_type(this->table_size[1]) *
@@ -3540,24 +3589,6 @@ Table<6, T>::operator()(const size_type i,
 
 
 template <typename T>
-inline typename AlignedVector<T>::const_reference
-Table<6, T>::operator()(const TableIndices<6> &indices) const
-{
-  return TableBase<6, T>::operator()(indices);
-}
-
-
-
-template <typename T>
-inline typename AlignedVector<T>::reference
-Table<6, T>::operator()(const TableIndices<6> &indices)
-{
-  return TableBase<6, T>::operator()(indices);
-}
-
-
-
-template <typename T>
 inline Table<7, T>::Table(const size_type size1,
                           const size_type size2,
                           const size_type size3,
@@ -3583,7 +3614,7 @@ inline Table<7, T>::Table(const size_type size1,
 
 template <typename T>
 inline dealii::internal::TableBaseAccessors::Accessor<7, T, true, 6>
-  Table<7, T>::operator[](const size_type i) const
+Table<7, T>::operator[](const size_type i) const
 {
   AssertIndexRange(i, this->table_size[0]);
   const size_type subobject_size =
@@ -3597,7 +3628,7 @@ inline dealii::internal::TableBaseAccessors::Accessor<7, T, true, 6>
 
 template <typename T>
 inline dealii::internal::TableBaseAccessors::Accessor<7, T, false, 6>
-  Table<7, T>::operator[](const size_type i)
+Table<7, T>::operator[](const size_type i)
 {
   AssertIndexRange(i, this->table_size[0]);
   const size_type subobject_size =
@@ -3667,24 +3698,6 @@ Table<7, T>::operator()(const size_type i,
       n) *
        this->table_size[6] +
      o];
-}
-
-
-
-template <typename T>
-inline typename AlignedVector<T>::const_reference
-Table<7, T>::operator()(const TableIndices<7> &indices) const
-{
-  return TableBase<7, T>::operator()(indices);
-}
-
-
-
-template <typename T>
-inline typename AlignedVector<T>::reference
-Table<7, T>::operator()(const TableIndices<7> &indices)
-{
-  return TableBase<7, T>::operator()(indices);
 }
 
 

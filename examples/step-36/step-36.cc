@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2009 - 2019 by the deal.II authors
+ * Copyright (C) 2009 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -324,9 +324,9 @@ namespace Step36
           max_spurious_eigenvalue = std::max(max_spurious_eigenvalue, ev);
         }
 
-    std::cout << "   Spurious eigenvalues are all in the interval "
-              << "[" << min_spurious_eigenvalue << ","
-              << max_spurious_eigenvalue << "]" << std::endl;
+    std::cout << "   Spurious eigenvalues are all in the interval " << '['
+              << min_spurious_eigenvalue << ',' << max_spurious_eigenvalue
+              << ']' << std::endl;
   }
 
 

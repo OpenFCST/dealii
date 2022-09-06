@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -54,7 +54,8 @@ public:
 
 
 
-void generate_grid(Triangulation<3> &triangulation, int orientation)
+void
+generate_grid(Triangulation<3> &triangulation, int orientation)
 {
   Point<3>              vertices_1[] = {Point<3>(-0., -0., -0.),
                            Point<3>(+1., -0., -0.),
@@ -153,7 +154,8 @@ test()
 
       AffineConstraints<double> dummy;
       dummy.close();
-      data.reinit(dof_handler, dummy, quadrature, additional_data);
+      data.reinit(
+        MappingQ1<dim>{}, dof_handler, dummy, quadrature, additional_data);
 
       using VectorType = LinearAlgebra::distributed::Vector<double>;
 

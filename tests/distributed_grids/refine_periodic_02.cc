@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -158,8 +158,9 @@ test()
     typename parallel::distributed::Triangulation<dim>::Settings(
       parallel::distributed::Triangulation<
         dim>::mesh_reconstruction_after_repartitioning |
+      parallel::distributed::Triangulation<dim>::construct_multigrid_hierarchy |
       parallel::distributed::Triangulation<
-        dim>::construct_multigrid_hierarchy));
+        dim>::communicate_vertices_to_p4est));
 
   GridGenerator::hyper_cube(tr, 0., 1., true);
 
@@ -194,10 +195,10 @@ test()
           << "n_levels: " << tr.n_levels() << std::endl;
 
   for (const auto &id : marked_coarsen)
-    CellId(id).to_cell(tr)->set_coarsen_flag();
+    tr.create_cell_iterator(CellId(id))->set_coarsen_flag();
 
   for (const auto &id : marked_refine)
-    CellId(id).to_cell(tr)->set_refine_flag();
+    tr.create_cell_iterator(CellId(id))->set_refine_flag();
 
   deallog << "execute_coarsening_and_refinement()..." << std::endl;
 

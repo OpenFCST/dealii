@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2011 - 2020 by the deal.II authors
+// Copyright (C) 2011 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -36,8 +36,9 @@ DEAL_II_NAMESPACE_OPEN
 class DynamicSparsityPattern;
 #endif
 
-/*! @addtogroup Sparsity
- *@{
+/**
+ * @addtogroup Sparsity
+ * @{
  */
 
 
@@ -225,12 +226,14 @@ namespace DynamicSparsityPatternIterators
     /**
      * Dereferencing operator.
      */
-    const Accessor &operator*() const;
+    const Accessor &
+    operator*() const;
 
     /**
      * Dereferencing operator.
      */
-    const Accessor *operator->() const;
+    const Accessor *
+    operator->() const;
 
     /**
      * Comparison. True, if both iterators point to the same matrix position.
@@ -472,7 +475,7 @@ public:
 
   /**
    * Construct and store in this object the sparsity pattern corresponding to
-   * the product of transposed @p left and and non-transpose @p right sparsity pattern.
+   * the product of transposed @p left and non-transpose @p right sparsity pattern.
    */
   template <typename SparsityPatternTypeLeft, typename SparsityPatternTypeRight>
   void
@@ -601,7 +604,7 @@ public:
   iterator
   end(const size_type r) const;
 
-  // @}
+  /** @} */
 
   /**
    * Compute the bandwidth of the matrix represented by this structure. The
@@ -734,7 +737,7 @@ private:
   friend class DynamicSparsityPatternIterators::Accessor;
 };
 
-/*@}*/
+/** @} */
 /*---------------------- Inline functions -----------------------------------*/
 
 
@@ -934,14 +937,16 @@ namespace DynamicSparsityPatternIterators
 
 
 
-  inline const Accessor &Iterator::operator*() const
+  inline const Accessor &
+  Iterator::operator*() const
   {
     return accessor;
   }
 
 
 
-  inline const Accessor *Iterator::operator->() const
+  inline const Accessor *
+  Iterator::operator->() const
   {
     return &accessor;
   }
@@ -1089,7 +1094,7 @@ DynamicSparsityPattern::column_number(const size_type row,
   Assert(rowset.size() == 0 || rowset.is_element(row), ExcInternalError());
 
   const size_type local_row =
-    rowset.size() ? rowset.index_within_set(row) : row;
+    rowset.size() != 0u ? rowset.index_within_set(row) : row;
   AssertIndexRange(index, lines[local_row].entries.size());
   return lines[local_row].entries[index];
 }
@@ -1177,7 +1182,7 @@ DynamicSparsityPattern::end(const size_type r) const
 {
   AssertIndexRange(r, n_rows());
 
-  unsigned int row = r + 1;
+  const size_type row = r + 1;
   if (row == n_rows())
     return {this};
   else

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2006 - 2019 by the deal.II authors
+// Copyright (C) 2006 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -70,8 +70,8 @@ std::string
 FE_DGVector<PolynomialType, dim, spacedim>::get_name() const
 {
   std::ostringstream namebuf;
-  namebuf << "FE_DGVector_" << this->poly_space->name() << "<" << dim << ">("
-          << this->degree - 1 << ")";
+  namebuf << "FE_DGVector_" << this->poly_space->name() << '<' << dim << ">("
+          << this->degree - 1 << ')';
   return namebuf.str();
 }
 

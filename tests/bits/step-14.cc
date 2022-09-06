@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2020 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -177,9 +177,9 @@ namespace Evaluation
 
   template <int dim>
   void
-  PointXDerivativeEvaluation<dim>::
-  operator()(const DoFHandler<dim> &dof_handler,
-             const Vector<double> & solution) const
+  PointXDerivativeEvaluation<dim>::operator()(
+    const DoFHandler<dim> &dof_handler,
+    const Vector<double> & solution) const
   {
     double point_derivative = 0;
 
@@ -248,7 +248,7 @@ namespace Evaluation
                               const Vector<double> & /*solution*/) const
   {
     std::ostringstream filename;
-    filename << output_name_base << "-" << this->refinement_cycle << ".eps"
+    filename << output_name_base << '-' << this->refinement_cycle << ".eps"
              << std::ends;
 
     GridOut().write_eps(dof_handler.get_triangulation(),
@@ -1031,7 +1031,8 @@ namespace Data
 
 
   template <>
-  void Exercise_2_3<2>::create_coarse_grid(Triangulation<2> &coarse_grid)
+  void
+  Exercise_2_3<2>::create_coarse_grid(Triangulation<2> &coarse_grid)
   {
     const unsigned int dim = 2;
 
@@ -1686,8 +1687,7 @@ namespace LaplaceSolver
     for (unsigned int t = 0;
          (t < this_thread) && (cell != dual_solver.dof_handler.end());
          ++t, ++cell)
-      {
-      }
+      {}
 
 
     if (cell == dual_solver.dof_handler.end())
@@ -1739,8 +1739,7 @@ namespace LaplaceSolver
         for (unsigned int t = 0;
              ((t < n_threads) && (cell != dual_solver.dof_handler.end()));
              ++t, ++cell, ++cell_index)
-          {
-          }
+          {}
 
         if (cell == dual_solver.dof_handler.end())
           break;

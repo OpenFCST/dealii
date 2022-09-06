@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2020 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -300,7 +300,7 @@ namespace Utilities
         for (Integer q = M; q > 1; q >>= 1)
           {
             const Integer p = q - 1;
-            for (unsigned int i = 0; i < dim; i++)
+            for (unsigned int i = 0; i < dim; ++i)
               {
                 // invert
                 if (X[i] & q)
@@ -318,14 +318,14 @@ namespace Utilities
           }
 
         // Gray encode (inverse of decode)
-        for (unsigned int i = 1; i < dim; i++)
+        for (unsigned int i = 1; i < dim; ++i)
           X[i] ^= X[i - 1];
 
         Integer t = 0;
         for (Integer q = M; q > 1; q >>= 1)
           if (X[dim - 1] & q)
             t ^= q - 1;
-        for (unsigned int i = 0; i < dim; i++)
+        for (unsigned int i = 0; i < dim; ++i)
           X[i] ^= t;
 
         // now we need to go from index stored in transpose format to
@@ -535,7 +535,7 @@ namespace Utilities
 
     for (; left < input.size(); ++left)
       {
-        if (!std::isspace(input[left]))
+        if (std::isspace(input[left]) == 0)
           {
             break;
           }
@@ -543,7 +543,7 @@ namespace Utilities
 
     for (; right >= left; --right)
       {
-        if (!std::isspace(input[right]))
+        if (std::isspace(input[right]) == 0)
           {
             break;
           }
@@ -611,7 +611,7 @@ namespace Utilities
     std::string s = s_;
     while ((s.size() > 0) && (s[0] == ' '))
       s.erase(s.begin());
-    while ((s.size() > 0) && (s[s.size() - 1] == ' '))
+    while ((s.size() > 0) && (s.back() == ' '))
       s.erase(s.end() - 1);
 
     // Now convert and see whether we succeed. Note that strtol only
@@ -659,7 +659,7 @@ namespace Utilities
     std::string s = s_;
     while ((s.size() > 0) && (s[0] == ' '))
       s.erase(s.begin());
-    while ((s.size() > 0) && (s[s.size() - 1] == ' '))
+    while ((s.size() > 0) && (s.back() == ' '))
       s.erase(s.end() - 1);
 
     // Now convert and see whether we succeed. Note that strtol only
@@ -709,8 +709,8 @@ namespace Utilities
 
     // as discussed in the documentation, eat whitespace from the end
     // of the string
-    while (tmp.length() != 0 && tmp[tmp.length() - 1] == ' ')
-      tmp.erase(tmp.length() - 1, 1);
+    while (tmp.size() != 0 && tmp.back() == ' ')
+      tmp.erase(tmp.size() - 1, 1);
 
     // split the input list until it is empty. since in every iteration
     // 'tmp' is what's left of the string after the next delimiter,
@@ -719,7 +719,7 @@ namespace Utilities
     // there was space after the last delimiter. this matches what's
     // discussed in the documentation
     std::vector<std::string> split_list;
-    while (tmp.length() != 0)
+    while (tmp.size() != 0)
       {
         std::string name;
         name = tmp;
@@ -733,10 +733,10 @@ namespace Utilities
           tmp = "";
 
         // strip spaces from this element's front and end
-        while ((name.length() != 0) && (name[0] == ' '))
+        while ((name.size() != 0) && (name[0] == ' '))
           name.erase(0, 1);
-        while (name.length() != 0 && name[name.length() - 1] == ' ')
-          name.erase(name.length() - 1, 1);
+        while (name.size() != 0 && name.back() == ' ')
+          name.erase(name.size() - 1, 1);
 
         split_list.push_back(name);
       }
@@ -763,24 +763,23 @@ namespace Utilities
     std::vector<std::string> lines;
 
     // remove trailing spaces
-    while ((text.length() != 0) && (text[text.length() - 1] == delimiter))
-      text.erase(text.length() - 1, 1);
+    while ((text.size() != 0) && (text.back() == delimiter))
+      text.erase(text.size() - 1, 1);
 
     // then split the text into lines
-    while (text.length() != 0)
+    while (text.size() != 0)
       {
         // in each iteration, first remove
         // leading spaces
-        while ((text.length() != 0) && (text[0] == delimiter))
+        while ((text.size() != 0) && (text[0] == delimiter))
           text.erase(0, 1);
 
         std::size_t pos_newline = text.find_first_of('\n', 0);
         if (pos_newline != std::string::npos && pos_newline <= width)
           {
             std::string line(text, 0, pos_newline);
-            while ((line.length() != 0) &&
-                   (line[line.length() - 1] == delimiter))
-              line.erase(line.length() - 1, 1);
+            while ((line.size() != 0) && (line.back() == delimiter))
+              line.erase(line.size() - 1, 1);
             lines.push_back(line);
             text.erase(0, pos_newline + 1);
             continue;
@@ -789,12 +788,11 @@ namespace Utilities
         // if we can fit everything into one
         // line, then do so. otherwise, we have
         // to keep breaking
-        if (text.length() < width)
+        if (text.size() < width)
           {
             // remove trailing spaces
-            while ((text.length() != 0) &&
-                   (text[text.length() - 1] == delimiter))
-              text.erase(text.length() - 1, 1);
+            while ((text.size() != 0) && (text.back() == delimiter))
+              text.erase(text.size() - 1, 1);
             lines.push_back(text);
             text = "";
           }
@@ -803,7 +801,7 @@ namespace Utilities
             // starting at position width, find the
             // location of the previous space, so
             // that we can break around there
-            int location = std::min<int>(width, text.length() - 1);
+            int location = std::min<int>(width, text.size() - 1);
             for (; location > 0; --location)
               if (text[location] == delimiter)
                 break;
@@ -811,8 +809,8 @@ namespace Utilities
             // if there are no spaces, then try if
             // there are spaces coming up
             if (location == 0)
-              for (location = std::min<int>(width, text.length() - 1);
-                   location < static_cast<int>(text.length());
+              for (location = std::min<int>(width, text.size() - 1);
+                   location < static_cast<int>(text.size());
                    ++location)
                 if (text[location] == delimiter)
                   break;
@@ -821,9 +819,8 @@ namespace Utilities
             // location and put it into a single
             // line, and remove it from 'text'
             std::string line(text, 0, location);
-            while ((line.length() != 0) &&
-                   (line[line.length() - 1] == delimiter))
-              line.erase(line.length() - 1, 1);
+            while ((line.size() != 0) && (line.back() == delimiter))
+              line.erase(line.size() - 1, 1);
             lines.push_back(line);
             text.erase(0, location);
           }
@@ -914,7 +911,7 @@ namespace Utilities
 
   namespace System
   {
-#if defined(__linux__)
+#ifdef __linux__
 
     double
     get_cpu_load()
@@ -922,7 +919,7 @@ namespace Utilities
       std::ifstream cpuinfo;
       cpuinfo.open("/proc/loadavg");
 
-      AssertThrow(cpuinfo, ExcIO());
+      AssertThrow(cpuinfo.fail() == false, ExcIO());
 
       double load;
       cpuinfo >> load;
@@ -974,7 +971,7 @@ namespace Utilities
       // parsing /proc/self/stat would be a
       // lot easier, but it does not contain
       // VmHWM, so we use /status instead.
-#if defined(__linux__)
+#ifdef __linux__
       std::ifstream file("/proc/self/status");
       std::string   line;
       std::string   name;
@@ -1071,150 +1068,6 @@ namespace Utilities
       return Utilities::MPI::job_supports_mpi();
     }
   } // namespace System
-
-
-#ifdef DEAL_II_WITH_TRILINOS
-
-  namespace Trilinos
-  {
-    const Epetra_Comm &
-    comm_world()
-    {
-#  ifdef DEAL_II_WITH_MPI
-      static Teuchos::RCP<Epetra_MpiComm> communicator =
-        Teuchos::rcp(new Epetra_MpiComm(MPI_COMM_WORLD), true);
-#  else
-      static Teuchos::RCP<Epetra_SerialComm> communicator =
-        Teuchos::rcp(new Epetra_SerialComm(), true);
-#  endif
-
-      return *communicator;
-    }
-
-
-
-    const Teuchos::RCP<const Teuchos::Comm<int>> &
-    tpetra_comm_self()
-    {
-#  ifdef DEAL_II_WITH_MPI
-      static auto communicator = Teuchos::RCP<const Teuchos::Comm<int>>(
-        new Teuchos::MpiComm<int>(MPI_COMM_SELF));
-#  else
-      static auto communicator =
-        Teuchos::RCP<const Teuchos::Comm<int>>(new Teuchos::Comm<int>());
-#  endif
-
-      return communicator;
-    }
-
-
-
-    const Epetra_Comm &
-    comm_self()
-    {
-#  ifdef DEAL_II_WITH_MPI
-      static Teuchos::RCP<Epetra_MpiComm> communicator =
-        Teuchos::rcp(new Epetra_MpiComm(MPI_COMM_SELF), true);
-#  else
-      static Teuchos::RCP<Epetra_SerialComm> communicator =
-        Teuchos::rcp(new Epetra_SerialComm(), true);
-#  endif
-
-      return *communicator;
-    }
-
-
-
-    Epetra_Comm *
-    duplicate_communicator(const Epetra_Comm &communicator)
-    {
-#  ifdef DEAL_II_WITH_MPI
-
-      // see if the communicator is in fact a
-      // parallel MPI communicator; if so,
-      // return a duplicate of it
-      const Epetra_MpiComm *mpi_comm =
-        dynamic_cast<const Epetra_MpiComm *>(&communicator);
-      if (mpi_comm != nullptr)
-        return new Epetra_MpiComm(
-          Utilities::MPI::duplicate_communicator(mpi_comm->GetMpiComm()));
-#  endif
-
-      // if we don't support MPI, or if the
-      // communicator in question was in fact
-      // not an MPI communicator, return a
-      // copy of the same object again
-      Assert(dynamic_cast<const Epetra_SerialComm *>(&communicator) != nullptr,
-             ExcInternalError());
-      return new Epetra_SerialComm(
-        dynamic_cast<const Epetra_SerialComm &>(communicator));
-    }
-
-
-
-    void
-    destroy_communicator(Epetra_Comm &communicator)
-    {
-      // save the communicator, reset the map, and delete the communicator if
-      // this whole thing was created as an MPI communicator
-#  ifdef DEAL_II_WITH_MPI
-      Epetra_MpiComm *mpi_comm = dynamic_cast<Epetra_MpiComm *>(&communicator);
-      if (mpi_comm != nullptr)
-        {
-          MPI_Comm comm  = mpi_comm->GetMpiComm();
-          *mpi_comm      = Epetra_MpiComm(MPI_COMM_SELF);
-          const int ierr = MPI_Comm_free(&comm);
-          AssertThrowMPI(ierr);
-        }
-#  endif
-    }
-
-
-
-    unsigned int
-    get_n_mpi_processes(const Epetra_Comm &mpi_communicator)
-    {
-      return mpi_communicator.NumProc();
-    }
-
-
-    unsigned int
-    get_this_mpi_process(const Epetra_Comm &mpi_communicator)
-    {
-      return static_cast<unsigned int>(mpi_communicator.MyPID());
-    }
-
-
-
-    Epetra_Map
-    duplicate_map(const Epetra_BlockMap &map, const Epetra_Comm &comm)
-    {
-      if (map.LinearMap() == true)
-        {
-          // each processor stores a
-          // contiguous range of
-          // elements in the
-          // following constructor
-          // call
-          return Epetra_Map(map.NumGlobalElements(),
-                            map.NumMyElements(),
-                            map.IndexBase(),
-                            comm);
-        }
-      else
-        {
-          // the range is not
-          // contiguous
-          return Epetra_Map(map.NumGlobalElements(),
-                            map.NumMyElements(),
-                            map.MyGlobalElements(),
-                            0,
-                            comm);
-        }
-    }
-  } // namespace Trilinos
-
-#endif
 
 #ifndef DOXYGEN
   template std::string

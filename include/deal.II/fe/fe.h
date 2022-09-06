@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -20,18 +20,21 @@
 
 #include <deal.II/fe/block_mask.h>
 #include <deal.II/fe/component_mask.h>
-#include <deal.II/fe/fe_base.h>
+#include <deal.II/fe/fe_data.h>
 #include <deal.II/fe/fe_update_flags.h>
 #include <deal.II/fe/fe_values_extractors.h>
 #include <deal.II/fe/mapping.h>
 
 #include <deal.II/lac/full_matrix.h>
+#include <deal.II/lac/vector.h>
 
 #include <memory>
 
 
 DEAL_II_NAMESPACE_OPEN
 
+// Forward declarations:
+#ifndef DOXYGEN
 template <int dim, int spacedim>
 class FEValuesBase;
 template <int dim, int spacedim>
@@ -40,8 +43,14 @@ template <int dim, int spacedim>
 class FEFaceValues;
 template <int dim, int spacedim>
 class FESubfaceValues;
+namespace NonMatching
+{
+  template <int dim>
+  class FEImmersedSurfaceValues;
+}
 template <int dim, int spacedim>
 class FESystem;
+#endif
 
 /**
  * This is the base class for finite elements in arbitrary dimensions. It
@@ -139,9 +148,9 @@ class FESystem;
  * FiniteElement::system_to_component_index() function.
  *
  * On the other hand, if there is at least one shape function that is nonzero
- * in more than one vector component, then we call the entire element "non-
- * primitive". The FiniteElement::get_nonzero_components() can then be used to
- * determine which vector components of a shape function are nonzero. The
+ * in more than one vector component, then we call the entire element
+ * "non-primitive". The FiniteElement::get_nonzero_components() can then be used
+ * to determine which vector components of a shape function are nonzero. The
  * number of nonzero components of a shape function is returned by
  * FiniteElement::n_components(). Whether a shape function is non-primitive
  * can be queried by FiniteElement::is_primitive().
@@ -648,7 +657,7 @@ public:
   /**
    * The dimension of the image space, corresponding to Triangulation.
    */
-  static const unsigned int space_dimension = spacedim;
+  static constexpr unsigned int space_dimension = spacedim;
 
   /**
    * A base class for internal data that derived finite element classes may
@@ -818,33 +827,6 @@ public:
   get_name() const = 0;
 
   /**
-   * This operator returns a reference to the present object if the argument
-   * given equals to zero. While this does not seem particularly useful, it is
-   * helpful in writing code that works with both ::DoFHandler and the hp-
-   * version hp::DoFHandler, since one can then write code like this:
-   * @code
-   * dofs_per_cell =
-   *   dof_handler->get_fe()[cell->active_fe_index()].n_dofs_per_cell();
-   * @endcode
-   *
-   * This code doesn't work in both situations without the present operator
-   * because DoFHandler::get_fe() returns a finite element, whereas
-   * hp::DoFHandler::get_fe() returns a collection of finite elements that
-   * doesn't offer a <code>dofs_per_cell</code> member variable: one first has
-   * to select which finite element to work on, which is done using the
-   * operator[]. Fortunately, <code>cell-@>active_fe_index()</code> also works
-   * for non-hp-classes and simply returns zero in that case. The present
-   * operator[] accepts this zero argument, by returning the finite element
-   * with index zero within its collection (that, of course, consists only of
-   * the present finite element anyway).
-   *
-   * @deprecated With DoFHandler::get_fe(int) and the deprecation of the
-   * hp::DoFHandler class, there is no more use of this operator.
-   */
-  DEAL_II_DEPRECATED const FiniteElement<dim, spacedim> &
-                           operator[](const unsigned int fe_index) const;
-
-  /**
    * @name Shape function access
    * @{
    */
@@ -887,8 +869,8 @@ public:
    * Return the gradient of the @p ith shape function at the point @p p. @p p
    * is a point on the reference element, and likewise the gradient is the
    * gradient on the unit cell with respect to unit cell coordinates. If the
-   * finite element is vector-valued, then return the value of the only non-
-   * zero component of the vector value of this shape function. If the shape
+   * finite element is vector-valued, then return the value of the only
+   * non-zero component of the vector value of this shape function. If the shape
    * function has more than one non-zero component (which we refer to with the
    * term non-primitive), then derived classes implementing this function
    * should throw an exception of type ExcShapeFunctionNotPrimitive. In that
@@ -924,10 +906,10 @@ public:
    * cell with respect to unit cell coordinates. If the finite element is
    * vector-valued, then return the value of the only non-zero component of
    * the vector value of this shape function. If the shape function has more
-   * than one non-zero component (which we refer to with the term non-
-   * primitive), then derived classes implementing this function should throw
-   * an exception of type ExcShapeFunctionNotPrimitive. In that case, use the
-   * shape_grad_grad_component() function.
+   * than one non-zero component (which we refer to with the term
+   * non-primitive), then derived classes implementing this function should
+   * throw an exception of type ExcShapeFunctionNotPrimitive. In that case, use
+   * the shape_grad_grad_component() function.
    *
    * Implementations of this function should throw an exception of type
    * ExcUnitShapeValuesDoNotExist if the shape functions of the FiniteElement
@@ -959,10 +941,10 @@ public:
    * cell with respect to unit cell coordinates. If the finite element is
    * vector-valued, then return the value of the only non-zero component of
    * the vector value of this shape function. If the shape function has more
-   * than one non-zero component (which we refer to with the term non-
-   * primitive), then derived classes implementing this function should throw
-   * an exception of type ExcShapeFunctionNotPrimitive. In that case, use the
-   * shape_3rd_derivative_component() function.
+   * than one non-zero component (which we refer to with the term
+   * non-primitive), then derived classes implementing this function should
+   * throw an exception of type ExcShapeFunctionNotPrimitive. In that case, use
+   * the shape_3rd_derivative_component() function.
    *
    * Implementations of this function should throw an exception of type
    * ExcUnitShapeValuesDoNotExist if the shape functions of the FiniteElement
@@ -994,10 +976,10 @@ public:
    * cell with respect to unit cell coordinates. If the finite element is
    * vector-valued, then return the value of the only non-zero component of
    * the vector value of this shape function. If the shape function has more
-   * than one non-zero component (which we refer to with the term non-
-   * primitive), then derived classes implementing this function should throw
-   * an exception of type ExcShapeFunctionNotPrimitive. In that case, use the
-   * shape_4th_derivative_component() function.
+   * than one non-zero component (which we refer to with the term
+   * non-primitive), then derived classes implementing this function should
+   * throw an exception of type ExcShapeFunctionNotPrimitive. In that case, use
+   * the shape_4th_derivative_component() function.
    *
    * Implementations of this function should throw an exception of type
    * ExcUnitShapeValuesDoNotExist if the shape functions of the FiniteElement
@@ -1036,7 +1018,7 @@ public:
   has_support_on_face(const unsigned int shape_index,
                       const unsigned int face_index) const;
 
-  //@}
+  /** @} */
   /**
    * @name Transfer and constraint matrices
    * @{
@@ -1267,10 +1249,10 @@ public:
   virtual void
   get_interpolation_matrix(const FiniteElement<dim, spacedim> &source,
                            FullMatrix<double> &                matrix) const;
-  //@}
+  /** @} */
 
   /**
-   * @name Functions to support hp
+   * @name Functions to support hp-adaptivity
    * @{
    */
 
@@ -1308,11 +1290,11 @@ public:
                                    const unsigned int                  subface,
                                    FullMatrix<double> &                matrix,
                                    const unsigned int face_no = 0) const;
-  //@}
+  /** @} */
 
 
   /**
-   * @name Functions to support hp-
+   * @name Functions to support hp-adaptivity
    * @{
    */
 
@@ -1368,7 +1350,7 @@ public:
   compare_for_domination(const FiniteElement<dim, spacedim> &fe_other,
                          const unsigned int                  codim = 0) const;
 
-  //@}
+  /** @} */
 
   /**
    * Comparison operator.
@@ -1581,8 +1563,8 @@ public:
   get_nonzero_components(const unsigned int i) const;
 
   /**
-   * Return in how many vector components the @p ith shape function is non-
-   * zero. This value equals the number of entries equal to @p true in the
+   * Return in how many vector components the @p ith shape function is
+   * non-zero. This value equals the number of entries equal to @p true in the
    * result of the get_nonzero_components() function.
    *
    * For most finite element spaces, the result will be equal to one. It is
@@ -1813,7 +1795,7 @@ public:
   unsigned int
   component_to_block_index(const unsigned int component) const;
 
-  //@}
+  /** @} */
 
   /**
    * @name Component and block matrices
@@ -1989,7 +1971,7 @@ public:
   virtual std::pair<Table<2, bool>, std::vector<unsigned int>>
   get_constant_modes() const;
 
-  //@}
+  /** @} */
 
   /**
    * @name Support points and interpolation
@@ -2118,7 +2100,22 @@ public:
    * @note The vector returned by this function is always a minimal set of
    * *unique* support points. This is in contrast to the behavior of
    * get_unit_support_points() that returns a repeated list of unit support
-   * points for an FESystem of numerous (Lagrangian) base elements.
+   * points for an FESystem of numerous (Lagrangian) base elements. As a
+   * consequence, it is possible to have fewer generalized support points
+   * than degrees of freedom in the element. An example is  the
+   * element `FESystem<dim>(FE_Q<dim>(1), 2)`, which has two
+   * copies of the $Q_1$ element. In 2d, each copy has 4 degrees of
+   * freedom, and each copy has its support points in the
+   * four vertices of the cell. While the get_support_points()
+   * function would return a vector of size 8 in which each of the
+   * vertices is listed twice, this function strips
+   * out the duplicates and returns a vector of length 4 in which each
+   * vertex is listed only once. This is possible because the purpose of this
+   * function is to return a list of points so that it is possible to
+   * interpolate an arbitrary function onto the finite element
+   * space, and this is possible by knowing the two components of the
+   * function in question at the four vertices of the cell -- it is not
+   * necessary to ask for this information twice at each vertex.
    *
    * See the
    * @ref GlossGeneralizedSupport "glossary entry on generalized support points"
@@ -2268,7 +2265,7 @@ public:
     const std::vector<Vector<double>> &support_point_values,
     std::vector<double> &              nodal_values) const;
 
-  //@}
+  /** @} */
 
   /**
    * Determine an estimate for the memory consumption (in bytes) of this
@@ -2361,7 +2358,7 @@ public:
   DeclException2(ExcWrongInterfaceMatrixSize,
                  int,
                  int,
-                 << "The interface matrix has a size of " << arg1 << "x" << arg2
+                 << "The interface matrix has a size of " << arg1 << 'x' << arg2
                  << ", which is not reasonable for the current element "
                     "in the present dimension.");
   /**
@@ -2521,8 +2518,8 @@ protected:
    * case the element is composed of other elements and at least one of them
    * is vector-valued itself.
    *
-   * This array has valid values also in the case of vector-valued (i.e. non-
-   * primitive) shape functions, in contrast to the
+   * This array has valid values also in the case of vector-valued (i.e.
+   * non-primitive) shape functions, in contrast to the
    * #system_to_component_table.
    */
   std::vector<std::pair<std::pair<unsigned int, unsigned int>, unsigned int>>
@@ -3068,6 +3065,7 @@ protected:
   friend class FEValues<dim, spacedim>;
   friend class FEFaceValues<dim, spacedim>;
   friend class FESubfaceValues<dim, spacedim>;
+  friend class NonMatching::FEImmersedSurfaceValues<dim>;
   friend class FESystem<dim, spacedim>;
 
   // explicitly check for sensible template arguments, but not on windows
@@ -3081,18 +3079,6 @@ protected:
 
 
 //----------------------------------------------------------------------//
-
-
-template <int dim, int spacedim>
-inline const FiniteElement<dim, spacedim> &FiniteElement<dim, spacedim>::
-                                           operator[](const unsigned int fe_index) const
-{
-  (void)fe_index;
-  Assert(fe_index == 0,
-         ExcMessage("A fe_index of zero is the only index allowed here"));
-  return *this;
-}
-
 
 
 template <int dim, int spacedim>

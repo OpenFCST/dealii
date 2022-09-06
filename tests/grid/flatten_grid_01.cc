@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,8 +25,8 @@ template <int dim, int spacedim1, int spacedim2>
 void
 test()
 {
-  deallog << "Testing <" << dim << "," << spacedim1 << "> VS <" << dim << ","
-          << spacedim2 << ">" << std::endl;
+  deallog << "Testing <" << dim << ',' << spacedim1 << "> VS <" << dim << ','
+          << spacedim2 << '>' << std::endl;
 
   Triangulation<dim, spacedim1> tria1;
   GridGenerator::hyper_cube(tria1);

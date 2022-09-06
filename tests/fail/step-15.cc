@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2020 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -589,7 +589,7 @@ main()
       for (unsigned int realization = 0; realization < n_realizations;
            ++realization)
         {
-          deallog << "Realization " << realization << ":" << std::endl;
+          deallog << "Realization " << realization << ':' << std::endl;
 
           MinimizationProblem<1> minimization_problem_1d(realization);
           minimization_problem_1d.run();

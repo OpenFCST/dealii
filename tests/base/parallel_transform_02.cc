@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2019 by the deal.II authors
+// Copyright (C) 2009 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -39,12 +39,13 @@ main()
     }
 
   // set z=x+2y, which happens to be zero
-  parallel::transform(x.begin(),
-                      x.end(),
-                      y.begin(),
-                      z.begin(),
-                      [](double i, double j) { return i + 2 * j; },
-                      10);
+  parallel::transform(
+    x.begin(),
+    x.end(),
+    y.begin(),
+    z.begin(),
+    [](double i, double j) { return i + 2 * j; },
+    10);
 
   Assert(z.l2_norm() == 0, ExcInternalError());
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -24,6 +24,7 @@
 #include <deal.II/base/subscriptor.h>
 #include <deal.II/base/utilities.h>
 
+#include <deal.II/lac/block_vector_base.h>
 #include <deal.II/lac/full_matrix.h>
 #include <deal.II/lac/solver.h>
 #include <deal.II/lac/solver_control.h>
@@ -33,8 +34,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup Solvers */
-/*@{*/
+/**
+ * @addtogroup Solvers
+ * @{
+ */
 
 namespace internal
 {
@@ -65,7 +68,8 @@ namespace internal
        * Get vector number @p i. If this vector was unused before, an error
        * occurs.
        */
-      VectorType &operator[](const unsigned int i) const;
+      VectorType &
+      operator[](const unsigned int i) const;
 
       /**
        * Get vector number @p i. Allocate it if necessary.
@@ -179,7 +183,7 @@ private:
   AdditionalData additional_data;
 };
 
-/*@}*/
+/** @} */
 /*------------------------- Implementation ----------------------------*/
 
 #ifndef DOXYGEN
@@ -199,8 +203,8 @@ namespace internal
 
 
     template <class VectorType>
-    inline VectorType &TmpVectors<VectorType>::
-                       operator[](const unsigned int i) const
+    inline VectorType &
+    TmpVectors<VectorType>::operator[](const unsigned int i) const
     {
       AssertIndexRange(i, data.size());
 
@@ -223,6 +227,53 @@ namespace internal
         }
       return *data[i];
     }
+
+
+
+    template <typename VectorType,
+              std::enable_if_t<!IsBlockVector<VectorType>::value, VectorType>
+                * = nullptr>
+    unsigned int
+    n_blocks(const VectorType &)
+    {
+      return 1;
+    }
+
+
+
+    template <typename VectorType,
+              std::enable_if_t<IsBlockVector<VectorType>::value, VectorType> * =
+                nullptr>
+    unsigned int
+    n_blocks(const VectorType &vector)
+    {
+      return vector.n_blocks();
+    }
+
+
+
+    template <typename VectorType,
+              std::enable_if_t<!IsBlockVector<VectorType>::value, VectorType>
+                * = nullptr>
+    VectorType &
+    block(VectorType &vector, const unsigned int b)
+    {
+      AssertDimension(b, 0);
+      (void)b;
+      return vector;
+    }
+
+
+
+    template <typename VectorType,
+              std::enable_if_t<IsBlockVector<VectorType>::value, VectorType> * =
+                nullptr>
+    typename VectorType::BlockType &
+    block(VectorType &vector, const unsigned int b)
+    {
+      return vector.block(b);
+    }
+
   } // namespace SolverIDRImplementation
 } // namespace internal
 
@@ -325,8 +376,13 @@ SolverIDR<VectorType>::solve(const MatrixType &        A,
       VectorType &tmp_q = Q(i, x);
       if (i != 0)
         {
-          for (auto indx : tmp_q.locally_owned_elements())
-            tmp_q(indx) = normal_distribution(rng);
+          for (unsigned int b = 0;
+               b < internal::SolverIDRImplementation::n_blocks(tmp_q);
+               ++b)
+            for (auto indx : internal::SolverIDRImplementation::block(tmp_q, b)
+                               .locally_owned_elements())
+              internal::SolverIDRImplementation::block(tmp_q, b)(indx) =
+                normal_distribution(rng);
           tmp_q.compress(VectorOperation::insert);
         }
       else

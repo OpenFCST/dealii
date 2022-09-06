@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2020 by the deal.II authors
+// Copyright (C) 2015 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -17,11 +17,13 @@
 #include <deal.II/base/logstream.h>
 #include <deal.II/base/memory_consumption.h>
 #include <deal.II/base/mpi.templates.h>
+#include <deal.II/base/mpi_large_count.h>
 #include <deal.II/base/utilities.h>
 
 #include <deal.II/distributed/shared_tria.h>
 #include <deal.II/distributed/tria_base.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/tria_accessor.h>
@@ -32,6 +34,7 @@
 #include <deal.II/lac/vector_memory.h>
 
 #include <algorithm>
+#include <cstdint>
 #include <fstream>
 #include <iostream>
 #include <numeric>
@@ -111,6 +114,7 @@ namespace parallel
   template <int dim, int spacedim>
   TriangulationBase<dim, spacedim>::NumberCache::NumberCache()
     : n_locally_owned_active_cells(0)
+    , number_of_global_coarse_cells(0)
     , n_global_levels(0)
   {}
 
@@ -176,11 +180,16 @@ namespace parallel
     }
 
     if (this->n_levels() > 0)
-      for (const auto &cell : this->active_cell_iterators())
-        if (cell->subdomain_id() == my_subdomain)
-          ++number_cache.n_locally_owned_active_cells;
+      number_cache.n_locally_owned_active_cells = std::count_if(
+        this->begin_active(),
+        typename Triangulation<dim, spacedim>::active_cell_iterator(
+          this->end()),
+        [](const auto &i) { return i.is_locally_owned(); });
+    else
+      number_cache.n_locally_owned_active_cells = 0;
 
-    // Potentially cast to a 64 bit type before accumulating to avoid overflow:
+    // Potentially cast to a 64 bit type before accumulating to avoid
+    // overflow:
     number_cache.n_global_active_cells =
       Utilities::MPI::sum(static_cast<types::global_cell_index>(
                             number_cache.n_locally_owned_active_cells),
@@ -189,7 +198,8 @@ namespace parallel
     number_cache.n_global_levels =
       Utilities::MPI::max(this->n_levels(), this->mpi_communicator);
 
-    // Store MPI ranks of level ghost owners of this processor on all levels.
+    // Store MPI ranks of level ghost owners of this processor on all
+    // levels.
     if (this->is_multilevel_hierarchy_constructed() == true)
       {
         number_cache.level_ghost_owners.clear();
@@ -199,18 +209,15 @@ namespace parallel
           return;
 
         // find level ghost owners
-        for (typename Triangulation<dim, spacedim>::cell_iterator cell =
-               this->begin();
-             cell != this->end();
-             ++cell)
+        for (const auto &cell : this->cell_iterators())
           if (cell->level_subdomain_id() != numbers::artificial_subdomain_id &&
               cell->level_subdomain_id() != this->locally_owned_subdomain())
             this->number_cache.level_ghost_owners.insert(
               cell->level_subdomain_id());
 
 #  ifdef DEBUG
-        // Check that level_ghost_owners is symmetric by sending a message to
-        // everyone
+        // Check that level_ghost_owners is symmetric by sending a message
+        // to everyone
         {
           int ierr = MPI_Barrier(this->mpi_communicator);
           AssertThrowMPI(ierr);
@@ -224,31 +231,26 @@ namespace parallel
           unsigned int dummy       = 0;
           unsigned int req_counter = 0;
 
-          for (std::set<types::subdomain_id>::iterator it =
-                 this->number_cache.level_ghost_owners.begin();
-               it != this->number_cache.level_ghost_owners.end();
-               ++it, ++req_counter)
+          for (const auto &it : this->number_cache.level_ghost_owners)
             {
               ierr = MPI_Isend(&dummy,
                                1,
                                MPI_UNSIGNED,
-                               *it,
+                               it,
                                mpi_tag,
                                this->mpi_communicator,
                                &requests[req_counter]);
               AssertThrowMPI(ierr);
+              ++req_counter;
             }
 
-          for (std::set<types::subdomain_id>::iterator it =
-                 this->number_cache.level_ghost_owners.begin();
-               it != this->number_cache.level_ghost_owners.end();
-               ++it)
+          for (const auto &it : this->number_cache.level_ghost_owners)
             {
               unsigned int dummy;
               ierr = MPI_Recv(&dummy,
                               1,
                               MPI_UNSIGNED,
-                              *it,
+                              it,
                               mpi_tag,
                               this->mpi_communicator,
                               MPI_STATUS_IGNORE);
@@ -272,6 +274,8 @@ namespace parallel
                  Utilities::MPI::n_mpi_processes(this->mpi_communicator),
                ExcInternalError());
       }
+
+    this->number_cache.number_of_global_coarse_cells = this->n_cells(0);
 
     // reset global cell ids
     this->reset_global_cell_indices();
@@ -315,6 +319,7 @@ namespace parallel
   }
 
 
+
   template <int dim, int spacedim>
   types::subdomain_id
   TriangulationBase<dim, spacedim>::locally_owned_subdomain() const
@@ -338,16 +343,6 @@ namespace parallel
   TriangulationBase<dim, spacedim>::level_ghost_owners() const
   {
     return number_cache.level_ghost_owners;
-  }
-
-
-
-  template <int dim, int spacedim>
-  std::map<unsigned int, std::set<dealii::types::subdomain_id>>
-  TriangulationBase<dim, spacedim>::compute_vertices_with_ghost_neighbors()
-    const
-  {
-    return GridTools::compute_vertices_with_ghost_neighbors(*this);
   }
 
 
@@ -430,52 +425,41 @@ namespace parallel
     // 2) determine the offset of each process
     types::global_cell_index cell_index = 0;
 
-    const int ierr =
-      MPI_Exscan(&n_locally_owned_cells,
-                 &cell_index,
-                 1,
-                 Utilities::MPI::internal::mpi_type_id(&n_locally_owned_cells),
-                 MPI_SUM,
-                 this->mpi_communicator);
+    const int ierr = MPI_Exscan(
+      &n_locally_owned_cells,
+      &cell_index,
+      1,
+      Utilities::MPI::mpi_type_id_for_type<decltype(n_locally_owned_cells)>,
+      MPI_SUM,
+      this->mpi_communicator);
     AssertThrowMPI(ierr);
 
     // 3) give global indices to locally-owned cells and mark all other cells as
     //    invalid
+    std::pair<types::global_cell_index, types::global_cell_index> my_range;
+    my_range.first = cell_index;
+
     for (const auto &cell : this->active_cell_iterators())
       if (cell->is_locally_owned())
         cell->set_global_active_cell_index(cell_index++);
       else
         cell->set_global_active_cell_index(numbers::invalid_dof_index);
 
+    my_range.second = cell_index;
+
     // 4) determine the global indices of ghost cells
+    std::vector<types::global_dof_index> is_ghost_vector;
     GridTools::exchange_cell_data_to_ghosts<types::global_cell_index>(
       *this,
       [](const auto &cell) { return cell->global_active_cell_index(); },
-      [](const auto &cell, const auto &id) {
+      [&is_ghost_vector](const auto &cell, const auto &id) {
         cell->set_global_active_cell_index(id);
+        is_ghost_vector.push_back(id);
       });
 
     // 5) set up new partitioner
-    std::vector<types::global_dof_index> is_local_vector;
-    std::vector<types::global_dof_index> is_ghost_vector;
-
-    for (const auto &cell : this->active_cell_iterators())
-      if (!cell->is_artificial())
-        {
-          const auto index = cell->global_active_cell_index();
-
-          if (index == numbers::invalid_dof_index)
-            continue;
-
-          if (cell->is_locally_owned())
-            is_local_vector.push_back(index);
-          else
-            is_ghost_vector.push_back(index);
-        }
-
-    std::sort(is_local_vector.begin(), is_local_vector.end());
     IndexSet is_local(this->n_global_active_cells());
-    is_local.add_indices(is_local_vector.begin(), is_local_vector.end());
+    is_local.add_range(my_range.first, my_range.second);
 
     std::sort(is_ghost_vector.begin(), is_ghost_vector.end());
     IndexSet is_ghost(this->n_global_active_cells());
@@ -489,57 +473,59 @@ namespace parallel
     if (this->is_multilevel_hierarchy_constructed() == true)
       {
         // 1) determine number of locally-owned cells on levels
-        std::vector<types::global_cell_index> n_locally_owned_cells(
+        std::vector<types::global_cell_index> n_cells_level(
           this->n_global_levels(), 0);
 
         for (auto cell : this->cell_iterators())
           if (cell->level_subdomain_id() == this->locally_owned_subdomain())
-            n_locally_owned_cells[cell->level()]++;
+            n_cells_level[cell->level()]++;
 
         // 2) determine the offset of each process
         std::vector<types::global_cell_index> cell_index(
           this->n_global_levels(), 0);
 
-        int ierr = MPI_Exscan(n_locally_owned_cells.data(),
-                              cell_index.data(),
-                              this->n_global_levels(),
-                              Utilities::MPI::internal::mpi_type_id(
-                                n_locally_owned_cells.data()),
-                              MPI_SUM,
-                              this->mpi_communicator);
+        int ierr = MPI_Exscan(
+          n_cells_level.data(),
+          cell_index.data(),
+          this->n_global_levels(),
+          Utilities::MPI::mpi_type_id_for_type<decltype(*n_cells_level.data())>,
+          MPI_SUM,
+          this->mpi_communicator);
         AssertThrowMPI(ierr);
 
         // 3) determine global number of "active" cells on each level
-        std::vector<types::global_cell_index> n_cells_level(
-          this->n_global_levels(), 0);
-
-        for (unsigned int l = 0; l < this->n_global_levels(); ++l)
-          n_cells_level[l] = n_locally_owned_cells[l] + cell_index[l];
-
-        ierr =
-          MPI_Bcast(n_cells_level.data(),
-                    this->n_global_levels(),
-                    Utilities::MPI::internal::mpi_type_id(n_cells_level.data()),
-                    this->n_subdomains - 1,
-                    this->mpi_communicator);
-        AssertThrowMPI(ierr);
+        Utilities::MPI::sum(n_cells_level,
+                            this->mpi_communicator,
+                            n_cells_level);
 
         // 4) give global indices to locally-owned cells on level and mark
         //    all other cells as invalid
+        std::vector<
+          std::pair<types::global_cell_index, types::global_cell_index>>
+          my_ranges(this->n_global_levels());
+        for (unsigned int l = 0; l < this->n_global_levels(); ++l)
+          my_ranges[l].first = cell_index[l];
+
         for (auto cell : this->cell_iterators())
           if (cell->level_subdomain_id() == this->locally_owned_subdomain())
             cell->set_global_level_cell_index(cell_index[cell->level()]++);
           else
             cell->set_global_level_cell_index(numbers::invalid_dof_index);
 
+        for (unsigned int l = 0; l < this->n_global_levels(); ++l)
+          my_ranges[l].second = cell_index[l];
+
         // 5) update the numbers of ghost level cells
+        std::vector<std::vector<types::global_dof_index>> is_ghost_vectors(
+          this->n_global_levels());
         GridTools::exchange_cell_data_to_level_ghosts<
           types::global_cell_index,
           dealii::Triangulation<dim, spacedim>>(
           *this,
           [](const auto &cell) { return cell->global_level_cell_index(); },
-          [](const auto &cell, const auto &id) {
-            return cell->set_global_level_cell_index(id);
+          [&is_ghost_vectors](const auto &cell, const auto &id) {
+            cell->set_global_level_cell_index(id);
+            is_ghost_vectors[cell->level()].push_back(id);
           });
 
         number_cache.level_cell_index_partitioners.resize(
@@ -548,35 +534,13 @@ namespace parallel
         // 6) set up cell partitioners for each level
         for (unsigned int l = 0; l < this->n_global_levels(); ++l)
           {
-            std::vector<types::global_dof_index> is_local_vector;
-            std::vector<types::global_dof_index> is_ghost_vector;
-
-            for (const auto &cell : this->cell_iterators_on_level(l))
-              if (cell->level_subdomain_id() !=
-                  dealii::numbers::artificial_subdomain_id)
-                {
-                  const auto index = cell->global_level_cell_index();
-
-                  if (index == numbers::invalid_dof_index)
-                    continue;
-
-                  if (cell->level_subdomain_id() ==
-                      this->locally_owned_subdomain())
-                    is_local_vector.push_back(index);
-                  else
-                    is_ghost_vector.push_back(index);
-                  ;
-                }
-
             IndexSet is_local(n_cells_level[l]);
-            std::sort(is_local_vector.begin(), is_local_vector.end());
-            is_local.add_indices(is_local_vector.begin(),
-                                 is_local_vector.end());
+            is_local.add_range(my_ranges[l].first, my_ranges[l].second);
 
             IndexSet is_ghost(n_cells_level[l]);
-            std::sort(is_ghost_vector.begin(), is_ghost_vector.end());
-            is_ghost.add_indices(is_ghost_vector.begin(),
-                                 is_ghost_vector.end());
+            std::sort(is_ghost_vectors[l].begin(), is_ghost_vectors[l].end());
+            is_ghost.add_indices(is_ghost_vectors[l].begin(),
+                                 is_ghost_vectors[l].end());
 
             number_cache.level_cell_index_partitioners[l] =
               std::make_shared<const Utilities::MPI::Partitioner>(
@@ -608,7 +572,7 @@ namespace parallel
 #endif
 
     Point<spacedim> invalid_point;
-    for (int d = 0; d < spacedim; ++d)
+    for (unsigned int d = 0; d < spacedim; ++d)
       invalid_point[d] = std::numeric_limits<double>::quiet_NaN();
 
     const auto pack = [&](const auto &cell) {
@@ -646,6 +610,8 @@ namespace parallel
     return number_cache.active_cell_index_partitioner;
   }
 
+
+
   template <int dim, int spacedim>
   const std::weak_ptr<const Utilities::MPI::Partitioner>
   TriangulationBase<dim, spacedim>::global_level_cell_index_partitioner(
@@ -655,6 +621,15 @@ namespace parallel
     AssertIndexRange(level, this->n_global_levels());
 
     return number_cache.level_cell_index_partitioners[level];
+  }
+
+
+
+  template <int dim, int spacedim>
+  types::coarse_cell_id
+  TriangulationBase<dim, spacedim>::n_global_coarse_cells() const
+  {
+    return number_cache.number_of_global_coarse_cells;
   }
 
 
@@ -723,6 +698,34 @@ namespace parallel
   }
 
 
+
+  template <int dim, int spacedim>
+  bool
+  DistributedTriangulationBase<dim, spacedim>::has_hanging_nodes() const
+  {
+    if (this->n_global_levels() <= 1)
+      return false; // can not have hanging nodes without refined cells
+
+    // if there are any active cells with level less than n_global_levels()-1,
+    // then there is obviously also one with level n_global_levels()-1, and
+    // consequently there must be a hanging node somewhere.
+    //
+    // The problem is that we cannot just ask for the first active cell, but
+    // instead need to filter over locally owned cells.
+    const bool have_coarser_cell =
+      std::any_of(this->begin_active(this->n_global_levels() - 2),
+                  this->end_active(this->n_global_levels() - 2),
+                  [](const CellAccessor<dim, spacedim> &cell) {
+                    return cell.is_locally_owned();
+                  });
+
+    // return true if at least one process has a coarser cell
+    return Utilities::MPI::max(have_coarser_cell ? 1 : 0,
+                               this->mpi_communicator) != 0;
+  }
+
+
+
   template <int dim, int spacedim>
   void
   DistributedTriangulationBase<dim, spacedim>::load_attached_data(
@@ -758,6 +761,8 @@ namespace parallel
       }
   }
 
+
+
   template <int dim, int spacedim>
   unsigned int
   DistributedTriangulationBase<dim, spacedim>::register_data_attach(
@@ -787,6 +792,7 @@ namespace parallel
   }
 
 
+
   template <int dim, int spacedim>
   void
   DistributedTriangulationBase<dim, spacedim>::notify_ready_to_unpack(
@@ -811,17 +817,15 @@ namespace parallel
     // would destroy the saved data before the second SolutionTransfer can
     // get it. This created a bug that is documented in
     // tests/mpi/p4est_save_03 with more than one SolutionTransfer.
+
     if (cell_attached_data.n_attached_data_sets == 0 &&
         cell_attached_data.n_attached_deserialize == 0)
       {
         // everybody got their data, time for cleanup!
         cell_attached_data.pack_callbacks_fixed.clear();
         cell_attached_data.pack_callbacks_variable.clear();
-      }
+        data_transfer.clear();
 
-    if (this->cell_attached_data.n_attached_data_sets == 0 &&
-        this->cell_attached_data.n_attached_deserialize == 0)
-      {
         // reset all cell_status entries after coarsening/refinement
         for (auto &cell_rel : local_cell_relations)
           cell_rel.second =
@@ -1013,10 +1017,11 @@ namespace parallel
                                    cell_sizes_variable_cumulative.end(),
                                    cell_sizes_variable_cumulative.begin());
 
-                  // Serialize cumulative variable size vector value-by-value.
-                  // This way we can circumvent the overhead of storing the
-                  // container object as a whole, since we know its size by
-                  // the number of registered callback functions.
+                  // Serialize cumulative variable size vector
+                  // value-by-value. This way we can circumvent the overhead
+                  // of storing the container object as a whole, since we
+                  // know its size by the number of registered callback
+                  // functions.
                   data_fixed_it->resize(n_callbacks_variable *
                                         sizeof(unsigned int));
                   for (unsigned int i = 0; i < n_callbacks_variable; ++i)
@@ -1052,10 +1057,10 @@ namespace parallel
     // functions (i.e. a cell that was not flagged with CELL_INVALID)
     // and store the sizes of each buffer.
     //
-    // To deal with the case that at least one of the processors does not own
-    // any cell at all, we will exchange the information about the data sizes
-    // among them later. The code in between is still well-defined, since the
-    // following loops will be skipped.
+    // To deal with the case that at least one of the processors does not
+    // own any cell at all, we will exchange the information about the data
+    // sizes among them later. The code in between is still well-defined,
+    // since the following loops will be skipped.
     std::vector<unsigned int> local_sizes_fixed(
       1 + n_callbacks_fixed + (variable_size_data_stored ? 1 : 0));
     for (const auto &data_cell : packed_fixed_size_data)
@@ -1126,7 +1131,8 @@ namespace parallel
                       src_sizes_variable.end(),
                       std::vector<int>::size_type(0));
 
-    // Move every piece of packed fixed size data into the consecutive buffer.
+    // Move every piece of packed fixed size data into the consecutive
+    // buffer.
     src_data_fixed.reserve(expected_size_fixed);
     for (const auto &data_cell_fixed : packed_fixed_size_data)
       {
@@ -1226,8 +1232,8 @@ namespace parallel
   {
     // We decode the handle returned by register_data_attach() back into
     // a format we can use. All even handles belong to those callback
-    // functions which write/read variable size data, all odd handles interact
-    // with fixed size buffers.
+    // functions which write/read variable size data, all odd handles
+    // interact with fixed size buffers.
     const bool         callback_variable_transfer = (handle % 2 == 0);
     const unsigned int callback_index             = handle / 2;
 
@@ -1295,7 +1301,8 @@ namespace parallel
         // Adjust buffer iterator to the offset of the callback
         // function so that we only have to advance its position
         // to the next cell after each iteration.
-        dest_data_it = dest_data_fixed.cbegin() + offset;
+        if (cell_relations.begin() != cell_relations.end())
+          dest_data_it = dest_data_fixed.cbegin() + offset;
       }
 
     // Iterate over all cells and unpack the transferred data.
@@ -1317,7 +1324,8 @@ namespace parallel
                                                        spacedim>::CELL_INVALID)
               {
                 // Extract the corresponding values for offset and size from
-                // the cumulative sizes array stored in the fixed size buffer.
+                // the cumulative sizes array stored in the fixed size
+                // buffer.
                 if (callback_index == 0)
                   offset = 0;
                 else
@@ -1338,8 +1346,10 @@ namespace parallel
                 data_increment -= offset;
               }
 
-            // Advance data size iterators to the next cell.
-            dest_sizes_cell_it += sizes_fixed_cumulative.back();
+            // Advance data size iterators to the next cell, avoid iterating
+            // past the end of dest_sizes_cell_it
+            if (cell_rel_it != cell_relations.end() - 1)
+              dest_sizes_cell_it += sizes_fixed_cumulative.back();
             ++dest_sizes_it;
           }
 
@@ -1373,7 +1383,8 @@ namespace parallel
               break;
           }
 
-        dest_data_it += data_increment;
+        if (cell_rel_it != cell_relations.end() - 1)
+          dest_data_it += data_increment;
       }
   }
 
@@ -1396,6 +1407,8 @@ namespace parallel
 
     const int myrank = Utilities::MPI::this_mpi_process(mpi_communicator);
 
+    const unsigned int bytes_per_cell = sizes_fixed_cumulative.back();
+
     //
     // ---------- Fixed size data ----------
     //
@@ -1408,7 +1421,7 @@ namespace parallel
 
       MPI_File fh;
       ierr = MPI_File_open(mpi_communicator,
-                           DEAL_II_MPI_CONST_CAST(fname_fixed.c_str()),
+                           fname_fixed.c_str(),
                            MPI_MODE_CREATE | MPI_MODE_WRONLY,
                            info,
                            &fh);
@@ -1425,41 +1438,45 @@ namespace parallel
       // ------------------
 
       // Write cumulative sizes to file.
-      // Since each processor owns the same information about the data sizes,
-      // it is sufficient to let only the first processor perform this task.
+      // Since each processor owns the same information about the data
+      // sizes, it is sufficient to let only the first processor perform
+      // this task.
       if (myrank == 0)
         {
-          const unsigned int *data = sizes_fixed_cumulative.data();
-
-          ierr = MPI_File_write_at(fh,
-                                   0,
-                                   DEAL_II_MPI_CONST_CAST(data),
-                                   sizes_fixed_cumulative.size(),
-                                   MPI_UNSIGNED,
-                                   MPI_STATUS_IGNORE);
+          ierr = Utilities::MPI::LargeCount::File_write_at_c(
+            fh,
+            0,
+            sizes_fixed_cumulative.data(),
+            sizes_fixed_cumulative.size(),
+            MPI_UNSIGNED,
+            MPI_STATUS_IGNORE);
           AssertThrowMPI(ierr);
         }
 
       // Write packed data to file simultaneously.
-      const unsigned int offset_fixed =
+      const MPI_Offset size_header =
         sizes_fixed_cumulative.size() * sizeof(unsigned int);
 
-      const char *data = src_data_fixed.data();
+      // Make sure we do the following computation in 64bit integers to be
+      // able to handle 4GB+ files:
+      const MPI_Offset my_global_file_position =
+        size_header +
+        static_cast<MPI_Offset>(global_first_cell) * bytes_per_cell;
 
-      ierr = MPI_File_write_at(
-        fh,
-        offset_fixed +
-          global_first_cell *
-            sizes_fixed_cumulative.back(), // global position in file
-        DEAL_II_MPI_CONST_CAST(data),
-        src_data_fixed.size(), // local buffer
-        MPI_CHAR,
-        MPI_STATUS_IGNORE);
+      ierr =
+        Utilities::MPI::LargeCount::File_write_at_c(fh,
+                                                    my_global_file_position,
+                                                    src_data_fixed.data(),
+                                                    src_data_fixed.size(),
+                                                    MPI_BYTE,
+                                                    MPI_STATUS_IGNORE);
       AssertThrowMPI(ierr);
 
       ierr = MPI_File_close(&fh);
       AssertThrowMPI(ierr);
     }
+
+
 
     //
     // ---------- Variable size data ----------
@@ -1475,7 +1492,7 @@ namespace parallel
 
         MPI_File fh;
         ierr = MPI_File_open(mpi_communicator,
-                             DEAL_II_MPI_CONST_CAST(fname_variable.c_str()),
+                             fname_variable.c_str(),
                              MPI_MODE_CREATE | MPI_MODE_WRONLY,
                              info,
                              &fh);
@@ -1492,46 +1509,53 @@ namespace parallel
 
         // Write sizes of each cell into file simultaneously.
         {
-          const int *data = src_sizes_variable.data();
-          ierr =
-            MPI_File_write_at(fh,
-                              global_first_cell *
-                                sizeof(unsigned int), // global position in file
-                              DEAL_II_MPI_CONST_CAST(data),
-                              src_sizes_variable.size(), // local buffer
-                              MPI_INT,
-                              MPI_STATUS_IGNORE);
+          const MPI_Offset my_global_file_position =
+            static_cast<MPI_Offset>(global_first_cell) * sizeof(unsigned int);
+
+          // It is very unlikely that a single process has more than
+          // 2 billion cells, but we might as well check.
+          AssertThrow(src_sizes_variable.size() <
+                        static_cast<std::size_t>(
+                          std::numeric_limits<int>::max()),
+                      ExcNotImplemented());
+
+          ierr = Utilities::MPI::LargeCount::File_write_at_c(
+            fh,
+            my_global_file_position,
+            src_sizes_variable.data(),
+            src_sizes_variable.size(),
+            MPI_INT,
+            MPI_STATUS_IGNORE);
           AssertThrowMPI(ierr);
         }
 
-
-        const unsigned int offset_variable =
-          global_num_cells * sizeof(unsigned int);
-
-        // Gather size of data in bytes we want to store from this processor.
-        const unsigned int size_on_proc = src_data_variable.size();
-
-        // Compute prefix sum
-        unsigned int prefix_sum = 0;
-        ierr = MPI_Exscan(DEAL_II_MPI_CONST_CAST(&size_on_proc),
+        // Gather size of data in bytes we want to store from this
+        // processor and compute the prefix sum. We do this in 64 bit
+        // to avoid overflow for files larger than 4GB:
+        const std::uint64_t size_on_proc = src_data_variable.size();
+        std::uint64_t       prefix_sum   = 0;
+        ierr                             = MPI_Exscan(&size_on_proc,
                           &prefix_sum,
                           1,
-                          MPI_UNSIGNED,
+                          MPI_UINT64_T,
                           MPI_SUM,
                           mpi_communicator);
         AssertThrowMPI(ierr);
 
-        const char *data = src_data_variable.data();
+        const MPI_Offset my_global_file_position =
+          static_cast<MPI_Offset>(global_num_cells) * sizeof(unsigned int) +
+          prefix_sum;
 
         // Write data consecutively into file.
-        ierr = MPI_File_write_at(fh,
-                                 offset_variable +
-                                   prefix_sum, // global position in file
-                                 DEAL_II_MPI_CONST_CAST(data),
-                                 src_data_variable.size(), // local buffer
-                                 MPI_CHAR,
-                                 MPI_STATUS_IGNORE);
+        ierr =
+          Utilities::MPI::LargeCount::File_write_at_c(fh,
+                                                      my_global_file_position,
+                                                      src_data_variable.data(),
+                                                      src_data_variable.size(),
+                                                      MPI_BYTE,
+                                                      MPI_STATUS_IGNORE);
         AssertThrowMPI(ierr);
+
 
         ierr = MPI_File_close(&fh);
         AssertThrowMPI(ierr);
@@ -1578,46 +1602,51 @@ namespace parallel
       AssertThrowMPI(ierr);
 
       MPI_File fh;
-      ierr = MPI_File_open(mpi_communicator,
-                           DEAL_II_MPI_CONST_CAST(fname_fixed.c_str()),
-                           MPI_MODE_RDONLY,
-                           info,
-                           &fh);
+      ierr = MPI_File_open(
+        mpi_communicator, fname_fixed.c_str(), MPI_MODE_RDONLY, info, &fh);
       AssertThrowMPI(ierr);
 
       ierr = MPI_Info_free(&info);
       AssertThrowMPI(ierr);
 
       // Read cumulative sizes from file.
-      // Since all processors need the same information about the data sizes,
-      // let each of them retrieve it by reading from the same location in
-      // the file.
+      // Since all processors need the same information about the data
+      // sizes, let each of them retrieve it by reading from the same
+      // location in the file.
       sizes_fixed_cumulative.resize(1 + n_attached_deserialize_fixed +
                                     (variable_size_data_stored ? 1 : 0));
-      ierr = MPI_File_read_at(fh,
-                              0,
-                              sizes_fixed_cumulative.data(),
-                              sizes_fixed_cumulative.size(),
-                              MPI_UNSIGNED,
-                              MPI_STATUS_IGNORE);
+      ierr = Utilities::MPI::LargeCount::File_read_at_c(
+        fh,
+        0,
+        sizes_fixed_cumulative.data(),
+        sizes_fixed_cumulative.size(),
+        MPI_UNSIGNED,
+        MPI_STATUS_IGNORE);
       AssertThrowMPI(ierr);
 
       // Allocate sufficient memory.
-      dest_data_fixed.resize(local_num_cells * sizes_fixed_cumulative.back());
+      const unsigned int bytes_per_cell = sizes_fixed_cumulative.back();
+      dest_data_fixed.resize(static_cast<size_t>(local_num_cells) *
+                             bytes_per_cell);
 
       // Read packed data from file simultaneously.
-      const unsigned int offset =
+      const MPI_Offset size_header =
         sizes_fixed_cumulative.size() * sizeof(unsigned int);
 
-      ierr = MPI_File_read_at(
-        fh,
-        offset + global_first_cell *
-                   sizes_fixed_cumulative.back(), // global position in file
-        dest_data_fixed.data(),
-        dest_data_fixed.size(), // local buffer
-        MPI_CHAR,
-        MPI_STATUS_IGNORE);
+      // Make sure we do the following computation in 64bit integers to be
+      // able to handle 4GB+ files:
+      const MPI_Offset my_global_file_position =
+        size_header +
+        static_cast<MPI_Offset>(global_first_cell) * bytes_per_cell;
+
+      ierr = Utilities::MPI::LargeCount::File_read_at_c(fh,
+                                                        my_global_file_position,
+                                                        dest_data_fixed.data(),
+                                                        dest_data_fixed.size(),
+                                                        MPI_BYTE,
+                                                        MPI_STATUS_IGNORE);
       AssertThrowMPI(ierr);
+
 
       ierr = MPI_File_close(&fh);
       AssertThrowMPI(ierr);
@@ -1636,11 +1665,8 @@ namespace parallel
         AssertThrowMPI(ierr);
 
         MPI_File fh;
-        ierr = MPI_File_open(mpi_communicator,
-                             DEAL_II_MPI_CONST_CAST(fname_variable.c_str()),
-                             MPI_MODE_RDONLY,
-                             info,
-                             &fh);
+        ierr = MPI_File_open(
+          mpi_communicator, fname_variable.c_str(), MPI_MODE_RDONLY, info, &fh);
         AssertThrowMPI(ierr);
 
         ierr = MPI_Info_free(&info);
@@ -1648,38 +1674,49 @@ namespace parallel
 
         // Read sizes of all locally owned cells.
         dest_sizes_variable.resize(local_num_cells);
-        ierr = MPI_File_read_at(fh,
-                                global_first_cell * sizeof(unsigned int),
-                                dest_sizes_variable.data(),
-                                dest_sizes_variable.size(),
-                                MPI_INT,
-                                MPI_STATUS_IGNORE);
+
+        const MPI_Offset my_global_file_position_sizes =
+          static_cast<MPI_Offset>(global_first_cell) * sizeof(unsigned int);
+
+        ierr = Utilities::MPI::LargeCount::File_read_at_c(
+          fh,
+          my_global_file_position_sizes,
+          dest_sizes_variable.data(),
+          dest_sizes_variable.size(),
+          MPI_INT,
+          MPI_STATUS_IGNORE);
         AssertThrowMPI(ierr);
 
-        const unsigned int offset = global_num_cells * sizeof(unsigned int);
 
-        const unsigned int size_on_proc =
+        // Compute my data size in bytes and compute prefix sum. We do this
+        // in 64 bit to avoid overflow for files larger than 4 GB:
+        const std::uint64_t size_on_proc =
           std::accumulate(dest_sizes_variable.begin(),
                           dest_sizes_variable.end(),
-                          0);
+                          0ULL);
 
-        // share information among all processors by prefix sum
-        unsigned int prefix_sum = 0;
-        ierr = MPI_Exscan(DEAL_II_MPI_CONST_CAST(&size_on_proc),
+        std::uint64_t prefix_sum = 0;
+        ierr                     = MPI_Exscan(&size_on_proc,
                           &prefix_sum,
                           1,
-                          MPI_UNSIGNED,
+                          MPI_UINT64_T,
                           MPI_SUM,
                           mpi_communicator);
         AssertThrowMPI(ierr);
 
+        const MPI_Offset my_global_file_position =
+          static_cast<MPI_Offset>(global_num_cells) * sizeof(unsigned int) +
+          prefix_sum;
+
         dest_data_variable.resize(size_on_proc);
-        ierr = MPI_File_read_at(fh,
-                                offset + prefix_sum,
-                                dest_data_variable.data(),
-                                dest_data_variable.size(),
-                                MPI_CHAR,
-                                MPI_STATUS_IGNORE);
+
+        ierr =
+          Utilities::MPI::LargeCount::File_read_at_c(fh,
+                                                     my_global_file_position,
+                                                     dest_data_variable.data(),
+                                                     dest_data_variable.size(),
+                                                     MPI_BYTE,
+                                                     MPI_STATUS_IGNORE);
         AssertThrowMPI(ierr);
 
         ierr = MPI_File_close(&fh);

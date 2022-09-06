@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2017 - 2020 by the deal.II authors
+ * Copyright (C) 2017 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -114,7 +114,7 @@ test()
       MatrixFree<dim, double>::AdditionalData::partition_color;
     data.mapping_update_flags =
       update_values | update_gradients | update_JxW_values;
-    mf_data->reinit(dof_handler, constraints, quad, data);
+    mf_data->reinit(MappingQ1<dim>{}, dof_handler, constraints, quad, data);
   }
 
   MatrixFreeOperators::MassOperator<dim,
@@ -181,7 +181,7 @@ test()
     {
       const double est = Utilities::LinearAlgebra::lanczos_largest_eigenvalue(
         OP, init_vector, k, vector_memory);
-      deallog << k << " " << est << std::endl;
+      deallog << k << ' ' << est << std::endl;
     }
 
     // exact eigenvectors via PArpack
@@ -200,11 +200,12 @@ test()
 
     const unsigned int num_arnoldi_vectors = 2 * eigenvalues.size() + 10;
     PArpackSolver<LinearAlgebra::distributed::Vector<double>>::AdditionalData
-    additional_data(num_arnoldi_vectors,
-                    PArpackSolver<LinearAlgebra::distributed::Vector<double>>::
-                      largest_magnitude,
-                    true,
-                    1);
+      additional_data(
+        num_arnoldi_vectors,
+        PArpackSolver<
+          LinearAlgebra::distributed::Vector<double>>::largest_magnitude,
+        true,
+        1);
 
     SolverControl solver_control(dof_handler.n_dofs(),
                                  1e-10,
@@ -230,10 +231,10 @@ test()
     eigensolver.solve(OP, mass, OP, lambda, eigenfunctions, eigenvalues.size());
     deallog.depth_file(previous_depth);
 
-    for (unsigned int i = 0; i < lambda.size(); i++)
+    for (unsigned int i = 0; i < lambda.size(); ++i)
       eigenvalues[i] = lambda[i].real();
 
-    for (unsigned int i = 0; i < eigenvalues.size(); i++)
+    for (unsigned int i = 0; i < eigenvalues.size(); ++i)
       deallog << eigenvalues[i] << std::endl;
 
     // make sure that we have eigenvectors and they are mass-orthonormal:
@@ -244,7 +245,7 @@ test()
       LinearAlgebra::distributed::Vector<double> Ax(eigenfunctions[0]);
       for (unsigned int i = 0; i < eigenfunctions.size(); ++i)
         {
-          for (unsigned int j = 0; j < eigenfunctions.size(); j++)
+          for (unsigned int j = 0; j < eigenfunctions.size(); ++j)
             {
               const double err =
                 std::abs(eigenfunctions[j] * eigenfunctions[i] - (i == j));

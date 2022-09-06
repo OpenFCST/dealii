@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -623,7 +623,7 @@ ImplicitQR<VectorType>::append_column(const VectorType &column)
       const Number rho2            = column_norm_sqr - u.norm_sqr();
       const bool   linearly_independent =
         column_signal.empty() ? rho2 > 0 :
-                                column_signal(u, rho2, column_norm_sqr).get();
+                                  column_signal(u, rho2, column_norm_sqr).get();
 
       // bail out if it turns out to be linearly dependent
       if (!linearly_independent)

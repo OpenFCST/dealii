@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2019 - 2020 by the deal.II authors
+ * Copyright (C) 2019 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -133,8 +133,9 @@ namespace Step64
       : coef(coef)
     {}
 
-    __device__ void
-    operator()(CUDAWrappers::FEEvaluation<dim, fe_degree> *fe_eval) const;
+    __device__ void operator()(
+      CUDAWrappers::FEEvaluation<dim, fe_degree, fe_degree + 1, 1, double>
+        *fe_eval) const;
 
   private:
     double coef;
@@ -149,8 +150,9 @@ namespace Step64
   // the two terms on the left-hand side correspond to the two function calls
   // here:
   template <int dim, int fe_degree>
-  __device__ void HelmholtzOperatorQuad<dim, fe_degree>::
-                  operator()(CUDAWrappers::FEEvaluation<dim, fe_degree> *fe_eval) const
+  __device__ void HelmholtzOperatorQuad<dim, fe_degree>::operator()(
+    CUDAWrappers::FEEvaluation<dim, fe_degree, fe_degree + 1, 1, double>
+      *fe_eval) const
   {
     fe_eval->submit_value(coef * fe_eval->get_value());
     fe_eval->submit_gradient(fe_eval->get_gradient());
@@ -264,7 +266,7 @@ namespace Step64
     const DoFHandler<dim> &          dof_handler,
     const AffineConstraints<double> &constraints)
   {
-    MappingQGeneric<dim> mapping(fe_degree);
+    MappingQ<dim> mapping(fe_degree);
     typename CUDAWrappers::MatrixFree<dim, double>::AdditionalData
       additional_data;
     additional_data.mapping_update_flags = update_values | update_gradients |
@@ -366,7 +368,7 @@ namespace Step64
     // In addition, we also keep a solution vector with CPU storage such that we
     // can view and display the solution as usual.
     LinearAlgebra::distributed::Vector<double, MemorySpace::Host>
-                                                                  ghost_solution_host;
+      ghost_solution_host;
     LinearAlgebra::distributed::Vector<double, MemorySpace::CUDA> solution_dev;
     LinearAlgebra::distributed::Vector<double, MemorySpace::CUDA>
       system_rhs_dev;
@@ -395,7 +397,8 @@ namespace Step64
     dof_handler.distribute_dofs(fe);
 
     locally_owned_dofs = dof_handler.locally_owned_dofs();
-    DoFTools::extract_locally_relevant_dofs(dof_handler, locally_relevant_dofs);
+    locally_relevant_dofs =
+      DoFTools::extract_locally_relevant_dofs(dof_handler);
     system_rhs_dev.reinit(locally_owned_dofs, mpi_communicator);
 
     constraints.clear();
@@ -545,7 +548,7 @@ namespace Step64
     data_out.build_patches();
 
     DataOutBase::VtkFlags flags;
-    flags.compression_level = DataOutBase::VtkFlags::best_speed;
+    flags.compression_level = DataOutBase::CompressionLevel::best_speed;
     data_out.set_flags(flags);
     data_out.write_vtu_with_pvtu_record(
       "./", "solution", cycle, mpi_communicator, 2);

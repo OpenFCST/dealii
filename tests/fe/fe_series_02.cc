@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -131,13 +131,13 @@ test(const LegendreFunction<dim> &func, const unsigned int poly_degree)
     legendre.calculate(local_dof_values, cell_active_fe_index, coeff_out);
   }
 
-  for (unsigned int i = 0; i < coeff_in.size(); i++)
-    deallog << coeff_in[i] << " ";
+  for (unsigned int i = 0; i < coeff_in.size(); ++i)
+    deallog << coeff_in[i] << ' ';
 
   deallog << std::endl;
 
-  for (unsigned int i = 0; i < N; i++)
-    deallog << coeff_out[i] << " ";
+  for (unsigned int i = 0; i < N; ++i)
+    deallog << coeff_out[i] << ' ';
 
   deallog << std::endl;
 

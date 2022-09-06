@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -45,6 +45,7 @@
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/grid_tools.h>
+#include <deal.II/grid/reference_cell.h>
 
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/lac/vector.h>
@@ -59,12 +60,14 @@ std::ofstream logfile("output");
  * Check if the normal component is continuous over element edges.
  */
 
-void EvaluateNormal2(DoFHandler<2> *dof_handler, Vector<double> &solution)
+void
+EvaluateNormal2(DoFHandler<2> *dof_handler, Vector<double> &solution)
 {
   // This quadrature rule determines the points, where the
   // continuity will be tested.
   QGauss<1>     quad(6);
-  Quadrature<2> qproject = QProjector<2>::project_to_all_faces(quad);
+  Quadrature<2> qproject =
+    QProjector<2>::project_to_all_faces(ReferenceCells::Quadrilateral, quad);
 
   FEFaceValues<2> fe_v_face(
     dof_handler->get_fe(),
@@ -106,12 +109,13 @@ void EvaluateNormal2(DoFHandler<2> *dof_handler, Vector<double> &solution)
           if (!cell->face(f)->at_boundary())
             {
               const QProjector<2>::DataSetDescriptor offset =
-                (QProjector<2>::DataSetDescriptor::face(f,
-                                                        cell->face_orientation(
-                                                          f),
-                                                        cell->face_flip(f),
-                                                        cell->face_rotation(f),
-                                                        quad.size()));
+                (QProjector<2>::DataSetDescriptor::face(
+                  ReferenceCells::Quadrilateral,
+                  f,
+                  cell->face_orientation(f),
+                  cell->face_flip(f),
+                  cell->face_rotation(f),
+                  quad.size()));
               fe_v_face.reinit(cell, f);
 
               DoFHandler<2>::active_cell_iterator cell_n = cell->neighbor(f);
@@ -120,6 +124,7 @@ void EvaluateNormal2(DoFHandler<2> *dof_handler, Vector<double> &solution)
 
               const QProjector<2>::DataSetDescriptor offset_n =
                 (QProjector<2>::DataSetDescriptor::face(
+                  ReferenceCells::Quadrilateral,
                   neighbor,
                   cell_n->face_orientation(neighbor),
                   cell_n->face_flip(neighbor),
@@ -168,7 +173,8 @@ void EvaluateNormal2(DoFHandler<2> *dof_handler, Vector<double> &solution)
  * Check if the normal component is continuous over element edges.
  */
 
-void EvaluateNormal(DoFHandler<2> *dof_handler, Vector<double> &solution)
+void
+EvaluateNormal(DoFHandler<2> *dof_handler, Vector<double> &solution)
 {
   // This quadrature rule determines the points, where the
   // continuity will be tested.

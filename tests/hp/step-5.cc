@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2019 by the deal.II authors
+// Copyright (C) 2005 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -271,7 +271,7 @@ LaplaceProblem<dim>::output_results(const unsigned int cycle) const
   if (cycle >= 2)
     return;
 
-  DataOut<dim, DoFHandler<dim>> data_out;
+  DataOut<dim> data_out;
 
   data_out.attach_dof_handler(dof_handler);
   data_out.add_data_vector(solution, "solution");

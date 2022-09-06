@@ -54,12 +54,12 @@ public:
 
 template <int dim, int fe_degree>
 __device__ void
-DummyOperator<dim, fe_degree>::
-operator()(const unsigned int                                          cell,
-           const typename CUDAWrappers::MatrixFree<dim, double>::Data *gpu_data,
-           CUDAWrappers::SharedData<dim, double> *,
-           const double *,
-           double *dst) const
+DummyOperator<dim, fe_degree>::operator()(
+  const unsigned int                                          cell,
+  const typename CUDAWrappers::MatrixFree<dim, double>::Data *gpu_data,
+  CUDAWrappers::SharedData<dim, double> *,
+  const double *,
+  double *dst) const
 {
   const unsigned int pos = CUDAWrappers::local_q_point_id<dim, double>(
     cell, gpu_data, n_dofs_1d, n_q_points);
@@ -117,7 +117,7 @@ test()
   constraints.close();
 
   // Computation on the device
-  MappingQGeneric<dim>                  mapping(fe_degree);
+  MappingQ<dim>                         mapping(fe_degree);
   CUDAWrappers::MatrixFree<dim, double> mf_data;
   typename CUDAWrappers::MatrixFree<dim, double>::AdditionalData
     additional_data;

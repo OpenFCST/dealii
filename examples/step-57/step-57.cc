@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2008 - 2020 by the deal.II authors
+ * Copyright (C) 2008 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -299,7 +299,7 @@ namespace Step57
     // remain satisfied during Newton's iteration, zero boundary conditions are
     // used for the update $\delta u^k$. Therefore we set up two different
     // constraint objects.
-    FEValuesExtractors::Vector velocities(0);
+    const FEValuesExtractors::Vector velocities(0);
     {
       nonzero_constraints.clear();
 
@@ -563,7 +563,7 @@ namespace Step57
   void StationaryNavierStokes<dim>::refine_mesh()
   {
     Vector<float> estimated_error_per_cell(triangulation.n_active_cells());
-    FEValuesExtractors::Vector velocity(0);
+    const FEValuesExtractors::Vector velocity(0);
     KellyErrorEstimator<dim>::estimate(
       dof_handler,
       QGauss<dim - 1>(degree + 1),
@@ -786,8 +786,8 @@ namespace Step57
         VectorTools::point_value(dof_handler, present_solution, p, tmp_vector);
         f << p(dim - 1);
 
-        for (int j = 0; j < dim; j++)
-          f << " " << tmp_vector(j);
+        for (int j = 0; j < dim; ++j)
+          f << ' ' << tmp_vector(j);
         f << std::endl;
       }
   }

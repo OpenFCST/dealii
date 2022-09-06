@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2018 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -33,7 +33,7 @@ test_bounding_box()
 
   std::pair<Point<spacedim>, Point<spacedim>> boundaries;
 
-  for (int i = 0; i < spacedim; i++)
+  for (int i = 0; i < spacedim; ++i)
     {
       boundaries.first[i]  = 0.2 - i * 0.2;
       boundaries.second[i] = 0.8 + i * 0.8;
@@ -45,7 +45,7 @@ test_bounding_box()
   deallog << b.get_boundary_points().second << std::endl;
 
   deallog << "Boundary points are inside: " << b.point_inside(boundaries.first)
-          << " " << b.point_inside(boundaries.second) << std::endl;
+          << ' ' << b.point_inside(boundaries.second) << std::endl;
 
   std::vector<Point<spacedim>> test_points;
 
@@ -111,7 +111,7 @@ test_unitary()
 {
   std::pair<Point<3>, Point<3>> boundaries;
 
-  for (int i = 0; i < 3; i++)
+  for (int i = 0; i < 3; ++i)
     {
       boundaries.second[i] = 1.0;
     }
@@ -126,12 +126,12 @@ test_unitary()
   Point<3> p3(0, 0, 1.0);
 
   deallog << "Checking if all vertices are inside: "
-          << b.point_inside(boundaries.first) << " "
+          << b.point_inside(boundaries.first) << ' '
           << b.point_inside(boundaries.second) << std::endl;
 
-  deallog << b.point_inside(p1) << " " << b.point_inside(p2) << " "
-          << b.point_inside(p3) << " " << b.point_inside(p1 + p2) << " "
-          << b.point_inside(p2 + p3) << " " << b.point_inside(p1 + p3) << " "
+  deallog << b.point_inside(p1) << ' ' << b.point_inside(p2) << ' '
+          << b.point_inside(p3) << ' ' << b.point_inside(p1 + p2) << ' '
+          << b.point_inside(p2 + p3) << ' ' << b.point_inside(p1 + p3) << ' '
           << std::endl;
 
   double eps = std::numeric_limits<double>::epsilon();

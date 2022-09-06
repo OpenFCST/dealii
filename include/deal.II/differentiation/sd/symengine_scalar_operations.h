@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2020 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -42,7 +42,7 @@ namespace Differentiation
     /**
      * @name Symbolic variable creation
      */
-    //@{
+    /** @{ */
 
     /**
      * Return an Expression representing a scalar symbolic variable
@@ -110,12 +110,12 @@ namespace Differentiation
     make_symbolic_function(const std::string &            symbol,
                            const types::substitution_map &arguments);
 
-    //@}
+    /** @} */
 
     /**
      * @name Symbolic differentiation
      */
-    //@{
+    /** @{ */
 
     /**
      * Return the symbolic result of computing the partial derivative of the
@@ -131,12 +131,12 @@ namespace Differentiation
     Expression
     differentiate(const Expression &f, const Expression &x);
 
-    //@}
+    /** @} */
 
     /**
      * @name Symbol map creation and manipulation
      */
-    //@{
+    /** @{ */
 
     namespace internal
     {
@@ -229,7 +229,7 @@ namespace Differentiation
               typename SymbolicType,
               typename... Args>
     types::substitution_map
-    make_symbol_map(const SymbolicType &symbol, const Args &... other_symbols);
+    make_symbol_map(const SymbolicType &symbol, const Args &...other_symbols);
 
     /**
      * A convenience function for adding an empty entry, with the key value
@@ -303,11 +303,11 @@ namespace Differentiation
     template <bool ignore_invalid_symbols = false,
               typename ValueType          = double,
               typename SymbolicType,
-              typename T = typename std::enable_if<
+              typename T = std::enable_if_t<
                 !std::is_base_of<Expression, SymbolicType>::value &&
                 dealii::internal::is_explicitly_convertible<
                   SymbolicType,
-                  const SymEngine::RCP<const SymEngine::Basic> &>::value>::type>
+                  const SymEngine::RCP<const SymEngine::Basic> &>::value>>
     void
     add_to_symbol_map(types::substitution_map &symbol_map,
                       const SymbolicType &     symbol);
@@ -417,7 +417,7 @@ namespace Differentiation
     void
     add_to_symbol_map(types::substitution_map &symbol_map,
                       const SymbolicType &     symbol,
-                      const Args &... other_symbols);
+                      const Args &...other_symbols);
 
     /**
      * Find the entry for @p symbol in the @p substitution_map and set its
@@ -460,11 +460,11 @@ namespace Differentiation
      */
     template <typename SymbolicType,
               typename ValueType,
-              typename T = typename std::enable_if<
+              typename T = std::enable_if_t<
                 dealii::internal::is_explicitly_convertible<
                   SymbolicType,
                   const SymEngine::RCP<const SymEngine::Basic> &>::value &&
-                std::is_constructible<SymbolicType, ValueType>::value>::type>
+                std::is_constructible<SymbolicType, ValueType>::value>>
     void
     set_value_in_symbol_map(types::substitution_map &substitution_map,
                             const SymbolicType &     symbol,
@@ -551,7 +551,7 @@ namespace Differentiation
     set_value_in_symbol_map(
       types::substitution_map &                 substitution_map,
       const std::pair<SymbolicType, ValueType> &symbol_value,
-      const Args &... other_symbol_values);
+      const Args &...other_symbol_values);
 
     /**
      * Find the entries for @p symbols in the @p substitution_map and set their
@@ -594,12 +594,12 @@ namespace Differentiation
     set_value_in_symbol_map(types::substitution_map &      substitution_map,
                             const types::substitution_map &symbol_values);
 
-    //@}
+    /** @} */
 
     /**
      * @name Symbol substitution map creation
      */
-    //@{
+    /** @{ */
 
     /**
      * Return a substitution map that has the entry key given by @p symbol
@@ -649,11 +649,11 @@ namespace Differentiation
      */
     template <typename ExpressionType,
               typename ValueType,
-              typename T = typename std::enable_if<
+              typename T = std::enable_if_t<
                 dealii::internal::is_explicitly_convertible<
                   ExpressionType,
                   const SymEngine::RCP<const SymEngine::Basic> &>::value &&
-                std::is_constructible<ExpressionType, ValueType>::value>::type>
+                std::is_constructible<ExpressionType, ValueType>::value>>
     types::substitution_map
     make_substitution_map(const ExpressionType &symbol, const ValueType &value);
 
@@ -780,14 +780,14 @@ namespace Differentiation
     types::substitution_map
     make_substitution_map(
       const std::pair<ExpressionType, ValueType> &symbol_value,
-      const Args &... other_symbol_values);
+      const Args &...other_symbol_values);
 
-    //@}
+    /** @} */
 
     /**
      * @name Symbol substitution map enlargement
      */
-    //@{
+    /** @{ */
 
     namespace internal
     {
@@ -892,11 +892,11 @@ namespace Differentiation
     template <bool ignore_invalid_symbols = false,
               typename ExpressionType,
               typename ValueType,
-              typename = typename std::enable_if<
+              typename = std::enable_if_t<
                 dealii::internal::is_explicitly_convertible<
                   ExpressionType,
                   const SymEngine::RCP<const SymEngine::Basic> &>::value &&
-                std::is_constructible<ExpressionType, ValueType>::value>::type>
+                std::is_constructible<ExpressionType, ValueType>::value>>
     void
     add_to_substitution_map(types::substitution_map &substitution_map,
                             const ExpressionType &   symbol,
@@ -938,11 +938,11 @@ namespace Differentiation
     template <bool ignore_invalid_symbols = false,
               typename ExpressionType,
               typename ValueType,
-              typename = typename std::enable_if<
+              typename = std::enable_if_t<
                 dealii::internal::is_explicitly_convertible<
                   ExpressionType,
                   const SymEngine::RCP<const SymEngine::Basic> &>::value &&
-                std::is_constructible<ExpressionType, ValueType>::value>::type>
+                std::is_constructible<ExpressionType, ValueType>::value>>
     void
     add_to_substitution_map(types::substitution_map &          substitution_map,
                             const std::vector<ExpressionType> &symbols,
@@ -1121,7 +1121,7 @@ namespace Differentiation
     add_to_substitution_map(
       types::substitution_map &                   substitution_map,
       const std::pair<ExpressionType, ValueType> &symbol_value,
-      const Args &... other_symbol_values);
+      const Args &...other_symbol_values);
 
     /**
      * Concatenate two symbolic maps, merging a second map @p substitution_map_in
@@ -1148,7 +1148,7 @@ namespace Differentiation
     void
     merge_substitution_maps(types::substitution_map &      substitution_map_out,
                             const types::substitution_map &substitution_map_in,
-                            const Args &... other_substitution_maps_in);
+                            const Args &...other_substitution_maps_in);
 
     /**
      * Concatenate multiple symbolic maps, merging the maps @p substitution_map_in
@@ -1160,14 +1160,14 @@ namespace Differentiation
     template <typename... Args>
     types::substitution_map
     merge_substitution_maps(const types::substitution_map &substitution_map_in,
-                            const Args &... other_substitution_maps_in);
+                            const Args &...other_substitution_maps_in);
 
-    //@}
+    /** @} */
 
     /**
      * @name Symbol substitution and evaluation
      */
-    //@{
+    /** @{ */
 
     /**
      * Return a substitution map that has any explicit interdependencies between
@@ -1355,7 +1355,7 @@ namespace Differentiation
      */
     template <typename ExpressionType, typename... Args>
     ExpressionType
-    substitute(const ExpressionType &expression, const Args &... symbol_values);
+    substitute(const ExpressionType &expression, const Args &...symbol_values);
 
     /**
      * Perform a single substitution sweep of a set of symbols into the given
@@ -1421,9 +1421,9 @@ namespace Differentiation
     template <typename ValueType, typename... Args>
     ValueType
     substitute_and_evaluate(const Expression &expression,
-                            const Args &... symbol_values);
+                            const Args &...symbol_values);
 
-    //@}
+    /** @} */
 
   } // namespace SD
 } // namespace Differentiation
@@ -1459,7 +1459,7 @@ namespace Differentiation
               typename SymbolicType,
               typename... Args>
     types::substitution_map
-    make_symbol_map(const SymbolicType &symbol, const Args &... other_symbols)
+    make_symbol_map(const SymbolicType &symbol, const Args &...other_symbols)
     {
       types::substitution_map symbol_map;
       add_to_symbol_map<ignore_invalid_symbols, ValueType>(symbol_map,
@@ -1541,7 +1541,7 @@ namespace Differentiation
     void
     add_to_symbol_map(types::substitution_map &symbol_map,
                       const SymbolicType &     symbol,
-                      const Args &... other_symbols)
+                      const Args &...other_symbols)
     {
       add_to_symbol_map<ignore_invalid_symbols, ValueType>(symbol_map, symbol);
       add_to_symbol_map<ignore_invalid_symbols, ValueType>(symbol_map,
@@ -1601,7 +1601,7 @@ namespace Differentiation
     set_value_in_symbol_map(
       types::substitution_map &                 substitution_map,
       const std::pair<SymbolicType, ValueType> &symbol_value,
-      const Args &... other_symbol_values)
+      const Args &...other_symbol_values)
     {
       set_value_in_symbol_map(substitution_map, symbol_value);
       set_value_in_symbol_map(substitution_map, other_symbol_values...);
@@ -1670,7 +1670,7 @@ namespace Differentiation
     types::substitution_map
     make_substitution_map(
       const std::pair<ExpressionType, ValueType> &symbol_value,
-      const Args &... other_symbol_values)
+      const Args &...other_symbol_values)
     {
       types::substitution_map substitution_map;
       add_to_substitution_map(substitution_map,
@@ -1834,7 +1834,7 @@ namespace Differentiation
     add_to_substitution_map(
       types::substitution_map &                   substitution_map,
       const std::pair<ExpressionType, ValueType> &symbol_value,
-      const Args &... other_symbol_values)
+      const Args &...other_symbol_values)
     {
       add_to_substitution_map<ignore_invalid_symbols>(substitution_map,
                                                       symbol_value);
@@ -1847,7 +1847,7 @@ namespace Differentiation
     types::substitution_map
     merge_substitution_maps(
       const types::substitution_map &substitution_map_in_1,
-      const Args &... other_substitution_maps_in)
+      const Args &...other_substitution_maps_in)
     {
       types::substitution_map substitution_map_out = substitution_map_in_1;
       merge_substitution_maps(substitution_map_out,
@@ -1861,7 +1861,7 @@ namespace Differentiation
     merge_substitution_maps(
       types::substitution_map &      substitution_map_out,
       const types::substitution_map &substitution_map_in_1,
-      const Args &... other_substitution_maps_in)
+      const Args &...other_substitution_maps_in)
     {
       merge_substitution_maps(substitution_map_out, substitution_map_in_1);
       merge_substitution_maps(substitution_map_out,
@@ -1895,7 +1895,7 @@ namespace Differentiation
 
     template <typename ExpressionType, typename... Args>
     ExpressionType
-    substitute(const ExpressionType &expression, const Args &... symbol_values)
+    substitute(const ExpressionType &expression, const Args &...symbol_values)
     {
       // Call other function
       return substitute(expression, make_substitution_map(symbol_values...));
@@ -1914,7 +1914,7 @@ namespace Differentiation
     template <typename ValueType, typename... Args>
     ValueType
     substitute_and_evaluate(const Expression &expression,
-                            const Args &... symbol_values)
+                            const Args &...symbol_values)
     {
       // Call other function
       return substitute_and_evaluate<ValueType>(

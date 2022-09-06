@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2006 - 2019 by the deal.II authors
+// Copyright (C) 2006 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -182,7 +182,6 @@ check_fe(FiniteElement<dim> &fe)
         std::vector<types::global_dof_index> &renumbered =
           mgdofmap[cell->id().to_string()];
         cell->set_mg_dof_indices(renumbered);
-        cell->update_cell_dof_indices_cache();
       }
 
     mg_constrained_dofs_ref.initialize(dofhref);
@@ -198,7 +197,7 @@ check_fe(FiniteElement<dim> &fe)
   const unsigned int n_levels = tr.n_global_levels();
   for (unsigned int level = 0; level < n_levels; ++level)
     {
-      deallog << "Level " << level << ":" << std::endl;
+      deallog << "Level " << level << ':' << std::endl;
 
       IndexSet rei = mg_constrained_dofs.get_refinement_edge_indices(level);
       deallog << "get_refinement_edge_indices:" << std::endl;

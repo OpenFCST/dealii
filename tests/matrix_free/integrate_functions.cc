@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2020 by the deal.II authors
+// Copyright (C) 2013 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -87,11 +87,11 @@ private:
 
 template <int dim, int fe_degree, typename Number>
 void
-MatrixFreeTest<dim, fe_degree, Number>::
-operator()(const MatrixFree<dim, Number> &data,
-           std::vector<Vector<Number> *> &dst,
-           const std::vector<Vector<Number> *> &,
-           const std::pair<unsigned int, unsigned int> &cell_range) const
+MatrixFreeTest<dim, fe_degree, Number>::operator()(
+  const MatrixFree<dim, Number> &data,
+  std::vector<Vector<Number> *> &dst,
+  const std::vector<Vector<Number> *> &,
+  const std::pair<unsigned int, unsigned int> &cell_range) const
 {
   FEEvaluation<dim, fe_degree, fe_degree + 1, 1, Number> fe_eval(data);
   const unsigned int                     n_q_points    = fe_eval.n_q_points;
@@ -104,7 +104,8 @@ operator()(const MatrixFree<dim, Number> &data,
       fe_eval.reinit(cell);
       // compare values with the ones the FEValues
       // gives us. Those are seen as reference
-      for (unsigned int j = 0; j < data.n_components_filled(cell); ++j)
+      for (unsigned int j = 0; j < data.n_active_entries_per_cell_batch(cell);
+           ++j)
         {
           // generate random numbers at quadrature
           // points and test them with basis functions
@@ -203,7 +204,8 @@ test()
   MatrixFree<dim, number> mf_data;
   {
     const QGauss<1> quad(fe_degree + 1);
-    mf_data.reinit(dof,
+    mf_data.reinit(MappingQ1<dim>{},
+                   dof,
                    constraints,
                    quad,
                    typename MatrixFree<dim, number>::AdditionalData(

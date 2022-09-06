@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2020 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,15 +19,12 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/mpi_stub.h>
+
+#include <deal.II/distributed/repartitioning_policy_tools.h>
 #include <deal.II/distributed/tria_base.h>
 
-#include <deal.II/grid/grid_tools.h>
-
 #include <vector>
-
-#ifdef DEAL_II_WITH_MPI
-#  include <mpi.h>
-#endif
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -197,6 +194,22 @@ namespace parallel
         const TriangulationDescription::Settings &     settings);
 
       /**
+       * Register a partitioner, which is used within the method
+       * repartition().
+       */
+      void
+      set_partitioner(
+        const RepartitioningPolicyTools::Base<dim, spacedim> &partitioner,
+        const TriangulationDescription::Settings &            settings);
+
+      /**
+       * Execute repartitioning and use the partitioner attached by the
+       * method set_partitioner();
+       */
+      void
+      repartition();
+
+      /**
        * Coarsen and refine the mesh according to refinement and coarsening
        * flags set.
        *
@@ -213,14 +226,6 @@ namespace parallel
        */
       virtual bool
       prepare_coarsening_and_refinement() override;
-
-      /**
-       * Return true if the triangulation has hanging nodes.
-       *
-       * @note Not implemented yet.
-       */
-      virtual bool
-      has_hanging_nodes() const override;
 
       /**
        * Return the local memory consumption in bytes.
@@ -252,8 +257,16 @@ namespace parallel
        * in with notify_ready_to_unpack() after calling load().
        */
       virtual void
-      load(const std::string &filename,
-           const bool         autopartition = false) override;
+      load(const std::string &filename) override;
+
+      /**
+       * @copydoc load()
+       *
+       * @deprecated The autopartition parameter has been removed.
+       */
+      DEAL_II_DEPRECATED
+      virtual void
+      load(const std::string &filename, const bool autopartition) override;
 
     private:
       virtual unsigned int
@@ -278,6 +291,9 @@ namespace parallel
       virtual void
       update_cell_relations() override;
 
+      virtual void
+      update_number_cache() override;
+
       /**
        * store the Settings.
        */
@@ -289,6 +305,12 @@ namespace parallel
       std::function<void(dealii::Triangulation<dim, spacedim> &,
                          const unsigned int)>
         partitioner;
+
+      /**
+       * Partitioner used during repartition().
+       */
+      SmartPointer<const RepartitioningPolicyTools::Base<dim, spacedim>>
+        partitioner_distributed;
 
       /**
        * Sorted list of pairs of coarse-cell ids and their indices.

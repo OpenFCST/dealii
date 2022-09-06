@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2002 - 2020 by the deal.II authors
+ * Copyright (C) 2002 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -123,9 +123,9 @@ namespace Step14
 
 
     template <int dim>
-    void PointValueEvaluation<dim>::
-         operator()(const DoFHandler<dim> &dof_handler,
-               const Vector<double> & solution) const
+    void
+    PointValueEvaluation<dim>::operator()(const DoFHandler<dim> &dof_handler,
+                                          const Vector<double> & solution) const
     {
       double point_value = 1e20;
 
@@ -192,9 +192,9 @@ namespace Step14
     // The more interesting things happen inside the function doing the actual
     // evaluation:
     template <int dim>
-    void PointXDerivativeEvaluation<dim>::
-         operator()(const DoFHandler<dim> &dof_handler,
-               const Vector<double> & solution) const
+    void PointXDerivativeEvaluation<dim>::operator()(
+      const DoFHandler<dim> &dof_handler,
+      const Vector<double> & solution) const
     {
       // This time initialize the return value with something useful, since we
       // will have to add up a number of contributions and take the mean value
@@ -617,9 +617,9 @@ namespace Step14
     // at least; otherwise, the actions are performed
     // sequentially). Note that we start only one thread, and do the
     // second action in the main thread. Since only one thread is
-    // generated, we don't use the <code>Threads::ThreadGroup</code>
-    // class here, but rather use the one created thread object
-    // directly to wait for this particular thread's exit. The
+    // generated, we don't use the <code>Threads::TaskGroup</code>
+    // class here, but rather use the one created task object
+    // directly to wait for this particular task's exit. The
     // approach is generally the same as the one we have used in
     // <code>Solver::assemble_linear_system()</code> above.
     //

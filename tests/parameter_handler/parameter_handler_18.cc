@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2002 - 2018 by the deal.II authors
+// Copyright (C) 2002 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -34,7 +34,7 @@ test()
   foo.declare_entry("val", "1.0", dealii::Patterns::Double(), "");
   foo.leave_subsection();
 
-  foo.parse_input(SOURCE_DIR "/parameter_handler_18.prm");
+  foo.parse_input(SOURCE_DIR "/parameter_handler_18_in.prm");
 
   foo.enter_subsection("bar");
   deallog << foo.get("val") << std::endl;

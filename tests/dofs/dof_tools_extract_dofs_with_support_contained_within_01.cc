@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2018 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -110,10 +110,10 @@ test(const unsigned int flag)
         << "plot '-' using 1:2 with lines notitle, '-' with labels point pt 2 offset 1,1 notitle"
         << std::endl;
       GridOut().write_gnuplot(triangulation, f);
-      f << "e" << std::endl;
+      f << 'e' << std::endl;
 
       DoFTools::write_gnuplot_dof_support_point_info(f, support_points);
-      f << "e" << std::endl;
+      f << 'e' << std::endl;
     }
 
   dh.clear();

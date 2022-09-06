@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -48,7 +48,7 @@ namespace VectorTools
   /**
    * @name Interpolation and projection
    */
-  //@{
+  /** @{ */
 
   /**
    * Compute the interpolation of @p function at the support points to the
@@ -87,7 +87,7 @@ namespace VectorTools
 
   /**
    * Call the @p interpolate() function above with
-   * <tt>mapping=MappingQGeneric@<dim,spacedim@>(1)</tt>.
+   * <tt>mapping=MappingQ@<dim,spacedim@>(1)</tt>.
    */
   template <int dim, int spacedim, typename VectorType>
   void
@@ -248,12 +248,12 @@ namespace VectorTools
     const AffineConstraints<typename VectorType::value_type> &constraints,
     VectorType &                                              u2);
 
-  //@}
+  /** @} */
 
   /**
    * Geometrical interpolation
    */
-  //@{
+  /** @{ */
   /**
    * Given a DoFHandler containing at least a spacedim vector field, this
    * function interpolates the Triangulation at the support points of a FE_Q()
@@ -289,7 +289,7 @@ namespace VectorTools
    * Like the above function but also taking @p mapping as argument.
    * This will introduce an additional approximation between the true geometry
    * specified by the manifold if the degree of the mapping is lower than the
-   * degree of the finite finite element in the DoFHandler @p dh, but more
+   * degree of the finite element in the DoFHandler @p dh, but more
    * importantly it allows to fill location vectors for mappings that do not
    * preserve vertex locations (like Eulerian mappings).
    */
@@ -300,7 +300,7 @@ namespace VectorTools
                       VectorType &                     vector,
                       const ComponentMask &            mask = ComponentMask());
 
-  //@}
+  /** @} */
 } // namespace VectorTools
 
 DEAL_II_NAMESPACE_CLOSE

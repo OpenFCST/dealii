@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -66,6 +66,7 @@ argv=0x7fffffffdf48) at find_cell_10.cc:103
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_q.h>
+#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_in.h>
@@ -98,8 +99,8 @@ test()
   ePos(0) = 0.0653630060373507487669897386695;
   ePos(1) = 1125.59175030825804242340382189;
 
-  MappingQ<2>         mapping(1);
-  MappingQGeneric<2> &mapping2 = StaticMappingQ1<2>::mapping;
+  MappingQ<2>  mapping(1);
+  MappingQ<2> &mapping2 = StaticMappingQ1<2>::mapping;
   deallog << "1:" << std::endl;
   GridTools::find_active_cell_around_point(mapping, triangulation, ePos);
   deallog << "2:" << std::endl;

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2018 by the deal.II authors
+// Copyright (C) 2000 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -33,7 +33,7 @@ test()
       }
 
   // output the determinants of these objects
-  deallog << "det(dF): " << dF.determinant().real() << " "
+  deallog << "det(dF): " << dF.determinant().real() << ' '
           << dF.determinant().imag() << std::endl;
 }
 

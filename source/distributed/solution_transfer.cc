@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2020 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -26,8 +26,6 @@
 
 #  include <deal.II/grid/tria_accessor.h>
 #  include <deal.II/grid/tria_iterator.h>
-
-#  include <deal.II/hp/dof_handler.h>
 
 #  include <deal.II/lac/block_vector.h>
 #  include <deal.II/lac/la_parallel_block_vector.h>
@@ -114,16 +112,17 @@ namespace parallel
 {
   namespace distributed
   {
-    template <int dim, typename VectorType, typename DoFHandlerType>
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::SolutionTransfer(
-      const DoFHandlerType &dof)
+    template <int dim, typename VectorType, int spacedim>
+    SolutionTransfer<dim, VectorType, spacedim>::SolutionTransfer(
+      const DoFHandler<dim, spacedim> &dof,
+      const bool                       average_values)
       : dof_handler(&dof, typeid(*this).name())
+      , average_values(average_values)
       , handle(numbers::invalid_unsigned_int)
     {
       Assert(
-        (dynamic_cast<const parallel::DistributedTriangulationBase<
-           dim,
-           DoFHandlerType::space_dimension> *>(
+        (dynamic_cast<
+           const parallel::DistributedTriangulationBase<dim, spacedim> *>(
            &dof_handler->get_triangulation()) != nullptr),
         ExcMessage(
           "parallel::distributed::SolutionTransfer requires a parallel::distributed::Triangulation object."));
@@ -131,9 +130,9 @@ namespace parallel
 
 
 
-    template <int dim, typename VectorType, typename DoFHandlerType>
+    template <int dim, typename VectorType, int spacedim>
     void
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::
+    SolutionTransfer<dim, VectorType, spacedim>::
       prepare_for_coarsening_and_refinement(
         const std::vector<const VectorType *> &all_in)
     {
@@ -147,32 +146,35 @@ namespace parallel
 
 
 
-    template <int dim, typename VectorType, typename DoFHandlerType>
+    template <int dim, typename VectorType, int spacedim>
     void
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::register_data_attach()
+    SolutionTransfer<dim, VectorType, spacedim>::register_data_attach()
     {
       // TODO: casting away constness is bad
-      auto *tria = (dynamic_cast<parallel::DistributedTriangulationBase<
-                      dim,
-                      DoFHandlerType::space_dimension> *>(
-        const_cast<dealii::Triangulation<dim, DoFHandlerType::space_dimension>
-                     *>(&dof_handler->get_triangulation())));
+      parallel::DistributedTriangulationBase<dim, spacedim> *tria =
+        (dynamic_cast<parallel::DistributedTriangulationBase<dim, spacedim> *>(
+          const_cast<dealii::Triangulation<dim, spacedim> *>(
+            &dof_handler->get_triangulation())));
       Assert(tria != nullptr, ExcInternalError());
+
+      Assert(handle == numbers::invalid_unsigned_int,
+             ExcMessage("You can only add one solution per "
+                        "SolutionTransfer object."));
 
       handle = tria->register_data_attach(
         [this](
-          const typename Triangulation<dim, DoFHandlerType::space_dimension>::
-            cell_iterator &cell_,
-          const typename Triangulation<dim, DoFHandlerType::space_dimension>::
-            CellStatus status) { return this->pack_callback(cell_, status); },
+          const typename Triangulation<dim, spacedim>::cell_iterator &cell_,
+          const typename Triangulation<dim, spacedim>::CellStatus     status) {
+          return this->pack_callback(cell_, status);
+        },
         /*returns_variable_size_data=*/dof_handler->has_hp_capabilities());
     }
 
 
 
-    template <int dim, typename VectorType, typename DoFHandlerType>
+    template <int dim, typename VectorType, int spacedim>
     void
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::
+    SolutionTransfer<dim, VectorType, spacedim>::
       prepare_for_coarsening_and_refinement(const VectorType &in)
     {
       std::vector<const VectorType *> all_in(1, &in);
@@ -181,10 +183,10 @@ namespace parallel
 
 
 
-    template <int dim, typename VectorType, typename DoFHandlerType>
+    template <int dim, typename VectorType, int spacedim>
     void
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::
-      prepare_for_serialization(const VectorType &in)
+    SolutionTransfer<dim, VectorType, spacedim>::prepare_for_serialization(
+      const VectorType &in)
     {
       std::vector<const VectorType *> all_in(1, &in);
       prepare_for_serialization(all_in);
@@ -192,20 +194,19 @@ namespace parallel
 
 
 
-    template <int dim, typename VectorType, typename DoFHandlerType>
+    template <int dim, typename VectorType, int spacedim>
     void
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::
-      prepare_for_serialization(const std::vector<const VectorType *> &all_in)
+    SolutionTransfer<dim, VectorType, spacedim>::prepare_for_serialization(
+      const std::vector<const VectorType *> &all_in)
     {
       prepare_for_coarsening_and_refinement(all_in);
     }
 
 
 
-    template <int dim, typename VectorType, typename DoFHandlerType>
+    template <int dim, typename VectorType, int spacedim>
     void
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::deserialize(
-      VectorType &in)
+    SolutionTransfer<dim, VectorType, spacedim>::deserialize(VectorType &in)
     {
       std::vector<VectorType *> all_in(1, &in);
       deserialize(all_in);
@@ -213,9 +214,9 @@ namespace parallel
 
 
 
-    template <int dim, typename VectorType, typename DoFHandlerType>
+    template <int dim, typename VectorType, int spacedim>
     void
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::deserialize(
+    SolutionTransfer<dim, VectorType, spacedim>::deserialize(
       std::vector<VectorType *> &all_in)
     {
       register_data_attach();
@@ -227,9 +228,9 @@ namespace parallel
     }
 
 
-    template <int dim, typename VectorType, typename DoFHandlerType>
+    template <int dim, typename VectorType, int spacedim>
     void
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::interpolate(
+    SolutionTransfer<dim, VectorType, spacedim>::interpolate(
       std::vector<VectorType *> &all_out)
     {
       Assert(input_vectors.size() == all_out.size(),
@@ -239,39 +240,65 @@ namespace parallel
                ExcDimensionMismatch(all_out[i]->size(), dof_handler->n_dofs()));
 
       // TODO: casting away constness is bad
-      auto *tria = (dynamic_cast<parallel::DistributedTriangulationBase<
-                      dim,
-                      DoFHandlerType::space_dimension> *>(
-        const_cast<dealii::Triangulation<dim, DoFHandlerType::space_dimension>
-                     *>(&dof_handler->get_triangulation())));
+      parallel::DistributedTriangulationBase<dim, spacedim> *tria =
+        (dynamic_cast<parallel::DistributedTriangulationBase<dim, spacedim> *>(
+          const_cast<dealii::Triangulation<dim, spacedim> *>(
+            &dof_handler->get_triangulation())));
       Assert(tria != nullptr, ExcInternalError());
+
+      if (average_values)
+        for (const auto vec : all_out)
+          *vec = 0.0;
+
+      VectorType valence;
+
+      // initialize valence vector only if we need to average
+      if (average_values)
+        valence.reinit(*all_out[0]);
 
       tria->notify_ready_to_unpack(
         handle,
-        [this, &all_out](
-          const typename Triangulation<dim, DoFHandlerType::space_dimension>::
-            cell_iterator &cell_,
-          const typename Triangulation<dim, DoFHandlerType::space_dimension>::
-            CellStatus status,
+        [this, &all_out, &valence](
+          const typename Triangulation<dim, spacedim>::cell_iterator &cell_,
+          const typename Triangulation<dim, spacedim>::CellStatus     status,
           const boost::iterator_range<std::vector<char>::const_iterator>
             &data_range) {
-          this->unpack_callback(cell_, status, data_range, all_out);
+          this->unpack_callback(cell_, status, data_range, all_out, valence);
         });
 
-      for (typename std::vector<VectorType *>::iterator it = all_out.begin();
-           it != all_out.end();
-           ++it)
-        (*it)->compress(::dealii::VectorOperation::insert);
+      if (average_values)
+        {
+          // finalize valence: compress and invert
+          using Number = typename VectorType::value_type;
+          valence.compress(::dealii::VectorOperation::add);
+          for (const auto i : valence.locally_owned_elements())
+            valence[i] = (static_cast<Number>(valence[i]) == Number() ?
+                            Number() :
+                            (Number(1.0) / static_cast<Number>(valence[i])));
+          valence.compress(::dealii::VectorOperation::insert);
+
+          for (const auto vec : all_out)
+            {
+              // compress and weight with valence
+              vec->compress(::dealii::VectorOperation::add);
+              vec->scale(valence);
+            }
+        }
+      else
+        {
+          for (const auto vec : all_out)
+            vec->compress(::dealii::VectorOperation::insert);
+        }
 
       input_vectors.clear();
+      handle = numbers::invalid_unsigned_int;
     }
 
 
 
-    template <int dim, typename VectorType, typename DoFHandlerType>
+    template <int dim, typename VectorType, int spacedim>
     void
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::interpolate(
-      VectorType &out)
+    SolutionTransfer<dim, VectorType, spacedim>::interpolate(VectorType &out)
     {
       std::vector<VectorType *> all_out(1, &out);
       interpolate(all_out);
@@ -279,16 +306,14 @@ namespace parallel
 
 
 
-    template <int dim, typename VectorType, typename DoFHandlerType>
+    template <int dim, typename VectorType, int spacedim>
     std::vector<char>
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::pack_callback(
-      const typename Triangulation<dim, DoFHandlerType::space_dimension>::
-        cell_iterator &cell_,
-      const typename Triangulation<dim,
-                                   DoFHandlerType::space_dimension>::CellStatus
-        status)
+    SolutionTransfer<dim, VectorType, spacedim>::pack_callback(
+      const typename Triangulation<dim, spacedim>::cell_iterator &cell_,
+      const typename Triangulation<dim, spacedim>::CellStatus     status)
     {
-      typename DoFHandlerType::cell_iterator cell(*cell_, dof_handler);
+      typename DoFHandler<dim, spacedim>::cell_iterator cell(*cell_,
+                                                             dof_handler);
 
       // create buffer for each individual object
       std::vector<::dealii::Vector<typename VectorType::value_type>> dof_values(
@@ -299,20 +324,17 @@ namespace parallel
         {
           switch (status)
             {
-              case parallel::distributed::Triangulation<
-                dim,
-                DoFHandlerType::space_dimension>::CELL_PERSIST:
-              case parallel::distributed::Triangulation<
-                dim,
-                DoFHandlerType::space_dimension>::CELL_REFINE:
+              case parallel::distributed::Triangulation<dim,
+                                                        spacedim>::CELL_PERSIST:
+              case parallel::distributed::Triangulation<dim,
+                                                        spacedim>::CELL_REFINE:
                 {
                   fe_index = cell->future_fe_index();
                   break;
                 }
 
-              case parallel::distributed::Triangulation<
-                dim,
-                DoFHandlerType::space_dimension>::CELL_COARSEN:
+              case parallel::distributed::Triangulation<dim,
+                                                        spacedim>::CELL_COARSEN:
                 {
                   // In case of coarsening, we need to find a suitable FE index
                   // for the parent cell. We choose the 'least dominant fe'
@@ -325,9 +347,7 @@ namespace parallel
 #  endif
 
                   fe_index = dealii::internal::hp::DoFHandlerImplementation::
-                    dominated_future_fe_on_children<
-                      dim,
-                      DoFHandlerType::space_dimension>(cell);
+                    dominated_future_fe_on_children<dim, spacedim>(cell);
                   break;
                 }
 
@@ -357,39 +377,35 @@ namespace parallel
 
 
 
-    template <int dim, typename VectorType, typename DoFHandlerType>
+    template <int dim, typename VectorType, int spacedim>
     void
-    SolutionTransfer<dim, VectorType, DoFHandlerType>::unpack_callback(
-      const typename Triangulation<dim, DoFHandlerType::space_dimension>::
-        cell_iterator &cell_,
-      const typename Triangulation<dim,
-                                   DoFHandlerType::space_dimension>::CellStatus
-        status,
+    SolutionTransfer<dim, VectorType, spacedim>::unpack_callback(
+      const typename Triangulation<dim, spacedim>::cell_iterator &cell_,
+      const typename Triangulation<dim, spacedim>::CellStatus     status,
       const boost::iterator_range<std::vector<char>::const_iterator>
         &                        data_range,
-      std::vector<VectorType *> &all_out)
+      std::vector<VectorType *> &all_out,
+      VectorType &               valence)
     {
-      typename DoFHandlerType::cell_iterator cell(*cell_, dof_handler);
+      typename DoFHandler<dim, spacedim>::cell_iterator cell(*cell_,
+                                                             dof_handler);
 
       unsigned int fe_index = 0;
       if (dof_handler->has_hp_capabilities())
         {
           switch (status)
             {
-              case parallel::distributed::Triangulation<
-                dim,
-                DoFHandlerType::space_dimension>::CELL_PERSIST:
-              case parallel::distributed::Triangulation<
-                dim,
-                DoFHandlerType::space_dimension>::CELL_COARSEN:
+              case parallel::distributed::Triangulation<dim,
+                                                        spacedim>::CELL_PERSIST:
+              case parallel::distributed::Triangulation<dim,
+                                                        spacedim>::CELL_COARSEN:
                 {
                   fe_index = cell->active_fe_index();
                   break;
                 }
 
-              case parallel::distributed::Triangulation<
-                dim,
-                DoFHandlerType::space_dimension>::CELL_REFINE:
+              case parallel::distributed::Triangulation<dim,
+                                                        spacedim>::CELL_REFINE:
                 {
                   // After refinement, this particular cell is no longer active,
                   // and its children have inherited its FE index. However, to
@@ -441,9 +457,25 @@ namespace parallel
       auto it_input  = dof_values.cbegin();
       auto it_output = all_out.begin();
       for (; it_input != dof_values.cend(); ++it_input, ++it_output)
-        cell->set_dof_values_by_interpolation(*it_input,
-                                              *(*it_output),
-                                              fe_index);
+        if (average_values)
+          cell->distribute_local_to_global_by_interpolation(*it_input,
+                                                            *(*it_output),
+                                                            fe_index);
+        else
+          cell->set_dof_values_by_interpolation(*it_input,
+                                                *(*it_output),
+                                                fe_index,
+                                                true);
+
+      if (average_values)
+        {
+          // compute valence vector if averaging should be performed
+          Vector<typename VectorType::value_type> ones(dofs_per_cell);
+          ones = 1.0;
+          cell->distribute_local_to_global_by_interpolation(ones,
+                                                            valence,
+                                                            fe_index);
+        }
     }
   } // namespace distributed
 } // namespace parallel

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -22,7 +22,8 @@
 #ifdef DEAL_II_COMPILER_CUDA_AWARE
 
 #  include <deal.II/base/cuda_size.h>
-#  include <deal.II/base/mpi.h>
+#  include <deal.II/base/mpi_stub.h>
+#  include <deal.II/base/partitioner.h>
 #  include <deal.II/base/quadrature.h>
 #  include <deal.II/base/tensor.h>
 
@@ -30,7 +31,6 @@
 
 #  include <deal.II/fe/fe_update_flags.h>
 #  include <deal.II/fe/mapping.h>
-#  include <deal.II/fe/mapping_q1.h>
 
 #  include <deal.II/grid/filtered_iterator.h>
 
@@ -39,7 +39,17 @@
 #  include <deal.II/lac/la_parallel_vector.h>
 
 
+
 DEAL_II_NAMESPACE_OPEN
+
+// Forward declaration
+namespace internal
+{
+  namespace MatrixFreeFunctions
+  {
+    enum class ConstraintKinds : std::uint16_t;
+  }
+} // namespace internal
 
 namespace CUDAWrappers
 {
@@ -154,8 +164,8 @@ namespace CUDAWrappers
       bool use_coloring;
 
       /**
-       *  Overlap MPI communications with computation. This requires CUDA-aware
-       *  MPI and use_coloring must be false.
+       * Overlap MPI communications with computation. This requires CUDA-aware
+       * MPI and use_coloring must be false.
        */
       bool overlap_communication_computation;
     };
@@ -210,7 +220,7 @@ namespace CUDAWrappers
       /**
        * Mask deciding where constraints are set on a given cell.
        */
-      unsigned int *constraint_mask;
+      dealii::internal::MatrixFreeFunctions::ConstraintKinds *constraint_mask;
 
       /**
        * If true, use graph coloring has been used and we can simply add into
@@ -271,7 +281,7 @@ namespace CUDAWrappers
     reinit(const DoFHandler<dim> &          dof_handler,
            const AffineConstraints<Number> &constraints,
            const Quadrature<1> &            quad,
-           const AdditionalData &           AdditionalData = AdditionalData());
+           const AdditionalData &           additional_data = AdditionalData());
 
     /**
      * Return the Data structure associated with @p color.
@@ -589,7 +599,8 @@ namespace CUDAWrappers
     /**
      * Mask deciding where constraints are set on a given cell.
      */
-    std::vector<unsigned int *> constraint_mask;
+    std::vector<dealii::internal::MatrixFreeFunctions::ConstraintKinds *>
+      constraint_mask;
 
     /**
      * Grid dimensions associated to the different colors. The grid dimensions
@@ -667,7 +678,7 @@ namespace CUDAWrappers
     SharedData(Number *vd, Number *gq[dim])
       : values(vd)
     {
-      for (int d = 0; d < dim; ++d)
+      for (unsigned int d = 0; d < dim; ++d)
         gradients[d] = gq[d];
     }
 
@@ -690,7 +701,7 @@ namespace CUDAWrappers
   // time (by virtue of being 'constexpr')
   // TODO this function should be rewritten using meta-programming
   __host__ __device__ constexpr unsigned int
-           cells_per_block_shmem(int dim, int fe_degree)
+  cells_per_block_shmem(int dim, int fe_degree)
   {
     /* clang-format off */
     // We are limiting the number of threads according to the
@@ -719,12 +730,11 @@ namespace CUDAWrappers
   __device__ inline unsigned int
   q_point_id_in_cell(const unsigned int n_q_points_1d)
   {
-    return (dim == 1 ?
-              threadIdx.x % n_q_points_1d :
-              dim == 2 ?
-              threadIdx.x % n_q_points_1d + n_q_points_1d * threadIdx.y :
-              threadIdx.x % n_q_points_1d +
-                  n_q_points_1d * (threadIdx.y + n_q_points_1d * threadIdx.z));
+    return (
+      dim == 1 ? threadIdx.x % n_q_points_1d :
+      dim == 2 ? threadIdx.x % n_q_points_1d + n_q_points_1d * threadIdx.y :
+                 threadIdx.x % n_q_points_1d +
+                   n_q_points_1d * (threadIdx.y + n_q_points_1d * threadIdx.z));
   }
 
 
@@ -816,7 +826,8 @@ namespace CUDAWrappers
     /**
      * Mask deciding where constraints are set on a given cell.
      */
-    std::vector<unsigned int> constraint_mask;
+    std::vector<dealii::internal::MatrixFreeFunctions::ConstraintKinds>
+      constraint_mask;
 
     /**
      * If true, use graph coloring has been used and we can simply add into

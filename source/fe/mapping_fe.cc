@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -329,25 +329,22 @@ namespace internal
 
               Assert(data.n_shape_functions > 0, ExcInternalError());
 
-              const Tensor<1, spacedim> *supp_pts =
-                data.mapping_support_points.data();
-
               for (unsigned int point = 0; point < n_q_points; ++point)
                 {
-                  const Tensor<1, dim> *data_derv =
-                    &data.derivative(point + data_set, 0);
-
                   double result[spacedim][dim];
 
                   // peel away part of sum to avoid zeroing the
                   // entries and adding for the first time
                   for (unsigned int i = 0; i < spacedim; ++i)
                     for (unsigned int j = 0; j < dim; ++j)
-                      result[i][j] = data_derv[0][j] * supp_pts[0][i];
+                      result[i][j] = data.derivative(point + data_set, 0)[j] *
+                                     data.mapping_support_points[0][i];
                   for (unsigned int k = 1; k < data.n_shape_functions; ++k)
                     for (unsigned int i = 0; i < spacedim; ++i)
                       for (unsigned int j = 0; j < dim; ++j)
-                        result[i][j] += data_derv[k][j] * supp_pts[k][i];
+                        result[i][j] +=
+                          data.derivative(point + data_set, k)[j] *
+                          data.mapping_support_points[k][i];
 
                   // write result into contravariant data. for
                   // j=dim in the case dim<spacedim, there will
@@ -2245,10 +2242,10 @@ namespace
   check_all_manifold_ids_identical(
     const TriaIterator<CellAccessor<2, spacedim>> &cell)
   {
-    const auto b_id = cell->manifold_id();
+    const auto m_id = cell->manifold_id();
 
     for (const auto f : cell->face_indices())
-      if (b_id != cell->face(f)->manifold_id())
+      if (m_id != cell->face(f)->manifold_id())
         return false;
 
     return true;
@@ -2261,14 +2258,14 @@ namespace
   check_all_manifold_ids_identical(
     const TriaIterator<CellAccessor<3, spacedim>> &cell)
   {
-    const auto b_id = cell->manifold_id();
+    const auto m_id = cell->manifold_id();
 
     for (const auto f : cell->face_indices())
-      if (b_id != cell->face(f)->manifold_id())
+      if (m_id != cell->face(f)->manifold_id())
         return false;
 
     for (const auto l : cell->line_indices())
-      if (b_id != cell->line(l)->manifold_id())
+      if (m_id != cell->line(l)->manifold_id())
         return false;
 
     return true;
@@ -2285,7 +2282,7 @@ MappingFE<dim, spacedim>::compute_mapping_support_points(
   Assert(
     check_all_manifold_ids_identical(cell),
     ExcMessage(
-      "All entities of a cell need to have the same boundary id as the cell has."));
+      "All entities of a cell need to have the same manifold id as the cell has."));
 
   std::vector<Point<spacedim>> vertices(cell->n_vertices());
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2021 by the deal.II authors
+// Copyright (C) 2021 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -35,7 +35,7 @@ test(const ReferenceCell &reference_cell)
     {
       deallog << v << ": ";
       for (const auto i : kind.faces_for_given_vertex(v))
-        deallog << i << " ";
+        deallog << i << ' ';
       deallog << std::endl;
     }
   deallog << std::endl;

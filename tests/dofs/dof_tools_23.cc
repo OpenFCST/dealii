@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2020 by the deal.II authors
+// Copyright (C) 2001 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -80,7 +80,7 @@ check_this(const DoFHandler<dim, spacedim> &dof_handler)
   cm.distribute(constrained);
 
   // Cast Vector<double> to Vector<std::complex<double>>
-  for (unsigned int index = 0; index < unconstrained.size(); index++)
+  for (unsigned int index = 0; index < unconstrained.size(); ++index)
     {
       unconstrained_complex[index] = unconstrained[index];
     }

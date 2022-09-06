@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2011 - 2020 by the deal.II authors
+// Copyright (C) 2011 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -63,8 +63,7 @@ test()
   solution = 1.0;
 
   // coarsen everything away
-  SolutionTransfer<dim, Vector<double>, DoFHandler<dim>> solution_trans(
-    dof_handler);
+  SolutionTransfer<dim, Vector<double>> solution_trans(dof_handler);
   for (unsigned int c = 0; c < dof_handler.begin(0)->n_children(); ++c)
     dof_handler.begin(0)->child(c)->set_coarsen_flag();
 

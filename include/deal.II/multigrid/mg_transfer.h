@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2020 by the deal.II authors
+// Copyright (C) 2001 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -237,10 +237,10 @@ namespace internal
  * MGTransferBase is defined in mg_base.h
  */
 
-/*!@addtogroup mg */
-/*@{*/
-
-
+/**
+ * @addtogroup mg
+ * @{
+ */
 
 /**
  * Implementation of transfer between the global vectors and the multigrid
@@ -611,6 +611,13 @@ protected:
   mutable MGLevelObject<LinearAlgebra::distributed::Vector<Number>>
     solution_ghosted_level_vector;
 
+  /**
+   * Function to initialize internal level vectors.
+   */
+  std::function<void(const unsigned int,
+                     LinearAlgebra::distributed::Vector<Number> &)>
+    initialize_dof_vector;
+
 private:
   /**
    * This function is called to make sure that build() has been invoked.
@@ -672,15 +679,6 @@ public:
   template <int dim, int spacedim>
   void
   build(const DoFHandler<dim, spacedim> &dof_handler);
-
-  /**
-   * Actually build the prolongation matrices for each level.
-   *
-   * @deprecated use build() instead.
-   */
-  template <int dim, int spacedim>
-  DEAL_II_DEPRECATED void
-  build_matrices(const DoFHandler<dim, spacedim> &dof_handler);
 
   /**
    * Prolongate a vector from level <tt>to_level-1</tt> to level
@@ -765,7 +763,7 @@ private:
 };
 
 
-/*@}*/
+/** @} */
 
 
 DEAL_II_NAMESPACE_CLOSE

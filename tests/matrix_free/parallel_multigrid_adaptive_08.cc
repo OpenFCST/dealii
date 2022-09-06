@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -243,7 +243,7 @@ do_test(const DoFHandler<dim> &dof)
 
   MyLaplaceOperator<dim, fe_degree, double> fine_matrix;
   std::shared_ptr<MatrixFree<dim, double>>  fine_level_data(
-     new MatrixFree<dim, double>());
+    new MatrixFree<dim, double>());
 
   typename MatrixFree<dim, double>::AdditionalData fine_level_additional_data;
   fine_level_additional_data.tasks_parallel_scheme =

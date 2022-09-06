@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2018 by the deal.II authors
+// Copyright (C) 2008 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -91,6 +91,8 @@ namespace TrilinosWrappers
       collect_sizes();
     }
 
+
+
     void
     BlockVector::reinit(const std::vector<IndexSet> &parallel_partitioning,
                         const std::vector<IndexSet> &ghost_values,
@@ -117,6 +119,7 @@ namespace TrilinosWrappers
 
       collect_sizes();
     }
+
 
 
     void

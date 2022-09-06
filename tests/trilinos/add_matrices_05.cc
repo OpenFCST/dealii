@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -46,7 +46,7 @@ test(TrilinosWrappers::SparseMatrix &m)
   m.compress(VectorOperation::insert);
   m2.compress(VectorOperation::insert);
 
-  deallog << "Matrix nonzeros: " << m.n_nonzero_elements() << " "
+  deallog << "Matrix nonzeros: " << m.n_nonzero_elements() << ' '
           << m2.n_nonzero_elements() << std::endl;
 
   m.print(deallog.get_file_stream());

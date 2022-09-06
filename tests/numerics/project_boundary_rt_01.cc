@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2007 - 2018 by the deal.II authors
+// Copyright (C) 2007 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -144,8 +144,8 @@ test_projection(const Triangulation<dim> &tr, const FiniteElement<dim> &fe)
   DoFHandler<dim> dof(tr);
   dof.distribute_dofs(fe);
 
-  QGauss<dim - 1>      quadrature(degree + 2);
-  MappingQGeneric<dim> mapping(1);
+  QGauss<dim - 1> quadrature(degree + 2);
+  MappingQ<dim>   mapping(1);
 
   TestFunction<dim>                                   f(degree - 1);
   std::map<types::global_dof_index, double>           boundary_constraints;

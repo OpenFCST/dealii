@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -82,8 +82,9 @@ public:
     SparseMatrix<Number> A1, A2, A_ref;
     SparsityPattern      sparsity_pattern;
 
-    const bool test_matrix = Utilities::MPI::n_mpi_processes(
-                               matrix_free.get_task_info().communicator) == 1;
+    const bool test_matrix = (Utilities::MPI::job_supports_mpi() == false) ||
+                             (Utilities::MPI::n_mpi_processes(
+                                matrix_free.get_task_info().communicator) == 1);
 
     if (test_matrix)
       {
@@ -97,7 +98,10 @@ public:
         A_ref.reinit(sparsity_pattern);
       }
 
+    double error_local_1, error_local_2, error_global;
+
     {
+      matrix_free.initialize_dof_vector(diagonal_global);
       MatrixFreeTools::compute_diagonal<dim,
                                         fe_degree,
                                         n_points,
@@ -109,19 +113,24 @@ public:
         });
 
       diagonal_global.print(deallog.get_file_stream());
-      deallog << diagonal_global.l2_norm() << std::endl;
+      error_local_1 = diagonal_global.l2_norm();
+      deallog << error_local_1 << std::endl;
     }
 
     {
       VectorType diagonal_global;
+      matrix_free.initialize_dof_vector(diagonal_global);
       MatrixFreeTools::compute_diagonal(matrix_free,
                                         diagonal_global,
                                         &Test::cell_function,
                                         this);
 
       diagonal_global.print(deallog.get_file_stream());
-      deallog << diagonal_global.l2_norm() << std::endl;
+      error_local_2 = diagonal_global.l2_norm();
+      deallog << error_local_2 << std::endl;
     }
+
+    Assert(std::abs(error_local_1 - error_local_2) < 1e-6, ExcInternalError());
 
     if (test_matrix)
       {
@@ -151,7 +160,7 @@ public:
       matrix_free.initialize_dof_vector(diagonal_global_reference);
       matrix_free.initialize_dof_vector(temp);
 
-      for (unsigned int i = 0; i < src.size(); i++)
+      for (unsigned int i = 0; i < src.size(); ++i)
         {
           if (src.get_partitioner()->in_local_range(i))
             src[i] = 1.0;
@@ -166,7 +175,7 @@ public:
 
           if (test_matrix)
             {
-              for (unsigned int j = 0; j < src.size(); j++)
+              for (unsigned int j = 0; j < src.size(); ++j)
                 if (temp[j] != 0.0)
                   A_ref(j, i) = temp[j];
                 else if (i == j)
@@ -177,8 +186,12 @@ public:
         }
 
       diagonal_global_reference.print(deallog.get_file_stream());
+
+      error_global = diagonal_global_reference.l2_norm();
       deallog << diagonal_global_reference.l2_norm() << std::endl;
     }
+
+    Assert(std::abs(error_local_1 - error_global) < 1e-6, ExcInternalError());
 
     if (test_matrix)
       {
@@ -213,7 +226,7 @@ public:
                  Number,
                  VectorizedArrayType>
       phi(data, pair);
-    for (auto cell = pair.first; cell < pair.second; cell++)
+    for (auto cell = pair.first; cell < pair.second; ++cell)
       {
         phi.reinit(cell);
         phi.read_dof_values(src);

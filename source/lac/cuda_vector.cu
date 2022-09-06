@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -268,7 +268,8 @@ namespace LinearAlgebra
 
 
     template <typename Number>
-    Number Vector<Number>::operator*(const VectorSpaceVector<Number> &V) const
+    Number
+    Vector<Number>::operator*(const VectorSpaceVector<Number> &V) const
     {
       // Check that casting will work
       Assert(dynamic_cast<const Vector<Number> *>(&V) != nullptr,
@@ -591,7 +592,7 @@ namespace LinearAlgebra
       Assert(dynamic_cast<const Vector<Number> *>(&W) != nullptr,
              ExcVectorTypeNotCompatible());
 
-      // Downcast V and W. If it fails, throw an exceptiion.
+      // Downcast V and W. If it fails, throw an exception.
       const Vector<Number> &down_V = dynamic_cast<const Vector<Number> &>(V);
       Assert(down_V.size() == this->size(),
              ExcMessage("Vector V has the wrong size."));
@@ -633,7 +634,7 @@ namespace LinearAlgebra
                           const bool         scientific,
                           const bool) const
     {
-      AssertThrow(out, ExcIO());
+      AssertThrow(out.fail() == false, ExcIO());
       std::ios::fmtflags old_flags     = out.flags();
       unsigned int       old_precision = out.precision(precision);
 
@@ -654,7 +655,7 @@ namespace LinearAlgebra
         out << cpu_val[i] << std::endl;
       out << std::flush;
 
-      AssertThrow(out, ExcIO());
+      AssertThrow(out.fail() == false, ExcIO());
       // reset output format
       out.flags(old_flags);
       out.precision(old_precision);

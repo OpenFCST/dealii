@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -21,7 +21,7 @@
 
 #include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_values.h>
-#include <deal.II/fe/mapping_q1.h>
+#include <deal.II/fe/mapping.h>
 
 #include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_tools.h>
@@ -676,7 +676,7 @@ namespace DerivativeApproximation
     public:
       /**
        * alias to select the DerivativeDescription corresponding to the
-       * <tt>order</tt>th derivative. In this general template we set an unvalid
+       * <tt>order</tt>th derivative. In this general template we set an invalid
        * alias to void, the real alias have to be specialized.
        */
       using DerivDescr = void;
@@ -801,7 +801,11 @@ namespace DerivativeApproximation
                                                           solution,
                                                           component);
       // ...and the place where it lives
-      const Point<dim> this_center = fe_midpoint_value.quadrature_point(0);
+      // This needs to be a copy. If it was a reference, it would be changed
+      // after the next `reinit` call of the FEValues object. clang-tidy
+      // complains about this not being a reference, so we suppress the warning.
+      const Point<dim> this_center =
+        fe_midpoint_value.quadrature_point(0); // NOLINT
 
       // loop over all neighbors and
       // accumulate the difference
@@ -839,7 +843,7 @@ namespace DerivativeApproximation
                 neighbor_fe_midpoint_value, solution, component);
 
           // ...and the place where it lives
-          const Point<dim> neighbor_center =
+          const Point<dim> &neighbor_center =
             neighbor_fe_midpoint_value.quadrature_point(0);
 
 
@@ -848,6 +852,7 @@ namespace DerivativeApproximation
           // direction between
           // the centers of two
           // cells
+
           Tensor<1, dim> y        = neighbor_center - this_center;
           const double   distance = y.norm();
           // normalize y
@@ -1025,8 +1030,12 @@ namespace DerivativeApproximation
                        Vector<float> &                  derivative_norm,
                        const unsigned int               component)
   {
+    Assert(!dof_handler.get_triangulation().is_mixed_mesh(),
+           ExcNotImplemented());
+    const auto reference_cell =
+      dof_handler.get_triangulation().get_reference_cells()[0];
     internal::approximate_derivative<internal::Gradient<dim>, dim>(
-      StaticMappingQ1<dim>::mapping,
+      reference_cell.template get_default_linear_mapping<dim, spacedim>(),
       dof_handler,
       solution,
       component,
@@ -1054,8 +1063,12 @@ namespace DerivativeApproximation
                                 Vector<float> &    derivative_norm,
                                 const unsigned int component)
   {
+    Assert(!dof_handler.get_triangulation().is_mixed_mesh(),
+           ExcNotImplemented());
+    const auto reference_cell =
+      dof_handler.get_triangulation().get_reference_cells()[0];
     internal::approximate_derivative<internal::SecondDerivative<dim>, dim>(
-      StaticMappingQ1<dim>::mapping,
+      reference_cell.template get_default_linear_mapping<dim, spacedim>(),
       dof_handler,
       solution,
       component,

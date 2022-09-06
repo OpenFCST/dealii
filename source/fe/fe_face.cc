@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2020 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -223,6 +223,7 @@ FE_FaceQ<dim, spacedim>::get_subface_interpolation_matrix(
             }
         }
 
+#ifdef DEBUG
       // make sure that the row sum of each of the matrices is 1 at this
       // point. this must be so since the shape functions sum up to 1
       for (unsigned int j = 0; j < source_fe->n_dofs_per_face(face_no); ++j)
@@ -234,6 +235,7 @@ FE_FaceQ<dim, spacedim>::get_subface_interpolation_matrix(
 
           Assert(std::fabs(sum - 1) < eps, ExcInternalError());
         }
+#endif
     }
   else if (dynamic_cast<const FE_Nothing<dim> *>(&x_source_fe) != nullptr)
     {
@@ -954,7 +956,7 @@ FE_FaceP<dim, spacedim>::get_subface_interpolation_matrix(
           for (unsigned int k = 0; k < face_quadrature.size(); ++k)
             {
               const Point<dim - 1> p =
-                numbers::invalid_unsigned_int ?
+                subface == numbers::invalid_unsigned_int ?
                   face_quadrature.point(k) :
                   GeometryInfo<dim - 1>::child_to_cell_coordinates(
                     face_quadrature.point(k), subface);

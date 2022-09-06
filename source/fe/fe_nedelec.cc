@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2020 by the deal.II authors
+// Copyright (C) 2013 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -84,19 +84,18 @@ FE_Nedelec<dim>::FE_Nedelec(const unsigned int order)
 
   Assert(dim >= 2, ExcImpossibleInDim(dim));
 
-  const unsigned int n_dofs = this->n_dofs_per_cell();
-
   this->mapping_kind = {mapping_nedelec};
   // First, initialize the
   // generalized support points and
   // quadrature weights, since they
   // are required for interpolation.
   initialize_support_points(order);
-  this->inverse_node_matrix.reinit(n_dofs, n_dofs);
-  this->inverse_node_matrix.fill(FullMatrix<double>(IdentityMatrix(n_dofs)));
-  // From now on, the shape functions
-  // will be the correct ones, not
-  // the raw shape functions anymore.
+
+  // We already use the correct basis, so no basis transformation is required
+  // from the polynomial space we have described above to the one that is dual
+  // to the node functionals. As documented in the base class, this is
+  // expressed by setting the inverse node matrix to the empty matrix.
+  this->inverse_node_matrix.clear();
 
   // do not initialize embedding and restriction here. these matrices are
   // initialized on demand in get_restriction_matrix and
@@ -207,7 +206,7 @@ FE_Nedelec<dim>::FE_Nedelec(const unsigned int order)
         Assert(false, ExcNotImplemented());
     }
 
-  // We need to initialize the dof permuation table and the one for the sign
+  // We need to initialize the dof permutation table and the one for the sign
   // change.
   initialize_quad_dof_index_permutation_and_sign_change();
 }
@@ -2060,20 +2059,21 @@ template <int dim>
 std::vector<unsigned int>
 FE_Nedelec<dim>::get_dpo_vector(const unsigned int degree, bool dg)
 {
-  std::vector<unsigned int> dpo(dim + 1);
+  std::vector<unsigned int> dpo;
 
   if (dg)
     {
+      dpo.resize(dim + 1);
       dpo[dim] = PolynomialsNedelec<dim>::n_polynomials(degree);
     }
   else
     {
-      dpo[0] = 0;
-      dpo[1] = degree + 1;
-      dpo[2] = 2 * degree * (degree + 1);
-
-      if (dim == 3)
-        dpo[3] = 3 * degree * degree * (degree + 1);
+      dpo.push_back(0);
+      dpo.push_back(degree + 1);
+      if (dim > 1)
+        dpo.push_back(2 * degree * (degree + 1));
+      if (dim > 2)
+        dpo.push_back(3 * degree * degree * (degree + 1));
     }
 
   return dpo;
@@ -3171,7 +3171,7 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
         {
           // Let us begin with the
           // interpolation part.
-          const QGauss<dim - 1> reference_edge_quadrature(this->degree);
+          const QGauss<1>    reference_edge_quadrature(this->degree);
           const unsigned int n_edge_points = reference_edge_quadrature.size();
 
           for (unsigned int i = 0; i < 2; ++i)
@@ -3191,17 +3191,17 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
                   nodal_values[(i + 2 * j) * this->degree] = 0.0;
               }
 
-          // If the degree is greater
-          // than 0, then we have still
-          // some higher order edge
-          // shape functions to
-          // consider.
-          // Here the projection part
-          // starts. The dof support_point_values
-          // are obtained by solving
+          // If the Nedelec element degree is greater
+          // than 0 (i.e., the polynomial degree is greater than 1),
+          // then we have still some higher order edge
+          // shape functions to consider.
+          // Note that this->degree returns the polynomial
+          // degree.
+          // Here the projection part starts.
+          // The dof support_point_values are obtained by solving
           // a linear system of
           // equations.
-          if (this->degree - 1 > 1)
+          if (this->degree > 1)
             {
               // We start with projection
               // on the higher order edge
@@ -3237,7 +3237,7 @@ FE_Nedelec<dim>::convert_generalized_support_point_values_to_dof_values(
               system_matrix_inv.invert(system_matrix);
 
               const unsigned int
-                             line_coordinate[GeometryInfo<2>::lines_per_cell] = {1, 1, 0, 0};
+                line_coordinate[GeometryInfo<2>::lines_per_cell] = {1, 1, 0, 0};
               Vector<double> system_rhs(system_matrix.m());
               Vector<double> solution(system_rhs.size());
 
@@ -4120,7 +4120,63 @@ FE_Nedelec<dim>::memory_consumption() const
   return 0;
 }
 
+template <int dim>
+std::vector<unsigned int>
+FE_Nedelec<dim>::get_embedding_dofs(const unsigned int sub_degree) const
+{
+  Assert((sub_degree > 0) && (sub_degree <= this->degree),
+         ExcIndexRange(sub_degree, 1, this->degree));
 
+  switch (dim)
+    {
+      case 2:
+        {
+          // The Nedelec cell has only Face (Line) and Cell DoFs...
+          const unsigned int n_face_dofs_sub =
+            GeometryInfo<dim>::lines_per_cell * sub_degree;
+          const unsigned int n_cell_dofs_sub =
+            2 * (sub_degree - 1) * sub_degree;
+
+          std::vector<unsigned int> embedding_dofs(n_face_dofs_sub +
+                                                   n_cell_dofs_sub);
+
+          unsigned int i = 0;
+
+          // Identify the Face/Line DoFs
+          while (i < n_face_dofs_sub)
+            {
+              const unsigned int face_index = i / sub_degree;
+              embedding_dofs[i] = i % sub_degree + face_index * this->degree;
+              ++i;
+            }
+
+          // Identify the Cell DoFs
+          if (sub_degree >= 2)
+            {
+              const unsigned int n_face_dofs =
+                GeometryInfo<dim>::lines_per_cell * this->degree;
+
+              // For the first component
+              for (unsigned ku = 0; ku < sub_degree; ++ku)
+                for (unsigned kv = 2; kv <= sub_degree; ++kv)
+                  embedding_dofs[i++] =
+                    n_face_dofs + ku * (this->degree - 1) + (kv - 2);
+
+              // For the second component
+              for (unsigned ku = 2; ku <= sub_degree; ++ku)
+                for (unsigned kv = 0; kv < sub_degree; ++kv)
+                  embedding_dofs[i++] = n_face_dofs +
+                                        this->degree * (this->degree - 1) +
+                                        (ku - 2) * (this->degree) + kv;
+            }
+          Assert(i == (n_face_dofs_sub + n_cell_dofs_sub), ExcInternalError());
+          return embedding_dofs;
+        }
+      default:
+        Assert(false, ExcNotImplemented());
+        return std::vector<unsigned int>();
+    }
+}
 //----------------------------------------------------------------------//
 
 

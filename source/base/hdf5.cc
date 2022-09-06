@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2019 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -20,6 +20,8 @@
 #  include <deal.II/base/hdf5.h>
 
 #  include <hdf5.h>
+
+#  include <iostream>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -265,7 +267,7 @@ namespace HDF5
 
 
 
-  uint32_t
+  std::uint32_t
   DataSet::get_local_no_collective_cause_as_hdf5_type()
   {
     Assert(
@@ -289,7 +291,7 @@ namespace HDF5
 
 
 
-  uint32_t
+  std::uint32_t
   DataSet::get_global_no_collective_cause_as_hdf5_type()
   {
     Assert(

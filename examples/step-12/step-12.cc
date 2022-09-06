@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2009 - 2020 by the deal.II authors
+ * Copyright (C) 2009 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -31,6 +31,7 @@
 #include <deal.II/grid/grid_out.h>
 #include <deal.II/grid/grid_refinement.h>
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_q1.h>
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/numerics/vector_tools.h>
 #include <deal.II/dofs/dof_tools.h>
@@ -97,8 +98,7 @@ namespace Step12
   {
     (void)component;
     AssertIndexRange(component, 1);
-    Assert(values.size() == points.size(),
-           ExcDimensionMismatch(values.size(), points.size()));
+    AssertDimension(values.size(), points.size());
 
     for (unsigned int i = 0; i < values.size(); ++i)
       {
@@ -120,9 +120,9 @@ namespace Step12
   {
     Assert(dim >= 2, ExcNotImplemented());
 
-    Point<dim> wind_field;
-    wind_field(0) = -p(1);
-    wind_field(1) = p(0);
+    Tensor<1, dim> wind_field;
+    wind_field[0] = -p[1];
+    wind_field[1] = p[0];
 
     if (wind_field.norm() > 1e-10)
       wind_field /= wind_field.norm();
@@ -135,7 +135,7 @@ namespace Step12
   //
   // The following objects are the scratch and copy objects we use in the call
   // to MeshWorker::mesh_loop(). The new object is the FEInterfaceValues object,
-  // that works similar to FEValues or FEFacesValues, except that it acts on
+  // that works similar to FEValues or FEFaceValues, except that it acts on
   // an interface between two cells and allows us to assemble the interface
   // terms in our weak form.
 
@@ -406,7 +406,7 @@ namespace Step12
           for (unsigned int i = 0; i < n_dofs; ++i)
             for (unsigned int j = 0; j < n_dofs; ++j)
               copy_data_face.cell_matrix(i, j) +=
-                fe_iv.jump(i, qpoint) // [\phi_i]
+                fe_iv.jump_in_shape_values(i, qpoint) // [\phi_i]
                 *
                 fe_iv.shape_value((beta_dot_n > 0), j, qpoint) // phi_j^{upwind}
                 * beta_dot_n                                   // (\beta . n)
@@ -544,7 +544,7 @@ namespace Step12
   void AdvectionProblem<dim>::output_results(const unsigned int cycle) const
   {
     const std::string filename = "solution-" + std::to_string(cycle) + ".vtk";
-    std::cout << "  Writing solution to <" << filename << ">" << std::endl;
+    std::cout << "  Writing solution to <" << filename << '>' << std::endl;
     std::ofstream output(filename);
 
     DataOut<dim> data_out;

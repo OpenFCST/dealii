@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2019 by the deal.II Authors
+// Copyright (C) 2015 - 2022 by the deal.II Authors
 //
 // This file is part of the deal.II library.
 //
@@ -28,9 +28,8 @@
 
 // This function initializes a container of Number type
 template <template <class...> class Container, typename Number>
-typename std::enable_if<
-  std::is_same<Container<Number>, std::vector<Number>>::value,
-  Container<Number>>::type
+std::enable_if_t<std::is_same<Container<Number>, std::vector<Number>>::value,
+                 Container<Number>>
 initialize_container(std::vector<hsize_t> dimensions)
 {
   return Container<Number>(std::accumulate(
@@ -38,8 +37,8 @@ initialize_container(std::vector<hsize_t> dimensions)
 }
 
 template <template <class...> class Container, typename Number>
-typename std::enable_if<std::is_same<Container<Number>, Vector<Number>>::value,
-                        Container<Number>>::type
+std::enable_if_t<std::is_same<Container<Number>, Vector<Number>>::value,
+                 Container<Number>>
 initialize_container(std::vector<hsize_t> dimensions)
 {
   return Container<Number>(std::accumulate(
@@ -47,9 +46,8 @@ initialize_container(std::vector<hsize_t> dimensions)
 }
 
 template <template <class...> class Container, typename Number>
-typename std::enable_if<
-  std::is_same<Container<Number>, FullMatrix<Number>>::value,
-  Container<Number>>::type
+std::enable_if_t<std::is_same<Container<Number>, FullMatrix<Number>>::value,
+                 Container<Number>>
 initialize_container(std::vector<hsize_t> dimensions)
 {
   return FullMatrix<Number>(dimensions[0], dimensions[1]);
@@ -57,26 +55,23 @@ initialize_container(std::vector<hsize_t> dimensions)
 
 // This function calculates the sum of the elements in a container
 template <template <class...> class Container, typename Number>
-typename std::enable_if<
-  std::is_same<Container<Number>, std::vector<Number>>::value,
-  Number>::type
+std::enable_if_t<std::is_same<Container<Number>, std::vector<Number>>::value,
+                 Number>
 container_sum(Container<Number> data)
 {
   return std::accumulate(data.begin(), data.end(), static_cast<Number>(0));
 }
 
 template <template <class...> class Container, typename Number>
-typename std::enable_if<std::is_same<Container<Number>, Vector<Number>>::value,
-                        Number>::type
+std::enable_if_t<std::is_same<Container<Number>, Vector<Number>>::value, Number>
 container_sum(Container<Number> data)
 {
   return std::accumulate(data.begin(), data.end(), static_cast<Number>(0));
 }
 
 template <template <class...> class Container, typename Number>
-typename std::enable_if<
-  std::is_same<Container<Number>, FullMatrix<Number>>::value,
-  Number>::type
+std::enable_if_t<std::is_same<Container<Number>, FullMatrix<Number>>::value,
+                 Number>
 container_sum(Container<Number> data)
 {
   Number sum = 0;
@@ -95,14 +90,14 @@ container_sum(Container<Number> data)
 // If Number is scalar the function returns 1
 // If Number is complex the function returns 1 + 1j
 template <typename Number>
-typename std::enable_if<!boost::is_complex<Number>::value, Number>::type
+std::enable_if_t<!boost::is_complex<Number>::value, Number>
 get_factor()
 {
   return 1;
 }
 
 template <typename Number>
-typename std::enable_if<boost::is_complex<Number>::value, Number>::type
+std::enable_if_t<boost::is_complex<Number>::value, Number>
 get_factor()
 {
   return static_cast<Number>(std::complex<float>(1, 1));
@@ -110,9 +105,8 @@ get_factor()
 
 // This function assigns data to the elements of the container
 template <template <class...> class Container, typename Number>
-typename std::enable_if<
-  std::is_same<Container<Number>, std::vector<Number>>::value,
-  void>::type
+std::enable_if_t<std::is_same<Container<Number>, std::vector<Number>>::value,
+                 void>
 assign_data(Container<Number> &data)
 {
   for (unsigned int idx = 0; idx < data.size(); ++idx)
@@ -122,8 +116,7 @@ assign_data(Container<Number> &data)
 }
 
 template <template <class...> class Container, typename Number>
-typename std::enable_if<std::is_same<Container<Number>, Vector<Number>>::value,
-                        void>::type
+std::enable_if_t<std::is_same<Container<Number>, Vector<Number>>::value, void>
 assign_data(Container<Number> &data)
 {
   for (unsigned int idx = 0; idx < data.size(); ++idx)
@@ -133,9 +126,8 @@ assign_data(Container<Number> &data)
 }
 
 template <template <class...> class Container, typename Number>
-typename std::enable_if<
-  std::is_same<Container<Number>, FullMatrix<Number>>::value,
-  void>::type
+std::enable_if_t<std::is_same<Container<Number>, FullMatrix<Number>>::value,
+                 void>
 assign_data(Container<Number> &data)
 {
   for (unsigned int row_idx = 0; row_idx < data.m(); ++row_idx)
@@ -194,7 +186,7 @@ write_test(HDF5::Group &              root_group,
       type_name = std::string("unsigned int");
     }
 
-  deallog << "Write tests for " << container_name << "<" << type_name << ">"
+  deallog << "Write tests for " << container_name << '<' << type_name << '>'
           << " datasets" << std::endl;
 
   auto group = root_group.create_group(container_name + "<" + type_name + ">");
@@ -204,30 +196,30 @@ write_test(HDF5::Group &              root_group,
     auto        dataset =
       group.create_dataset<Number>(dataset_name, dataset_dimensions);
     dataset.set_query_io_mode(true);
-    deallog << "Dimensions " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): " << dataset.get_dimensions() << std::endl;
-    deallog << "Size " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): " << dataset.get_size() << std::endl;
-    deallog << "Rank " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): " << dataset.get_rank() << std::endl;
+    deallog << "Dimensions " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): " << dataset.get_dimensions()
+            << std::endl;
+    deallog << "Size " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): " << dataset.get_size()
+            << std::endl;
+    deallog << "Rank " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): " << dataset.get_rank()
+            << std::endl;
     auto data = initialize_container<Container, Number>(dataset_dimensions);
     assign_data(data);
     dataset.write(data);
-    deallog << "Sum " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): " << container_sum(data) << std::endl;
-    std::cout << "IO mode " + dataset_name << " " << container_name << "<"
-              << type_name << ">"
-              << " (Write): " << dataset.get_io_mode() << std::endl;
-    std::cout << "Local no collective cause " + dataset_name << " "
-              << container_name << "<" << type_name << ">"
+    deallog << "Sum " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): " << container_sum(data)
+            << std::endl;
+    std::cout << "IO mode " + dataset_name << ' ' << container_name << '<'
+              << type_name << '>' << " (Write): " << dataset.get_io_mode()
+              << std::endl;
+    std::cout << "Local no collective cause " + dataset_name << ' '
+              << container_name << '<' << type_name << '>'
               << " (Write): " << dataset.get_local_no_collective_cause()
               << std::endl;
-    std::cout << "Global no collective cause " + dataset_name << " "
-              << container_name << "<" << type_name << ">"
+    std::cout << "Global no collective cause " + dataset_name << ' '
+              << container_name << '<' << type_name << '>'
               << " (Write): " << dataset.get_global_no_collective_cause()
               << std::endl;
   }
@@ -237,15 +229,15 @@ write_test(HDF5::Group &              root_group,
     auto        dataset =
       group.create_dataset<Number>(dataset_name, dataset_dimensions);
     dataset.set_query_io_mode(true);
-    deallog << "Dimensions " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): " << dataset.get_dimensions() << std::endl;
-    deallog << "Size " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): " << dataset.get_size() << std::endl;
-    deallog << "Rank " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): " << dataset.get_rank() << std::endl;
+    deallog << "Dimensions " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): " << dataset.get_dimensions()
+            << std::endl;
+    deallog << "Size " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): " << dataset.get_size()
+            << std::endl;
+    deallog << "Rank " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): " << dataset.get_rank()
+            << std::endl;
 
     std::vector<hsize_t> coordinates_a = {0,
                                           0, // first point
@@ -282,21 +274,20 @@ write_test(HDF5::Group &              root_group,
     dataset.write_selection(data_a, coordinates_a);
     dataset.write_selection(data_b, coordinates_b);
     dataset.write_selection(data_c, coordinates_c);
-    deallog << "Sum " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): "
+    deallog << "Sum " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): "
             << container_sum(data_a) + container_sum(data_b) +
                  container_sum(data_c)
             << std::endl;
-    std::cout << "IO mode " + dataset_name << " " << container_name << "<"
-              << type_name << ">"
-              << " (Write): " << dataset.get_io_mode() << std::endl;
-    std::cout << "Local no collective cause " + dataset_name << " "
-              << container_name << "<" << type_name << ">"
+    std::cout << "IO mode " + dataset_name << ' ' << container_name << '<'
+              << type_name << '>' << " (Write): " << dataset.get_io_mode()
+              << std::endl;
+    std::cout << "Local no collective cause " + dataset_name << ' '
+              << container_name << '<' << type_name << '>'
               << " (Write): " << dataset.get_local_no_collective_cause()
               << std::endl;
-    std::cout << "Global no collective cause " + dataset_name << " "
-              << container_name << "<" << type_name << ">"
+    std::cout << "Global no collective cause " + dataset_name << ' '
+              << container_name << '<' << type_name << '>'
               << " (Write): " << dataset.get_global_no_collective_cause()
               << std::endl;
   }
@@ -310,21 +301,21 @@ write_test(HDF5::Group &              root_group,
         auto        dataset =
           group.create_dataset<Number>(dataset_name, dataset_dimensions);
         dataset.set_query_io_mode(true);
-        deallog << "Dimensions " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Write): " << dataset.get_dimensions() << std::endl;
-        deallog << "Size " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Write): " << dataset.get_size() << std::endl;
-        deallog << "Rank " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Write): " << dataset.get_rank() << std::endl;
+        deallog << "Dimensions " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Write): " << dataset.get_dimensions()
+                << std::endl;
+        deallog << "Size " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Write): " << dataset.get_size()
+                << std::endl;
+        deallog << "Rank " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Write): " << dataset.get_rank()
+                << std::endl;
         auto data = initialize_container<Container, double>(dataset_dimensions);
         assign_data(data);
         dataset.write(data);
-        deallog << "Sum " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Write): " << container_sum(data) << std::endl;
+        deallog << "Sum " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Write): " << container_sum(data)
+                << std::endl;
       }
     else if (std::is_same<Number, double>::value)
       {
@@ -335,18 +326,18 @@ write_test(HDF5::Group &              root_group,
         auto data = initialize_container<Container, float>(dataset_dimensions);
         assign_data(data);
         dataset.write(data);
-        deallog << "Sum " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Write): " << container_sum(data) << std::endl;
-        std::cout << "IO mode " + dataset_name << " " << container_name << "<"
-                  << type_name << ">"
-                  << " (Write): " << dataset.get_io_mode() << std::endl;
-        std::cout << "Local no collective cause " + dataset_name << " "
-                  << container_name << "<" << type_name << ">"
+        deallog << "Sum " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Write): " << container_sum(data)
+                << std::endl;
+        std::cout << "IO mode " + dataset_name << ' ' << container_name << '<'
+                  << type_name << '>' << " (Write): " << dataset.get_io_mode()
+                  << std::endl;
+        std::cout << "Local no collective cause " + dataset_name << ' '
+                  << container_name << '<' << type_name << '>'
                   << " (Write): " << dataset.get_local_no_collective_cause()
                   << std::endl;
-        std::cout << "Global no collective cause " + dataset_name << " "
-                  << container_name << "<" << type_name << ">"
+        std::cout << "Global no collective cause " + dataset_name << ' '
+                  << container_name << '<' << type_name << '>'
                   << " (Write): " << dataset.get_global_no_collective_cause()
                   << std::endl;
       }
@@ -357,15 +348,15 @@ write_test(HDF5::Group &              root_group,
     auto        dataset =
       group.create_dataset<Number>(dataset_name, dataset_dimensions);
     dataset.set_query_io_mode(true);
-    deallog << "Dimensions " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): " << dataset.get_dimensions() << std::endl;
-    deallog << "Size " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): " << dataset.get_size() << std::endl;
-    deallog << "Rank " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): " << dataset.get_rank() << std::endl;
+    deallog << "Dimensions " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): " << dataset.get_dimensions()
+            << std::endl;
+    deallog << "Size " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): " << dataset.get_size()
+            << std::endl;
+    deallog << "Rank " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): " << dataset.get_rank()
+            << std::endl;
     const std::vector<hsize_t> hyperslab_dimensions_a = {2, 5};
     const std::vector<hsize_t> hyperslab_offset_a     = {0, 0};
     auto                       hyperslab_data_a =
@@ -400,28 +391,27 @@ write_test(HDF5::Group &              root_group,
                             hyperslab_count_c,
                             hyperslab_block_c);
 
-    deallog << "Sum " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): "
+    deallog << "Sum " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): "
             << container_sum(hyperslab_data_a) +
                  container_sum(hyperslab_data_b) +
                  container_sum(hyperslab_data_c)
             << std::endl;
-    deallog << "Hyperslab_a sum " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
+    deallog << "Hyperslab_a sum " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>'
             << " (Write): " << container_sum(hyperslab_data_a) << std::endl;
-    deallog << "Hyperslab_b sum " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
+    deallog << "Hyperslab_b sum " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>'
             << " (Write): " << container_sum(hyperslab_data_b) << std::endl;
-    std::cout << "IO mode " + dataset_name << " " << container_name << "<"
-              << type_name << ">"
-              << " (Write): " << dataset.get_io_mode() << std::endl;
-    std::cout << "Local no collective cause " + dataset_name << " "
-              << container_name << "<" << type_name << ">"
+    std::cout << "IO mode " + dataset_name << ' ' << container_name << '<'
+              << type_name << '>' << " (Write): " << dataset.get_io_mode()
+              << std::endl;
+    std::cout << "Local no collective cause " + dataset_name << ' '
+              << container_name << '<' << type_name << '>'
               << " (Write): " << dataset.get_local_no_collective_cause()
               << std::endl;
-    std::cout << "Global no collective cause " + dataset_name << " "
-              << container_name << "<" << type_name << ">"
+    std::cout << "Global no collective cause " + dataset_name << ' '
+              << container_name << '<' << type_name << '>'
               << " (Write): " << dataset.get_global_no_collective_cause()
               << std::endl;
   }
@@ -431,9 +421,9 @@ write_test(HDF5::Group &              root_group,
     auto data = initialize_container<Container, Number>(dataset_dimensions);
     assign_data(data);
     group.write_dataset(dataset_name, data);
-    deallog << "Sum " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Write): " << container_sum(data) << std::endl;
+    deallog << "Sum " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Write): " << container_sum(data)
+            << std::endl;
   }
 }
 
@@ -481,7 +471,7 @@ read_test(HDF5::Group root_group)
       type_name = std::string("unsigned int");
     }
 
-  deallog << "Read tests for " << container_name << "<" << type_name << ">"
+  deallog << "Read tests for " << container_name << '<' << type_name << '>'
           << " datasets" << std::endl;
 
   auto group = root_group.open_group(container_name + "<" + type_name + ">");
@@ -490,28 +480,28 @@ read_test(HDF5::Group root_group)
     std::string dataset_name("dataset_1");
     auto        dataset = group.open_dataset(dataset_name);
     dataset.set_query_io_mode(true);
-    deallog << "Dimensions " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << dataset.get_dimensions() << std::endl;
-    deallog << "Size " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << dataset.get_size() << std::endl;
-    deallog << "Rank " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << dataset.get_rank() << std::endl;
+    deallog << "Dimensions " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << dataset.get_dimensions()
+            << std::endl;
+    deallog << "Size " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << dataset.get_size()
+            << std::endl;
+    deallog << "Rank " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << dataset.get_rank()
+            << std::endl;
     Container<Number> data = dataset.read<Container<Number>>();
-    deallog << "Sum " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << container_sum(data) << std::endl;
-    std::cout << "IO mode " + dataset_name << " " << container_name << "<"
-              << type_name << ">"
-              << " (Read): " << dataset.get_io_mode() << std::endl;
-    std::cout << "Local no collective cause " + dataset_name << " "
-              << container_name << "<" << type_name << ">"
+    deallog << "Sum " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << container_sum(data)
+            << std::endl;
+    std::cout << "IO mode " + dataset_name << ' ' << container_name << '<'
+              << type_name << '>' << " (Read): " << dataset.get_io_mode()
+              << std::endl;
+    std::cout << "Local no collective cause " + dataset_name << ' '
+              << container_name << '<' << type_name << '>'
               << " (Read): " << dataset.get_local_no_collective_cause()
               << std::endl;
-    std::cout << "Global no collective cause " + dataset_name << " "
-              << container_name << "<" << type_name << ">"
+    std::cout << "Global no collective cause " + dataset_name << ' '
+              << container_name << '<' << type_name << '>'
               << " (Read): " << dataset.get_global_no_collective_cause()
               << std::endl;
   }
@@ -520,29 +510,29 @@ read_test(HDF5::Group root_group)
     std::string dataset_name("dataset_2");
     auto        dataset = group.open_dataset(dataset_name);
     dataset.set_query_io_mode(true);
-    deallog << "Dimensions " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << dataset.get_dimensions() << std::endl;
-    deallog << "Size " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << dataset.get_size() << std::endl;
-    deallog << "Rank " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << dataset.get_rank() << std::endl;
+    deallog << "Dimensions " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << dataset.get_dimensions()
+            << std::endl;
+    deallog << "Size " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << dataset.get_size()
+            << std::endl;
+    deallog << "Rank " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << dataset.get_rank()
+            << std::endl;
     {
       Container<Number> data = dataset.read<Container<Number>>();
-      deallog << "Sum " + dataset_name << " " << container_name << "<"
-              << type_name << ">"
-              << " (Read): " << container_sum(data) << std::endl;
-      std::cout << "IO mode " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Read): " << dataset.get_io_mode() << std::endl;
-      std::cout << "Local no collective cause " + dataset_name << " "
-                << container_name << "<" << type_name << ">"
+      deallog << "Sum " + dataset_name << ' ' << container_name << '<'
+              << type_name << '>' << " (Read): " << container_sum(data)
+              << std::endl;
+      std::cout << "IO mode " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Read): " << dataset.get_io_mode()
+                << std::endl;
+      std::cout << "Local no collective cause " + dataset_name << ' '
+                << container_name << '<' << type_name << '>'
                 << " (Read): " << dataset.get_local_no_collective_cause()
                 << std::endl;
-      std::cout << "Global no collective cause " + dataset_name << " "
-                << container_name << "<" << type_name << ">"
+      std::cout << "Global no collective cause " + dataset_name << ' '
+                << container_name << '<' << type_name << '>'
                 << " (Read): " << dataset.get_global_no_collective_cause()
                 << std::endl;
     }
@@ -558,19 +548,19 @@ read_test(HDF5::Group root_group)
                                             12}; // fourth point
       auto                 data_a =
         dataset.template read_selection<std::vector<Number>>(coordinates_a);
-      deallog << "Selection " + dataset_name << " " << container_name << "<"
-              << type_name << ">"
-              << " (Read): " << data_a[0] << ", " << data_a[1] << ", "
-              << data_a[2] << ", " << data_a[3] << std::endl;
-      std::cout << "IO mode " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Read): " << dataset.get_io_mode() << std::endl;
-      std::cout << "Local no collective cause " + dataset_name << " "
-                << container_name << "<" << type_name << ">"
+      deallog << "Selection " + dataset_name << ' ' << container_name << '<'
+              << type_name << '>' << " (Read): " << data_a[0] << ", "
+              << data_a[1] << ", " << data_a[2] << ", " << data_a[3]
+              << std::endl;
+      std::cout << "IO mode " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Read): " << dataset.get_io_mode()
+                << std::endl;
+      std::cout << "Local no collective cause " + dataset_name << ' '
+                << container_name << '<' << type_name << '>'
                 << " (Read): " << dataset.get_local_no_collective_cause()
                 << std::endl;
-      std::cout << "Global no collective cause " + dataset_name << " "
-                << container_name << "<" << type_name << ">"
+      std::cout << "Global no collective cause " + dataset_name << ' '
+                << container_name << '<' << type_name << '>'
                 << " (Read): " << dataset.get_global_no_collective_cause()
                 << std::endl;
     }
@@ -585,28 +575,28 @@ read_test(HDF5::Group root_group)
         std::string dataset_name("dataset_3");
         auto        dataset = group.open_dataset(dataset_name);
         dataset.set_query_io_mode(true);
-        deallog << "Dimensions " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Read): " << dataset.get_dimensions() << std::endl;
-        deallog << "Size " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Read): " << dataset.get_size() << std::endl;
-        deallog << "Rank " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Read): " << dataset.get_rank() << std::endl;
+        deallog << "Dimensions " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Read): " << dataset.get_dimensions()
+                << std::endl;
+        deallog << "Size " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Read): " << dataset.get_size()
+                << std::endl;
+        deallog << "Rank " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Read): " << dataset.get_rank()
+                << std::endl;
         Container<Number> data = dataset.read<Container<Number>>();
-        deallog << "Sum " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Read): " << container_sum(data) << std::endl;
-        std::cout << "IO mode " + dataset_name << " " << container_name << "<"
-                  << type_name << ">"
-                  << " (Read): " << dataset.get_io_mode() << std::endl;
-        std::cout << "Local no collective cause " + dataset_name << " "
-                  << container_name << "<" << type_name << ">"
+        deallog << "Sum " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Read): " << container_sum(data)
+                << std::endl;
+        std::cout << "IO mode " + dataset_name << ' ' << container_name << '<'
+                  << type_name << '>' << " (Read): " << dataset.get_io_mode()
+                  << std::endl;
+        std::cout << "Local no collective cause " + dataset_name << ' '
+                  << container_name << '<' << type_name << '>'
                   << " (Read): " << dataset.get_local_no_collective_cause()
                   << std::endl;
-        std::cout << "Global no collective cause " + dataset_name << " "
-                  << container_name << "<" << type_name << ">"
+        std::cout << "Global no collective cause " + dataset_name << ' '
+                  << container_name << '<' << type_name << '>'
                   << " (Read): " << dataset.get_global_no_collective_cause()
                   << std::endl;
       }
@@ -616,29 +606,29 @@ read_test(HDF5::Group root_group)
     std::string dataset_name("dataset_4");
     auto        dataset = group.open_dataset(dataset_name);
     dataset.set_query_io_mode(true);
-    deallog << "Dimensions " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << dataset.get_dimensions() << std::endl;
-    deallog << "Size " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << dataset.get_size() << std::endl;
-    deallog << "Rank " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << dataset.get_rank() << std::endl;
+    deallog << "Dimensions " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << dataset.get_dimensions()
+            << std::endl;
+    deallog << "Size " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << dataset.get_size()
+            << std::endl;
+    deallog << "Rank " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << dataset.get_rank()
+            << std::endl;
     {
       Container<Number> data = dataset.read<Container<Number>>();
-      deallog << "Sum " + dataset_name << " " << container_name << "<"
-              << type_name << ">"
-              << " (Read): " << container_sum(data) << std::endl;
-      std::cout << "IO mode " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Read): " << dataset.get_io_mode() << std::endl;
-      std::cout << "Local no collective cause " + dataset_name << " "
-                << container_name << "<" << type_name << ">"
+      deallog << "Sum " + dataset_name << ' ' << container_name << '<'
+              << type_name << '>' << " (Read): " << container_sum(data)
+              << std::endl;
+      std::cout << "IO mode " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Read): " << dataset.get_io_mode()
+                << std::endl;
+      std::cout << "Local no collective cause " + dataset_name << ' '
+                << container_name << '<' << type_name << '>'
                 << " (Read): " << dataset.get_local_no_collective_cause()
                 << std::endl;
-      std::cout << "Global no collective cause " + dataset_name << " "
-                << container_name << "<" << type_name << ">"
+      std::cout << "Global no collective cause " + dataset_name << ' '
+                << container_name << '<' << type_name << '>'
                 << " (Read): " << dataset.get_global_no_collective_cause()
                 << std::endl;
     }
@@ -649,18 +639,18 @@ read_test(HDF5::Group root_group)
       auto                       data_a =
         dataset.read_hyperslab<Container<Number>>(hyperslab_offset_a,
                                                   hyperslab_count_a);
-      deallog << "Hyperslab_a sum " + dataset_name << " " << container_name
-              << "<" << type_name << ">"
-              << " (Read): " << container_sum(data_a) << std::endl;
-      std::cout << "IO mode " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Read): " << dataset.get_io_mode() << std::endl;
-      std::cout << "Local no collective cause " + dataset_name << " "
-                << container_name << "<" << type_name << ">"
+      deallog << "Hyperslab_a sum " + dataset_name << ' ' << container_name
+              << '<' << type_name << '>' << " (Read): " << container_sum(data_a)
+              << std::endl;
+      std::cout << "IO mode " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Read): " << dataset.get_io_mode()
+                << std::endl;
+      std::cout << "Local no collective cause " + dataset_name << ' '
+                << container_name << '<' << type_name << '>'
                 << " (Read): " << dataset.get_local_no_collective_cause()
                 << std::endl;
-      std::cout << "Global no collective cause " + dataset_name << " "
-                << container_name << "<" << type_name << ">"
+      std::cout << "Global no collective cause " + dataset_name << ' '
+                << container_name << '<' << type_name << '>'
                 << " (Read): " << dataset.get_global_no_collective_cause()
                 << std::endl;
     }
@@ -671,18 +661,18 @@ read_test(HDF5::Group root_group)
       Container<Number>          data_b;
       data_b = dataset.read_hyperslab<Container<Number>>(hyperslab_offset_b,
                                                          hyperslab_count_b);
-      deallog << "Hyperslab_b sum " + dataset_name << " " << container_name
-              << "<" << type_name << ">"
-              << " (Read): " << container_sum(data_b) << std::endl;
-      std::cout << "IO mode " + dataset_name << " " << container_name << "<"
-                << type_name << ">"
-                << " (Read): " << dataset.get_io_mode() << std::endl;
-      std::cout << "Local no collective cause " + dataset_name << " "
-                << container_name << "<" << type_name << ">"
+      deallog << "Hyperslab_b sum " + dataset_name << ' ' << container_name
+              << '<' << type_name << '>' << " (Read): " << container_sum(data_b)
+              << std::endl;
+      std::cout << "IO mode " + dataset_name << ' ' << container_name << '<'
+                << type_name << '>' << " (Read): " << dataset.get_io_mode()
+                << std::endl;
+      std::cout << "Local no collective cause " + dataset_name << ' '
+                << container_name << '<' << type_name << '>'
                 << " (Read): " << dataset.get_local_no_collective_cause()
                 << std::endl;
-      std::cout << "Global no collective cause " + dataset_name << " "
-                << container_name << "<" << type_name << ">"
+      std::cout << "Global no collective cause " + dataset_name << ' '
+                << container_name << '<' << type_name << '>'
                 << " (Read): " << dataset.get_global_no_collective_cause()
                 << std::endl;
     }
@@ -692,28 +682,28 @@ read_test(HDF5::Group root_group)
     std::string dataset_name("dataset_5");
     auto        dataset = group.open_dataset(dataset_name);
     dataset.set_query_io_mode(true);
-    deallog << "Dimensions " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << dataset.get_dimensions() << std::endl;
-    deallog << "Size " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << dataset.get_size() << std::endl;
-    deallog << "Rank " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << dataset.get_rank() << std::endl;
+    deallog << "Dimensions " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << dataset.get_dimensions()
+            << std::endl;
+    deallog << "Size " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << dataset.get_size()
+            << std::endl;
+    deallog << "Rank " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << dataset.get_rank()
+            << std::endl;
     Container<Number> data = dataset.read<Container<Number>>();
-    deallog << "Sum " + dataset_name << " " << container_name << "<"
-            << type_name << ">"
-            << " (Read): " << container_sum(data) << std::endl;
-    std::cout << "IO mode " + dataset_name << " " << container_name << "<"
-              << type_name << ">"
-              << " (Read): " << dataset.get_io_mode() << std::endl;
-    std::cout << "Local no collective cause " + dataset_name << " "
-              << container_name << "<" << type_name << ">"
+    deallog << "Sum " + dataset_name << ' ' << container_name << '<'
+            << type_name << '>' << " (Read): " << container_sum(data)
+            << std::endl;
+    std::cout << "IO mode " + dataset_name << ' ' << container_name << '<'
+              << type_name << '>' << " (Read): " << dataset.get_io_mode()
+              << std::endl;
+    std::cout << "Local no collective cause " + dataset_name << ' '
+              << container_name << '<' << type_name << '>'
               << " (Read): " << dataset.get_local_no_collective_cause()
               << std::endl;
-    std::cout << "Global no collective cause " + dataset_name << " "
-              << container_name << "<" << type_name << ">"
+    std::cout << "Global no collective cause " + dataset_name << ' '
+              << container_name << '<' << type_name << '>'
               << " (Read): " << dataset.get_global_no_collective_cause()
               << std::endl;
   }

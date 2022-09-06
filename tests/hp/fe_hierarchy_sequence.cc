@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2021 by the deal.II authors
+// Copyright (C) 2021 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -54,7 +54,7 @@ test()
 
       deallog << " idx: " << fe_index << ", sequence:";
       for (const auto index : sequence)
-        deallog << " " << index;
+        deallog << ' ' << index;
       deallog << std::endl;
     }
 }

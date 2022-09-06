@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2007 - 2018 by the deal.II authors
+// Copyright (C) 2007 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -34,7 +34,7 @@ void
 check_value(const Function<dim> &f)
 {
   Point<dim> p;
-  for (unsigned int i = 0; i < dim; i++)
+  for (unsigned int i = 0; i < dim; ++i)
     p[i] = i;
 
   deallog << f.value(p) << std::endl;
@@ -71,7 +71,7 @@ void
 check_gradient(const Function<dim> &f)
 {
   Point<dim> p;
-  for (unsigned int i = 0; i < dim; i++)
+  for (unsigned int i = 0; i < dim; ++i)
     p[i] = i;
 
   deallog << f.gradient(p) << std::endl;
@@ -108,7 +108,7 @@ void
 check_laplacian(const Function<dim> &f)
 {
   Point<dim> p;
-  for (unsigned int i = 0; i < dim; i++)
+  for (unsigned int i = 0; i < dim; ++i)
     p[i] = i;
 
   deallog << f.laplacian(p) << std::endl;

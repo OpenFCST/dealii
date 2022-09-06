@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -24,7 +24,7 @@
 
 
 
-// Test to verify correctness of SolverFIRE::sovle()
+// Test to verify correctness of SolverFIRE::solve()
 // The objective function is the extended Rosenbrock function.
 // The Rosenbrock function is a non-convex function used as a test problem
 // for optimization algorithms introduced by Howard H. Rosenbrock.
@@ -89,7 +89,7 @@ check_value(const unsigned int N, const double tol)
   inv_mass.reinit(X);
 
   // Set initial guess.
-  for (unsigned int i = 0; i < N / 2; i++)
+  for (unsigned int i = 0; i < N / 2; ++i)
     {
       X(2 * i)     = -1.2;
       X(2 * i + 1) = 1.0;

@@ -1,84 +1,92 @@
-//-----------------------------------------------------------
+// ---------------------------------------------------------------------
 //
-//    Copyright (C) 2015 - 2020 by the deal.II authors
+// Copyright (C) 2015 - 2022 by the deal.II authors
 //
-//    This file is part of the deal.II library.
+// This file is part of the deal.II library.
 //
-//    The deal.II library is free software; you can use it, redistribute
-//    it, and/or modify it under the terms of the GNU Lesser General
-//    Public License as published by the Free Software Foundation; either
-//    version 2.1 of the License, or (at your option) any later version.
-//    The full text of the license can be found in the file LICENSE.md at
-//    the top level directory of deal.II.
+// The deal.II library is free software; you can use it, redistribute
+// it, and/or modify it under the terms of the GNU Lesser General
+// Public License as published by the Free Software Foundation; either
+// version 2.1 of the License, or (at your option) any later version.
+// The full text of the license can be found in the file LICENSE.md at
+// the top level directory of deal.II.
 //
-//-----------------------------------------------------------
-
+// ---------------------------------------------------------------------
 
 #include <deal.II/base/config.h>
+
+#include <deal.II/lac/vector_operation.h>
 
 #include <deal.II/sundials/ida.h>
 
 #ifdef DEAL_II_WITH_SUNDIALS
+#  include <deal.II/base/utilities.h>
 
-#  if DEAL_II_SUNDIALS_VERSION_LT(4, 0, 0)
+#  include <deal.II/lac/block_vector.h>
 
-#    include <deal.II/base/utilities.h>
+#  include <deal.II/sundials/n_vector.h>
+#  include <deal.II/sundials/sunlinsol_wrapper.h>
+#  ifdef DEAL_II_WITH_TRILINOS
+#    include <deal.II/lac/trilinos_parallel_block_vector.h>
+#    include <deal.II/lac/trilinos_vector.h>
+#  endif
+#  ifdef DEAL_II_WITH_PETSC
+#    include <deal.II/lac/petsc_block_vector.h>
+#    include <deal.II/lac/petsc_vector.h>
+#  endif
 
-#    include <deal.II/lac/block_vector.h>
-#    ifdef DEAL_II_WITH_TRILINOS
-#      include <deal.II/lac/trilinos_parallel_block_vector.h>
-#      include <deal.II/lac/trilinos_vector.h>
-#    endif
-#    ifdef DEAL_II_WITH_PETSC
-#      include <deal.II/lac/petsc_block_vector.h>
-#      include <deal.II/lac/petsc_vector.h>
-#    endif
+#  include <deal.II/sundials/n_vector.h>
 
-#    include <deal.II/sundials/copy.h>
-
-#    ifdef DEAL_II_SUNDIALS_WITH_IDAS
-#      include <idas/idas_impl.h>
-#    else
-#      include <ida/ida_impl.h>
-#    endif
-
-#    include <iomanip>
-#    include <iostream>
+#  include <iomanip>
+#  include <iostream>
 
 DEAL_II_NAMESPACE_OPEN
 
 namespace SUNDIALS
 {
-  using namespace internal;
-
   namespace
   {
     template <typename VectorType>
     int
-    t_dae_residual(realtype tt,
-                   N_Vector yy,
-                   N_Vector yp,
-                   N_Vector rr,
-                   void *   user_data)
+    residual_callback(realtype tt,
+                      N_Vector yy,
+                      N_Vector yp,
+                      N_Vector rr,
+                      void *   user_data)
     {
       IDA<VectorType> &solver = *static_cast<IDA<VectorType> *>(user_data);
-      GrowingVectorMemory<VectorType> mem;
 
-      typename VectorMemory<VectorType>::Pointer src_yy(mem);
-      solver.reinit_vector(*src_yy);
-
-      typename VectorMemory<VectorType>::Pointer src_yp(mem);
-      solver.reinit_vector(*src_yp);
-
-      typename VectorMemory<VectorType>::Pointer residual(mem);
-      solver.reinit_vector(*residual);
-
-      copy(*src_yy, yy);
-      copy(*src_yp, yp);
+      auto *src_yy   = internal::unwrap_nvector_const<VectorType>(yy);
+      auto *src_yp   = internal::unwrap_nvector_const<VectorType>(yp);
+      auto *residual = internal::unwrap_nvector<VectorType>(rr);
 
       int err = solver.residual(tt, *src_yy, *src_yp, *residual);
 
-      copy(rr, *residual);
+      return err;
+    }
+
+
+
+    template <typename VectorType>
+    int
+    setup_jacobian_callback(realtype tt,
+                            realtype cj,
+                            N_Vector yy,
+                            N_Vector yp,
+                            N_Vector /* residual */,
+                            SUNMatrix /* ignored */,
+                            void *user_data,
+                            N_Vector /* tmp1 */,
+                            N_Vector /* tmp2 */,
+                            N_Vector /* tmp3 */)
+    {
+      Assert(user_data != nullptr, ExcInternalError());
+      IDA<VectorType> &solver = *static_cast<IDA<VectorType> *>(user_data);
+
+      auto *src_yy = internal::unwrap_nvector_const<VectorType>(yy);
+      auto *src_yp = internal::unwrap_nvector_const<VectorType>(yp);
+
+      int err = solver.setup_jacobian(tt, *src_yy, *src_yp, cj);
 
       return err;
     }
@@ -87,101 +95,74 @@ namespace SUNDIALS
 
     template <typename VectorType>
     int
-    t_dae_lsetup(IDAMem   IDA_mem,
-                 N_Vector yy,
-                 N_Vector yp,
-                 N_Vector resp,
-                 N_Vector tmp1,
-                 N_Vector tmp2,
-                 N_Vector tmp3)
+    solve_with_jacobian_callback(SUNLinearSolver LS,
+                                 SUNMatrix /*ignored*/,
+                                 N_Vector x,
+                                 N_Vector b,
+                                 realtype tol)
     {
-      (void)tmp1;
-      (void)tmp2;
-      (void)tmp3;
-      (void)resp;
-      IDA<VectorType> &solver =
-        *static_cast<IDA<VectorType> *>(IDA_mem->ida_user_data);
-      GrowingVectorMemory<VectorType> mem;
+      IDA<VectorType> &solver = *static_cast<IDA<VectorType> *>(LS->content);
 
-      typename VectorMemory<VectorType>::Pointer src_yy(mem);
-      solver.reinit_vector(*src_yy);
-
-      typename VectorMemory<VectorType>::Pointer src_yp(mem);
-      solver.reinit_vector(*src_yp);
-
-      copy(*src_yy, yy);
-      copy(*src_yp, yp);
-
-      int err = solver.setup_jacobian(IDA_mem->ida_tn,
-                                      *src_yy,
-                                      *src_yp,
-                                      IDA_mem->ida_cj);
+      auto *src_b = internal::unwrap_nvector_const<VectorType>(b);
+      auto *dst_x = internal::unwrap_nvector<VectorType>(x);
+      int   err   = 0;
+      if (solver.solve_with_jacobian)
+        err = solver.solve_with_jacobian(*src_b, *dst_x, tol);
+      else if (solver.solve_jacobian_system)
+        err = solver.solve_jacobian_system(*src_b, *dst_x);
+      else
+        // We have already checked this outside, so we should never get here.
+        Assert(false, ExcInternalError());
 
       return err;
     }
-
-
-    template <typename VectorType>
-    int
-    t_dae_solve(IDAMem   IDA_mem,
-                N_Vector b,
-                N_Vector weight,
-                N_Vector yy,
-                N_Vector yp,
-                N_Vector resp)
-    {
-      (void)weight;
-      (void)yy;
-      (void)yp;
-      (void)resp;
-      IDA<VectorType> &solver =
-        *static_cast<IDA<VectorType> *>(IDA_mem->ida_user_data);
-      GrowingVectorMemory<VectorType> mem;
-
-      typename VectorMemory<VectorType>::Pointer src(mem);
-      solver.reinit_vector(*src);
-
-      typename VectorMemory<VectorType>::Pointer dst(mem);
-      solver.reinit_vector(*dst);
-
-      copy(*src, b);
-
-      int err = solver.solve_jacobian_system(*src, *dst);
-      copy(b, *dst);
-
-      return err;
-    }
-
   } // namespace
+
+
+
+  template <typename VectorType>
+  IDA<VectorType>::IDA(const AdditionalData &data)
+    : IDA(data, MPI_COMM_SELF)
+  {}
+
+
 
   template <typename VectorType>
   IDA<VectorType>::IDA(const AdditionalData &data, const MPI_Comm &mpi_comm)
     : data(data)
     , ida_mem(nullptr)
-    , yy(nullptr)
-    , yp(nullptr)
-    , abs_tolls(nullptr)
-    , diff_id(nullptr)
-    , communicator(is_serial_vector<VectorType>::value ?
-                     MPI_COMM_SELF :
-                     Utilities::MPI::duplicate_communicator(mpi_comm))
+#  if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+    , ida_ctx(nullptr)
+#  endif
+    , mpi_communicator(mpi_comm)
   {
+    // SUNDIALS will always duplicate communicators if we provide them. This
+    // can cause problems if SUNDIALS is configured with MPI and we pass along
+    // MPI_COMM_SELF in a serial application as MPI won't be
+    // initialized. Hence, work around that by just not providing a
+    // communicator in that case.
+#  if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+    const int status =
+      SUNContext_Create(mpi_communicator == MPI_COMM_SELF ? nullptr :
+                                                            &mpi_communicator,
+                        &ida_ctx);
+    (void)status;
+    AssertIDA(status);
+#  endif
     set_functions_to_trigger_an_assert();
   }
+
+
 
   template <typename VectorType>
   IDA<VectorType>::~IDA()
   {
-    if (ida_mem)
-      IDAFree(&ida_mem);
-#    ifdef DEAL_II_WITH_MPI
-    if (is_serial_vector<VectorType>::value == false)
-      {
-        const int ierr = MPI_Comm_free(&communicator);
-        (void)ierr;
-        AssertNothrow(ierr == MPI_SUCCESS, ExcMPI(ierr));
-      }
-#    endif
+    IDAFree(&ida_mem);
+#  if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+    const int status = SUNContext_Free(&ida_ctx);
+    (void)status;
+    AssertIDA(status);
+#  endif
   }
 
 
@@ -190,8 +171,6 @@ namespace SUNDIALS
   unsigned int
   IDA<VectorType>::solve_dae(VectorType &solution, VectorType &solution_dot)
   {
-    unsigned int system_size = solution.size();
-
     double       t           = data.initial_time;
     double       h           = data.initial_step_size;
     unsigned int step_number = 0;
@@ -199,36 +178,11 @@ namespace SUNDIALS
     int status;
     (void)status;
 
+    reset(data.initial_time, data.initial_step_size, solution, solution_dot);
+
     // The solution is stored in
     // solution. Here we take only a
     // view of it.
-#    ifdef DEAL_II_WITH_MPI
-    if (is_serial_vector<VectorType>::value == false)
-      {
-        const IndexSet    is                = solution.locally_owned_elements();
-        const std::size_t local_system_size = is.n_elements();
-
-        yy = N_VNew_Parallel(communicator, local_system_size, system_size);
-
-        yp = N_VNew_Parallel(communicator, local_system_size, system_size);
-
-        diff_id = N_VNew_Parallel(communicator, local_system_size, system_size);
-
-        abs_tolls =
-          N_VNew_Parallel(communicator, local_system_size, system_size);
-      }
-    else
-#    endif
-      {
-        Assert(is_serial_vector<VectorType>::value,
-               ExcInternalError(
-                 "Trying to use a serial code with a parallel vector."));
-        yy        = N_VNew_Serial(system_size);
-        yp        = N_VNew_Serial(system_size);
-        diff_id   = N_VNew_Serial(system_size);
-        abs_tolls = N_VNew_Serial(system_size);
-      }
-    reset(data.initial_time, data.initial_step_size, solution, solution_dot);
 
     double next_time = data.initial_time;
 
@@ -238,14 +192,24 @@ namespace SUNDIALS
       {
         next_time += data.output_period;
 
+        auto yy = internal::make_nvector_view(solution
+#  if !DEAL_II_SUNDIALS_VERSION_LT(6, 0, 0)
+                                              ,
+                                              ida_ctx
+#  endif
+        );
+        auto yp = internal::make_nvector_view(solution_dot
+#  if !DEAL_II_SUNDIALS_VERSION_LT(6, 0, 0)
+                                              ,
+                                              ida_ctx
+#  endif
+        );
+
         status = IDASolve(ida_mem, next_time, &t, yy, yp, IDA_NORMAL);
         AssertIDA(status);
 
         status = IDAGetLastStep(ida_mem, &h);
         AssertIDA(status);
-
-        copy(solution, yy);
-        copy(solution_dot, yp);
 
         while (solver_should_restart(t, solution, solution_dot))
           reset(t, h, solution, solution_dot);
@@ -255,26 +219,10 @@ namespace SUNDIALS
         output_step(t, solution, solution_dot, step_number);
       }
 
-      // Free the vectors which are no longer used.
-#    ifdef DEAL_II_WITH_MPI
-    if (is_serial_vector<VectorType>::value == false)
-      {
-        N_VDestroy_Parallel(yy);
-        N_VDestroy_Parallel(yp);
-        N_VDestroy_Parallel(abs_tolls);
-        N_VDestroy_Parallel(diff_id);
-      }
-    else
-#    endif
-      {
-        N_VDestroy_Serial(yy);
-        N_VDestroy_Serial(yp);
-        N_VDestroy_Serial(abs_tolls);
-        N_VDestroy_Serial(diff_id);
-      }
-
     return step_number;
   }
+
+
 
   template <typename VectorType>
   void
@@ -283,73 +231,60 @@ namespace SUNDIALS
                          VectorType & solution,
                          VectorType & solution_dot)
   {
-    unsigned int system_size;
-    bool         first_step = (current_time == data.initial_time);
-
-    if (ida_mem)
-      IDAFree(&ida_mem);
-
-    ida_mem = IDACreate();
-
-
-    // Free the vectors which are no longer used.
-    if (yy)
-      {
-#    ifdef DEAL_II_WITH_MPI
-        if (is_serial_vector<VectorType>::value == false)
-          {
-            N_VDestroy_Parallel(yy);
-            N_VDestroy_Parallel(yp);
-            N_VDestroy_Parallel(abs_tolls);
-            N_VDestroy_Parallel(diff_id);
-          }
-        else
-#    endif
-          {
-            N_VDestroy_Serial(yy);
-            N_VDestroy_Serial(yp);
-            N_VDestroy_Serial(abs_tolls);
-            N_VDestroy_Serial(diff_id);
-          }
-      }
+    bool first_step = (current_time == data.initial_time);
 
     int status;
     (void)status;
-    system_size = solution.size();
-#    ifdef DEAL_II_WITH_MPI
-    if (is_serial_vector<VectorType>::value == false)
-      {
-        const IndexSet    is                = solution.locally_owned_elements();
-        const std::size_t local_system_size = is.n_elements();
 
-        yy = N_VNew_Parallel(communicator, local_system_size, system_size);
-
-        yp = N_VNew_Parallel(communicator, local_system_size, system_size);
-
-        diff_id = N_VNew_Parallel(communicator, local_system_size, system_size);
-
-        abs_tolls =
-          N_VNew_Parallel(communicator, local_system_size, system_size);
-      }
-    else
-#    endif
-      {
-        yy        = N_VNew_Serial(system_size);
-        yp        = N_VNew_Serial(system_size);
-        diff_id   = N_VNew_Serial(system_size);
-        abs_tolls = N_VNew_Serial(system_size);
-      }
-
-    copy(yy, solution);
-    copy(yp, solution_dot);
-
-    status = IDAInit(ida_mem, t_dae_residual<VectorType>, current_time, yy, yp);
+#  if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+    status = SUNContext_Free(&ida_ctx);
     AssertIDA(status);
 
+    // Same comment applies as in class constructor:
+    status =
+      SUNContext_Create(mpi_communicator == MPI_COMM_SELF ? nullptr :
+                                                            &mpi_communicator,
+                        &ida_ctx);
+    AssertIDA(status);
+#  endif
+
+    if (ida_mem)
+      {
+        IDAFree(&ida_mem);
+        // Initialization is version-dependent: do that in a moment
+      }
+
+#  if DEAL_II_SUNDIALS_VERSION_LT(6, 0, 0)
+    ida_mem = IDACreate();
+#  else
+    ida_mem = IDACreate(ida_ctx);
+#  endif
+
+    auto yy = internal::make_nvector_view(solution
+#  if !DEAL_II_SUNDIALS_VERSION_LT(6, 0, 0)
+                                          ,
+                                          ida_ctx
+#  endif
+    );
+    auto yp = internal::make_nvector_view(solution_dot
+#  if !DEAL_II_SUNDIALS_VERSION_LT(6, 0, 0)
+                                          ,
+                                          ida_ctx
+#  endif
+    );
+
+    status =
+      IDAInit(ida_mem, residual_callback<VectorType>, current_time, yy, yp);
+    AssertIDA(status);
     if (get_local_tolerances)
       {
-        copy(abs_tolls, get_local_tolerances());
-        status = IDASVtolerances(ida_mem, data.relative_tolerance, abs_tolls);
+        const auto abs_tols = internal::make_nvector_view(get_local_tolerances()
+#  if !DEAL_II_SUNDIALS_VERSION_LT(6, 0, 0)
+                                                            ,
+                                                          ida_ctx
+#  endif
+        );
+        status = IDASVtolerances(ida_mem, data.relative_tolerance, abs_tols);
         AssertIDA(status);
       }
     else
@@ -375,8 +310,14 @@ namespace SUNDIALS
         auto dc          = differential_components();
         for (auto i = dc.begin(); i != dc.end(); ++i)
           diff_comp_vector[*i] = 1.0;
+        diff_comp_vector.compress(VectorOperation::insert);
 
-        copy(diff_id, diff_comp_vector);
+        const auto diff_id = internal::make_nvector_view(diff_comp_vector
+#  if !DEAL_II_SUNDIALS_VERSION_LT(6, 0, 0)
+                                                         ,
+                                                         ida_ctx
+#  endif
+        );
         status = IDASetId(ida_mem, diff_id);
         AssertIDA(status);
       }
@@ -392,14 +333,100 @@ namespace SUNDIALS
     AssertIDA(status);
 
     // Initialize solver
-    auto IDA_mem = static_cast<IDAMem>(ida_mem);
+    SUNMatrix       J  = nullptr;
+    SUNLinearSolver LS = nullptr;
 
-    IDA_mem->ida_lsetup = t_dae_lsetup<VectorType>;
-    IDA_mem->ida_lsolve = t_dae_solve<VectorType>;
-#    if DEAL_II_SUNDIALS_VERSION_LT(3, 0, 0)
-    IDA_mem->ida_setupNonNull = true;
-#    endif
+    // and attach it to the SUNLinSol object. The functions that will get
+    // called do not actually receive the IDAMEM object, just the LS
+    // object, so we have to store a pointer to the current
+    // object in the LS object
+#  if DEAL_II_SUNDIALS_VERSION_LT(6, 0, 0)
+    LS = SUNLinSolNewEmpty();
+#  else
+    LS      = SUNLinSolNewEmpty(ida_ctx);
+#  endif
 
+    LS->content = this;
+
+    LS->ops->gettype = [](SUNLinearSolver /*ignored*/) -> SUNLinearSolver_Type {
+      return SUNLINEARSOLVER_MATRIX_ITERATIVE;
+    };
+
+    LS->ops->free = [](SUNLinearSolver LS) -> int {
+      if (LS->content)
+        {
+          LS->content = nullptr;
+        }
+      if (LS->ops)
+        {
+          free(LS->ops);
+          LS->ops = nullptr;
+        }
+      free(LS);
+      LS = nullptr;
+      return 0;
+    };
+
+    AssertThrow(solve_jacobian_system || solve_with_jacobian,
+                ExcFunctionNotProvided(
+                  "solve_jacobian_system or solve_with_jacobian"));
+    LS->ops->solve = solve_with_jacobian_callback<VectorType>;
+
+    // When we set an iterative solver IDA requires that resid is provided. From
+    // SUNDIALS docs If an iterative method computes the preconditioned initial
+    // residual and returns with a successful solve without performing any
+    // iterations (i.e., either the initial guess or the preconditioner is
+    // sufficiently accurate), then this optional routine may be called by the
+    // SUNDIALS package. This routine should return the N_Vector containing the
+    // preconditioned initial residual vector.
+    LS->ops->resid = [](SUNLinearSolver /*ignored*/) -> N_Vector {
+      return nullptr;
+    };
+    // When we set an iterative solver IDA requires that last number of
+    // iteration is provided. Since we can't know what kind of solver the user
+    // has provided we set 1. This is clearly suboptimal.
+    LS->ops->numiters = [](SUNLinearSolver /*ignored*/) -> int { return 1; };
+    // Even though we don't use it, IDA still wants us to set some
+    // kind of matrix object for the nonlinear solver. This is because
+    // if we don't set it, it won't call the functions that set up
+    // the matrix object (i.e., the argument to the 'IDASetJacFn'
+    // function below).
+#  if DEAL_II_SUNDIALS_VERSION_LT(6, 0, 0)
+    J = SUNMatNewEmpty();
+#  else
+    J       = SUNMatNewEmpty(ida_ctx);
+#  endif
+    J->content = this;
+
+    J->ops->getid = [](SUNMatrix /*ignored*/) -> SUNMatrix_ID {
+      return SUNMATRIX_CUSTOM;
+    };
+
+    J->ops->destroy = [](SUNMatrix A) {
+      if (A->content)
+        {
+          A->content = nullptr;
+        }
+      if (A->ops)
+        {
+          free(A->ops);
+          A->ops = nullptr;
+        }
+      free(A);
+      A = nullptr;
+    };
+
+    // Now set the linear system and Jacobian objects in the solver:
+    status = IDASetLinearSolver(ida_mem, LS, J);
+    AssertIDA(status);
+
+    status = IDASetLSNormFactor(ida_mem, data.ls_norm_factor);
+    AssertIDA(status);
+    // Finally tell IDA about
+    // it as well. The manual says that this must happen *after*
+    // calling IDASetLinearSolver
+    status = IDASetJacFn(ida_mem, &setup_jacobian_callback<VectorType>);
+    AssertIDA(status);
     status = IDASetMaxOrd(ida_mem, data.maximum_order);
     AssertIDA(status);
 
@@ -422,9 +449,6 @@ namespace SUNDIALS
 
         status = IDAGetConsistentIC(ida_mem, yy, yp);
         AssertIDA(status);
-
-        copy(solution, yy);
-        copy(solution_dot, yp);
       }
     else if (type == AdditionalData::use_y_diff)
       {
@@ -434,9 +458,6 @@ namespace SUNDIALS
 
         status = IDAGetConsistentIC(ida_mem, yy, yp);
         AssertIDA(status);
-
-        copy(solution, yy);
-        copy(solution_dot, yp);
       }
   }
 
@@ -457,20 +478,6 @@ namespace SUNDIALS
       return ret;
     };
 
-    setup_jacobian = [](const double,
-                        const VectorType &,
-                        const VectorType &,
-                        const double) -> int {
-      int ret = 0;
-      AssertThrow(false, ExcFunctionNotProvided("setup_jacobian"));
-      return ret;
-    };
-
-    solve_jacobian_system = [](const VectorType &, VectorType &) -> int {
-      int ret = 0;
-      AssertThrow(false, ExcFunctionNotProvided("solve_jacobian_system"));
-      return ret;
-    };
 
     output_step = [](const double,
                      const VectorType &,
@@ -484,34 +491,31 @@ namespace SUNDIALS
       GrowingVectorMemory<VectorType>            mem;
       typename VectorMemory<VectorType>::Pointer v(mem);
       reinit_vector(*v);
-      const unsigned int size = v->size();
-      return complete_index_set(size);
+      return v->locally_owned_elements();
     };
   }
 
   template class IDA<Vector<double>>;
   template class IDA<BlockVector<double>>;
 
-#    ifdef DEAL_II_WITH_MPI
+#  ifdef DEAL_II_WITH_MPI
 
-#      ifdef DEAL_II_WITH_TRILINOS
+#    ifdef DEAL_II_WITH_TRILINOS
   template class IDA<TrilinosWrappers::MPI::Vector>;
   template class IDA<TrilinosWrappers::MPI::BlockVector>;
-#      endif // DEAL_II_WITH_TRILINOS
+#    endif // DEAL_II_WITH_TRILINOS
 
-#      ifdef DEAL_II_WITH_PETSC
-#        ifndef PETSC_USE_COMPLEX
+#    ifdef DEAL_II_WITH_PETSC
+#      ifndef PETSC_USE_COMPLEX
   template class IDA<PETScWrappers::MPI::Vector>;
   template class IDA<PETScWrappers::MPI::BlockVector>;
-#        endif // PETSC_USE_COMPLEX
-#      endif   // DEAL_II_WITH_PETSC
+#      endif // PETSC_USE_COMPLEX
+#    endif   // DEAL_II_WITH_PETSC
 
-#    endif // DEAL_II_WITH_MPI
+#  endif // DEAL_II_WITH_MPI
 
 } // namespace SUNDIALS
 
 DEAL_II_NAMESPACE_CLOSE
-
-#  endif
 
 #endif // DEAL_II_WITH_SUNDIALS

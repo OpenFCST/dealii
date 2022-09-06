@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -81,12 +81,12 @@ test_1d()
                     fourier_coefficients);
 
   deallog << "calculated:" << std::endl;
-  for (unsigned int i = 0; i < N; i++)
-    deallog << fourier_coefficients[i].real() << " "
+  for (unsigned int i = 0; i < N; ++i)
+    deallog << fourier_coefficients[i].real() << ' '
             << fourier_coefficients[i].imag() << std::endl;
   deallog << "exact:" << std::endl;
-  for (unsigned int i = 0; i < N; i++)
-    deallog << exact[i].real() << " " << exact[i].imag() << std::endl;
+  for (unsigned int i = 0; i < N; ++i)
+    deallog << exact[i].real() << ' ' << exact[i].imag() << std::endl;
 }
 
 

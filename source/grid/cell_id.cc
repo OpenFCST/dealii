@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2019 by the deal.II authors
+// Copyright (C) 2015 - 2020 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -158,15 +158,6 @@ CellId::to_string() const
   std::ostringstream ss;
   ss << *this;
   return ss.str();
-}
-
-
-
-template <int dim, int spacedim>
-typename Triangulation<dim, spacedim>::cell_iterator
-CellId::to_cell(const Triangulation<dim, spacedim> &tria) const
-{
-  return tria.create_cell_iterator(*this);
 }
 
 

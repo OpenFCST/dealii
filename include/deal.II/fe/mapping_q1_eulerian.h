@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2018 by the deal.II authors
+// Copyright (C) 2001 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -22,7 +22,7 @@
 
 #include <deal.II/dofs/dof_handler.h>
 
-#include <deal.II/fe/mapping_q1.h>
+#include <deal.II/fe/mapping_q.h>
 
 #include <array>
 
@@ -32,8 +32,10 @@ template <typename>
 class Vector;
 
 
-/*!@addtogroup mapping */
-/*@{*/
+/**
+ * @addtogroup mapping
+ * @{
+ */
 
 /**
  * This class provides a mapping that adds to the location of each cell
@@ -90,7 +92,7 @@ class Vector;
  * the documentation of FiniteElement or the one of Triangulation.
  */
 template <int dim, typename VectorType = Vector<double>, int spacedim = dim>
-class MappingQ1Eulerian : public MappingQGeneric<dim, spacedim>
+class MappingQ1Eulerian : public MappingQ<dim, spacedim>
 {
 public:
   /**
@@ -164,7 +166,7 @@ protected:
   /**
    * Compute the support points of the mapping. For the current class, these
    * are the vertices, as obtained by calling Mapping::get_vertices(). See the
-   * documentation of MappingQGeneric::compute_mapping_support_points() for
+   * documentation of MappingQ::compute_mapping_support_points() for
    * more information.
    */
   virtual std::vector<Point<spacedim>>
@@ -186,7 +188,7 @@ protected:
     shiftmap_dof_handler;
 };
 
-/*@}*/
+/** @} */
 
 /*----------------------------------------------------------------------*/
 

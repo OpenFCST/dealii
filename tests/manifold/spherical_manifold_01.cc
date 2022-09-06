@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2018 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -130,7 +130,7 @@ main()
     const unsigned int num_points = 20;
     deallog << "=================================" << std::endl;
     ;
-    for (unsigned int i = 0; i < num_points; i++)
+    for (unsigned int i = 0; i < num_points; ++i)
       deallog << manifold.get_intermediate_point(P1,
                                                  P2,
                                                  (1.0 * i) / (num_points - 1))

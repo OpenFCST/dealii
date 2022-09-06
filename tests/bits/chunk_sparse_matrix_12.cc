@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -53,7 +53,7 @@ test(const unsigned int chunk_size)
            it != m.end(i);
            ++it)
         {
-          deallog << "[" << it->column() << "," << std::setprecision(2)
+          deallog << '[' << it->column() << ',' << std::setprecision(2)
                   << std::fixed << std::setw(4) << it->value() << "] ";
         }
       deallog << std::endl;

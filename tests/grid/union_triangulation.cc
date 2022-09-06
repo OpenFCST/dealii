@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2006 - 2018 by the deal.II authors
+// Copyright (C) 2006 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -47,7 +47,7 @@ test()
   // similar for second grid, but
   // different cell
   tria_2.refine_global(1);
-  (++tria_2.begin_active())->set_refine_flag();
+  (std::next(tria_2.begin_active()))->set_refine_flag();
   tria_2.execute_coarsening_and_refinement();
 
   GridGenerator::create_union_triangulation(tria_1, tria_2, tria_3);

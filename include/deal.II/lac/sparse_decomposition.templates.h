@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2002 - 2020 by the deal.II authors
+// Copyright (C) 2002 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -59,7 +59,7 @@ SparseLUDecomposition<number>::clear()
 
   SparseMatrix<number>::clear();
 
-  if (own_sparsity)
+  if (own_sparsity != nullptr)
     {
       delete own_sparsity;
       own_sparsity = nullptr;

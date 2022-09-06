@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -26,6 +26,7 @@
 #include <deal.II/fe/fe_tools.h>
 #include <deal.II/fe/fe_values.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/intergrid_map.h>
 #include <deal.II/grid/tria.h>
@@ -1945,7 +1946,7 @@ namespace DoFTools
       // neighbor a face are artificial, we simply test to see if the face
       // does not have a valid dof initialization.
 
-      for (unsigned int i = 0; i < dofs_per_face; i++)
+      for (unsigned int i = 0; i < dofs_per_face; ++i)
         if (dofs_1[i] == numbers::invalid_dof_index ||
             dofs_2[i] == numbers::invalid_dof_index)
           {
@@ -2139,7 +2140,7 @@ namespace DoFTools
 
           if (constraints_are_cyclic)
             {
-              if (std::abs(cycle_constraint_factor - 1.) > eps)
+              if (std::abs(cycle_constraint_factor - number(1.)) > eps)
                 affine_constraints.add_line(dof_left);
             }
           else
@@ -2168,10 +2169,10 @@ namespace DoFTools
               // just very small due to roundoff. Of course, constraining x2 in
               // terms of x1 has the same problem. So one chooses x1 = b/a*x2 if
               // |b|<|a|, and x2 = a/b*x1 if |a|<|b|.
-              Assert(
-                std::abs(constraint_factor) < 1e10,
-                ExcMessage(
-                  "The periodicity constraint is too large. The parameter periodicity_factor might be too large or too small."));
+              Assert(std::abs(constraint_factor) < 1e10,
+                     ExcMessage("The periodicity constraint is too large. "
+                                "The parameter periodicity_factor might "
+                                "be too large or too small."));
             }
         } /* for dofs_per_face */
     }
@@ -2266,10 +2267,10 @@ namespace DoFTools
 
               // ... and rotate all dofs belonging to vector valued components
               // that are selected by first_vector_components:
-              for (int i = 0; i < spacedim; ++i)
+              for (unsigned int i = 0; i < spacedim; ++i)
                 {
                   transformation[vector_dofs[i]][vector_dofs[i]] = 0.;
-                  for (int j = 0; j < spacedim; ++j)
+                  for (unsigned int j = 0; j < spacedim; ++j)
                     transformation[vector_dofs[i]][vector_dofs[j]] =
                       matrix[i][j];
                 }
@@ -2297,14 +2298,6 @@ namespace DoFTools
     const std::vector<unsigned int> &            first_vector_components,
     const number                                 periodicity_factor)
   {
-    // TODO: the implementation makes the assumption that all faces have the
-    // same number of dofs
-    AssertDimension(
-      face_1->get_fe(face_1->nth_active_fe_index(0)).n_unique_faces(), 1);
-    AssertDimension(
-      face_2->get_fe(face_2->nth_active_fe_index(0)).n_unique_faces(), 1);
-    const unsigned int face_no = 0;
-
     static const int dim      = FaceIterator::AccessorType::dimension;
     static const int spacedim = FaceIterator::AccessorType::space_dimension;
 
@@ -2338,6 +2331,12 @@ namespace DoFTools
 #ifdef DEBUG
     if (!face_1->has_children())
       {
+        // TODO: the implementation makes the assumption that all faces have the
+        // same number of dofs
+        AssertDimension(
+          face_1->get_fe(face_1->nth_active_fe_index(0)).n_unique_faces(), 1);
+        const unsigned int face_no = 0;
+
         Assert(face_1->n_active_fe_indices() == 1, ExcInternalError());
         const unsigned int n_dofs_per_face =
           face_1->get_fe(face_1->nth_active_fe_index(0))
@@ -2356,6 +2355,12 @@ namespace DoFTools
 
     if (!face_2->has_children())
       {
+        // TODO: the implementation makes the assumption that all faces have the
+        // same number of dofs
+        AssertDimension(
+          face_2->get_fe(face_2->nth_active_fe_index(0)).n_unique_faces(), 1);
+        const unsigned int face_no = 0;
+
         Assert(face_2->n_active_fe_indices() == 1, ExcInternalError());
         const unsigned int n_dofs_per_face =
           face_2->get_fe(face_2->nth_active_fe_index(0))
@@ -2457,6 +2462,11 @@ namespace DoFTools
           face_1->has_children() ?
             face_2->get_fe(face_2->nth_active_fe_index(0)) :
             face_1->get_fe(face_1->nth_active_fe_index(0));
+
+        // TODO: the implementation makes the assumption that all faces have the
+        // same number of dofs
+        AssertDimension(fe.n_unique_faces(), 1);
+        const unsigned int face_no = 0;
 
         const unsigned int n_dofs_per_face = fe.n_dofs_per_face(face_no);
 
@@ -3062,15 +3072,15 @@ namespace DoFTools
           std::vector<types::global_dof_index> local_dof_indices(
             fine_fe.n_dofs_per_cell());
 
-          for (const auto &cell : fine_grid.active_cell_iterators())
-            if (cell->is_locally_owned())
-              {
-                cell->get_dof_indices(local_dof_indices);
-                for (unsigned int i = 0; i < fine_fe.n_dofs_per_cell(); ++i)
-                  if (fine_fe.system_to_component_index(i).first ==
-                      fine_component)
-                    dof_is_interesting[local_dof_indices[i]] = true;
-              }
+          for (const auto &cell : fine_grid.active_cell_iterators() |
+                                    IteratorFilters::LocallyOwnedCell())
+            {
+              cell->get_dof_indices(local_dof_indices);
+              for (unsigned int i = 0; i < fine_fe.n_dofs_per_cell(); ++i)
+                if (fine_fe.system_to_component_index(i).first ==
+                    fine_component)
+                  dof_is_interesting[local_dof_indices[i]] = true;
+            }
 
           n_parameters_on_fine_grid = std::count(dof_is_interesting.begin(),
                                                  dof_is_interesting.end(),
@@ -3089,22 +3099,22 @@ namespace DoFTools
           std::vector<types::global_dof_index> local_dof_indices(
             fine_fe.n_dofs_per_cell());
           unsigned int next_free_index = 0;
-          for (const auto &cell : fine_grid.active_cell_iterators())
-            if (cell->is_locally_owned())
-              {
-                cell->get_dof_indices(local_dof_indices);
-                for (unsigned int i = 0; i < fine_fe.n_dofs_per_cell(); ++i)
-                  // if this DoF is a parameter dof and has not yet been
-                  // numbered, then do so
-                  if ((fine_fe.system_to_component_index(i).first ==
-                       fine_component) &&
-                      (weight_mapping[local_dof_indices[i]] ==
-                       numbers::invalid_dof_index))
-                    {
-                      weight_mapping[local_dof_indices[i]] = next_free_index;
-                      ++next_free_index;
-                    }
-              }
+          for (const auto &cell : fine_grid.active_cell_iterators() |
+                                    IteratorFilters::LocallyOwnedCell())
+            {
+              cell->get_dof_indices(local_dof_indices);
+              for (unsigned int i = 0; i < fine_fe.n_dofs_per_cell(); ++i)
+                // if this DoF is a parameter dof and has not yet been
+                // numbered, then do so
+                if ((fine_fe.system_to_component_index(i).first ==
+                     fine_component) &&
+                    (weight_mapping[local_dof_indices[i]] ==
+                     numbers::invalid_dof_index))
+                  {
+                    weight_mapping[local_dof_indices[i]] = next_free_index;
+                    ++next_free_index;
+                  }
+            }
 
           Assert(next_free_index == n_parameters_on_fine_grid,
                  ExcInternalError());

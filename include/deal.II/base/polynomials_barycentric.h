@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2021 by the deal.II authors
+// Copyright (C) 2021 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -137,7 +137,8 @@ public:
    * Multiply by a scalar.
    */
   template <typename Number2>
-  BarycentricPolynomial<dim, Number> operator*(const Number2 &a) const;
+  BarycentricPolynomial<dim, Number>
+  operator*(const Number2 &a) const;
 
   /**
    * Divide by a scalar.
@@ -215,9 +216,34 @@ class BarycentricPolynomials : public ScalarPolynomialsBase<dim>
 {
 public:
   /**
+   * Alias for polynomial type.
+   */
+  using PolyType = BarycentricPolynomial<dim>;
+
+  /**
+   * Alias for polynomial gradient type.
+   */
+  using GradType = std::array<PolyType, dim>;
+
+  /**
+   * Alias for polynomial hessian type.
+   */
+  using HessianType = std::array<GradType, dim>;
+
+  /**
+   * Alias for polynomial third derivatives type.
+   */
+  using ThirdDerivativesType = std::array<HessianType, dim>;
+
+  /**
+   * Alias for polynomial fourth derivatives type.
+   */
+  using FourthDerivativesType = std::array<ThirdDerivativesType, dim>;
+
+  /**
    * Make the dimension available to the outside.
    */
-  static const unsigned int dimension = dim;
+  static constexpr unsigned int dimension = dim;
 
   /**
    * Get the standard Lagrange basis for a specified degree.
@@ -234,7 +260,8 @@ public:
   /**
    * Access operator.
    */
-  const BarycentricPolynomial<dim> &operator[](const std::size_t i) const;
+  const BarycentricPolynomial<dim> &
+  operator[](const std::size_t i) const;
 
   /**
    * @copydoc ScalarPolynomialsBase::evaluate()
@@ -312,15 +339,11 @@ public:
   clone() const override;
 
 protected:
-  std::vector<BarycentricPolynomial<dim>> polys;
-
-  Table<2, BarycentricPolynomial<dim>> poly_grads;
-
-  Table<3, BarycentricPolynomial<dim>> poly_hessians;
-
-  Table<4, BarycentricPolynomial<dim>> poly_third_derivatives;
-
-  Table<5, BarycentricPolynomial<dim>> poly_fourth_derivatives;
+  std::vector<PolyType>              polys;
+  std::vector<GradType>              poly_grads;
+  std::vector<HessianType>           poly_hessians;
+  std::vector<ThirdDerivativesType>  poly_third_derivatives;
+  std::vector<FourthDerivativesType> poly_fourth_derivatives;
 };
 
 // non-member template functions for algebra
@@ -489,8 +512,8 @@ BarycentricPolynomial<dim, Number>::operator-(const Number2 &a) const
 
 template <int dim, typename Number>
 template <typename Number2>
-BarycentricPolynomial<dim, Number> BarycentricPolynomial<dim, Number>::
-                                   operator*(const Number2 &a) const
+BarycentricPolynomial<dim, Number>
+BarycentricPolynomial<dim, Number>::operator*(const Number2 &a) const
 {
   if (a == Number2())
     {
@@ -522,8 +545,8 @@ BarycentricPolynomial<dim, Number>::operator/(const Number2 &a) const
 
 template <int dim, typename Number>
 BarycentricPolynomial<dim, Number>
-BarycentricPolynomial<dim, Number>::
-operator+(const BarycentricPolynomial<dim, Number> &augend) const
+BarycentricPolynomial<dim, Number>::operator+(
+  const BarycentricPolynomial<dim, Number> &augend) const
 {
   TableIndices<dim + 1> deg;
   for (unsigned int d = 0; d < dim + 1; ++d)
@@ -550,8 +573,8 @@ operator+(const BarycentricPolynomial<dim, Number> &augend) const
 
 template <int dim, typename Number>
 BarycentricPolynomial<dim, Number>
-BarycentricPolynomial<dim, Number>::
-operator-(const BarycentricPolynomial<dim, Number> &augend) const
+BarycentricPolynomial<dim, Number>::operator-(
+  const BarycentricPolynomial<dim, Number> &augend) const
 {
   return *this + (-augend);
 }
@@ -559,8 +582,9 @@ operator-(const BarycentricPolynomial<dim, Number> &augend) const
 
 
 template <int dim, typename Number>
-BarycentricPolynomial<dim, Number> BarycentricPolynomial<dim, Number>::
-                                   operator*(const BarycentricPolynomial<dim, Number> &multiplicand) const
+BarycentricPolynomial<dim, Number>
+BarycentricPolynomial<dim, Number>::operator*(
+  const BarycentricPolynomial<dim, Number> &multiplicand) const
 {
   TableIndices<dim + 1> deg;
   for (unsigned int d = 0; d < dim + 1; ++d)
@@ -697,8 +721,8 @@ BarycentricPolynomial<dim, Number>::index_to_indices(
 }
 
 template <int dim>
-const BarycentricPolynomial<dim> &BarycentricPolynomials<dim>::
-                                  operator[](const std::size_t i) const
+const BarycentricPolynomial<dim> &
+BarycentricPolynomials<dim>::operator[](const std::size_t i) const
 {
   AssertIndexRange(i, polys.size());
   return polys[i];

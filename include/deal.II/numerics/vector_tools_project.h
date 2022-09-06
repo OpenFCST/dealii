@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -43,8 +43,6 @@ class VectorizedArray;
 namespace hp
 {
   template <int dim, int spacedim>
-  class DoFHandler;
-  template <int dim, int spacedim>
   class MappingCollection;
   template <int dim>
   class QCollection;
@@ -55,8 +53,8 @@ namespace VectorTools
 {
   /**
    * @name Interpolation and projection
+   * @{
    */
-  //@{
 
   /**
    * Compute the projection of @p function to the finite element space. In other
@@ -98,7 +96,8 @@ namespace VectorTools
    * - dim==spacedim
    *
    * In this case, this function performs numerical quadrature using the given
-   * quadrature formula for integration of the right hand side $\Phi_i$ while a
+   * quadrature formula for integration of the right hand side $\Phi_i$ and
+   * for the mass operator. In the case of hypercube cells, a
    * QGauss(fe_degree+2) object is used for the mass operator. You should
    * therefore make sure that the given quadrature formula is sufficiently
    * accurate for creating the right-hand side.
@@ -148,13 +147,13 @@ namespace VectorTools
           VectorType &                                               vec,
           const bool                 enforce_zero_boundary     = false,
           const Quadrature<dim - 1> &q_boundary                = (dim > 1 ?
-                                                     QGauss<dim - 1>(2) :
-                                                     Quadrature<dim - 1>(0)),
+                                                                    QGauss<dim - 1>(2) :
+                                                                    Quadrature<dim - 1>(0)),
           const bool                 project_to_boundary_first = false);
 
   /**
    * Call the project() function above, with
-   * <tt>mapping=MappingQGeneric@<dim@>(1)</tt>.
+   * <tt>mapping=MappingQ@<dim@>(1)</tt>.
    */
   template <int dim, typename VectorType, int spacedim>
   void
@@ -165,8 +164,8 @@ namespace VectorTools
           VectorType &                                               vec,
           const bool                 enforce_zero_boundary     = false,
           const Quadrature<dim - 1> &q_boundary                = (dim > 1 ?
-                                                     QGauss<dim - 1>(2) :
-                                                     Quadrature<dim - 1>(0)),
+                                                                    QGauss<dim - 1>(2) :
+                                                                    Quadrature<dim - 1>(0)),
           const bool                 project_to_boundary_first = false);
 
   /**
@@ -297,7 +296,7 @@ namespace VectorTools
     VectorType &                                              vec_result,
     const unsigned int                                        fe_component = 0);
 
-  // @}
+  /** @} */
 
 } // namespace VectorTools
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2002 - 2019 by the deal.II authors
+// Copyright (C) 2002 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -23,8 +23,9 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*! @addtogroup Preconditioners
- *@{
+/**
+ * @addtogroup Preconditioners
+ * @{
  */
 
 /**
@@ -147,10 +148,10 @@ public:
   DeclException2(ExcDecompositionNotStable,
                  int,
                  double,
-                 << "The diagonal element (" << arg1 << "," << arg1 << ") is "
+                 << "The diagonal element (" << arg1 << ',' << arg1 << ") is "
                  << arg2 << ", but must be positive");
 
-  //@}
+  /** @} */
 private:
   /**
    * Values of the computed diagonal.
@@ -175,7 +176,7 @@ private:
   get_rowsum(const size_type row) const;
 };
 
-/*@}*/
+/** @} */
 
 DEAL_II_NAMESPACE_CLOSE
 

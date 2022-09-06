@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2020 by the deal.II authors
+// Copyright (C) 2015 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,9 +25,8 @@
 #include <deal.II/lac/la_parallel_vector.h>
 #include <deal.II/lac/la_vector.h>
 #include <deal.II/lac/read_write_vector.h>
+#include <deal.II/lac/vector.h>
 #include <deal.II/lac/vector_operations_internal.h>
-
-#include <boost/io/ios_state.hpp>
 
 #ifdef DEAL_II_WITH_PETSC
 #  include <deal.II/lac/petsc_vector.h>
@@ -43,6 +42,8 @@
 #ifdef DEAL_II_WITH_CUDA
 #  include <deal.II/lac/cuda_vector.h>
 #endif
+
+#include <boost/io/ios_state.hpp>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -251,7 +252,7 @@ namespace LinearAlgebra
     if (omit_zeroing_entries == false)
       this->operator=(Number());
 
-    // reset the communication patter
+    // reset the communication pattern
     source_stored_elements.clear();
     comm_pattern.reset();
   }
@@ -271,7 +272,7 @@ namespace LinearAlgebra
     if (omit_zeroing_entries == false)
       this->operator=(Number());
 
-    // reset the communication patter
+    // reset the communication pattern
     source_stored_elements.clear();
     comm_pattern.reset();
   }
@@ -299,7 +300,7 @@ namespace LinearAlgebra
 
 
 
-#if defined(DEAL_II_WITH_TRILINOS) && defined(DEAL_II_WITH_MPI)
+#ifdef DEAL_II_WITH_TRILINOS
   template <typename Number>
   void
   ReadWriteVector<Number>::reinit(
@@ -355,12 +356,13 @@ namespace LinearAlgebra
     if (n_elements() != in_vector.n_elements())
       reinit(in_vector, true);
 
-    dealii::internal::VectorOperations::Vector_copy<Number, Number> copier(
-      in_vector.values.get(), values.get());
-    dealii::internal::VectorOperations::parallel_for(copier,
-                                                     0,
-                                                     n_elements(),
-                                                     thread_loop_partitioner);
+    if (n_elements() > 0)
+      {
+        dealii::internal::VectorOperations::Vector_copy<Number, Number> copier(
+          in_vector.values.get(), values.get());
+        dealii::internal::VectorOperations::parallel_for(
+          copier, 0, n_elements(), thread_loop_partitioner);
+      }
 
     return *this;
   }
@@ -376,12 +378,13 @@ namespace LinearAlgebra
     if (n_elements() != in_vector.n_elements())
       reinit(in_vector, true);
 
-    dealii::internal::VectorOperations::Vector_copy<Number, Number2> copier(
-      in_vector.values.get(), values.get());
-    dealii::internal::VectorOperations::parallel_for(copier,
-                                                     0,
-                                                     n_elements(),
-                                                     thread_loop_partitioner);
+    if (n_elements() > 0)
+      {
+        dealii::internal::VectorOperations::Vector_copy<Number, Number2> copier(
+          in_vector.values.get(), values.get());
+        dealii::internal::VectorOperations::parallel_for(
+          copier, 0, n_elements(), thread_loop_partitioner);
+      }
 
     return *this;
   }
@@ -570,7 +573,7 @@ namespace LinearAlgebra
 
 
 
-#if defined(DEAL_II_WITH_TRILINOS) && defined(DEAL_II_WITH_MPI)
+#ifdef DEAL_II_WITH_TRILINOS
 #  ifdef DEAL_II_TRILINOS_WITH_TPETRA
   template <typename Number>
   void
@@ -1011,7 +1014,7 @@ namespace LinearAlgebra
                                  const unsigned int precision,
                                  const bool         scientific) const
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
     boost::io::ios_flags_saver restore_flags(out);
 
     out.precision(precision);
@@ -1025,15 +1028,15 @@ namespace LinearAlgebra
     out << std::endl;
     unsigned int i = 0;
     for (const auto idx : this->stored_elements)
-      out << "[" << idx << "]: " << values[i++] << '\n';
+      out << '[' << idx << "]: " << values[i++] << '\n';
     out << std::flush;
 
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
   }
 
 
 
-#if defined(DEAL_II_WITH_TRILINOS) && defined(DEAL_II_WITH_MPI)
+#ifdef DEAL_II_WITH_TRILINOS
 #  ifdef DEAL_II_TRILINOS_WITH_TPETRA
   template <typename Number>
   TpetraWrappers::CommunicationPattern

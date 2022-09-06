@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2018 by the deal.II authors
+// Copyright (C) 2005 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -262,7 +262,7 @@ template <int dim>
 void
 LaplaceProblem<dim>::output_results() const
 {
-  DataOut<dim, DoFHandler<dim>> data_out;
+  DataOut<dim> data_out;
 
   data_out.attach_dof_handler(dof_handler);
   data_out.add_data_vector(solution, "solution");

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -26,6 +26,7 @@
 #include <deal.II/boost_adaptors/segment.h>
 
 DEAL_II_DISABLE_EXTRA_DIAGNOSTICS
+#include <boost/geometry/algorithms/distance.hpp>
 #include <boost/geometry/index/rtree.hpp>
 #include <boost/geometry/strategies/strategies.hpp>
 DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
@@ -123,7 +124,7 @@ DEAL_II_NAMESPACE_OPEN
  *
  * Segment<2> segment(Point<2>(0,0), Point<2>(1,1));
  *
- * std::vector<Point<2>> nearest;
+ * std::vector<Point<2>> intersection;
  * tree.query(bgi::nearest(segment,3), std::back_inserter(intersection));
  * // Returns the 3 closest points to the Segment defined above.
  * @endcode
@@ -388,7 +389,7 @@ struct ExtractLevelVisitor
  * processes. The finest level of information is given by the leaves, which in
  * this context would be the collection of all the bounding boxes associated
  * to the locally owned cells of the triangulation. Exchanging this information
- * with all participating processess would defeat the purpuse of parallel
+ * with all participating processes would defeat the purpuse of parallel
  * computations. If however one constructs an RTree containing these bounding
  * boxes (for example, by calling
  * GridTools::Cache::get_cell_bounding_boxes_rtree()), and then extracts one of
@@ -498,8 +499,8 @@ template <typename Value,
           typename Box,
           typename Allocators>
 void
-ExtractLevelVisitor<Value, Options, Translator, Box, Allocators>::
-operator()(const ExtractLevelVisitor::InternalNode &node)
+ExtractLevelVisitor<Value, Options, Translator, Box, Allocators>::operator()(
+  const ExtractLevelVisitor::InternalNode &node)
 {
   using ElmentsType =
     typename boost::geometry::index::detail::rtree::elements_type<
@@ -542,8 +543,8 @@ template <typename Value,
           typename Box,
           typename Allocators>
 void
-ExtractLevelVisitor<Value, Options, Translator, Box, Allocators>::
-operator()(const ExtractLevelVisitor::Leaf &)
+ExtractLevelVisitor<Value, Options, Translator, Box, Allocators>::operator()(
+  const ExtractLevelVisitor::Leaf &)
 {}
 
 

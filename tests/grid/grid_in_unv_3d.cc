@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2002 - 2018 by the deal.II authors
+// Copyright (C) 2002 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -51,6 +51,8 @@ void
 filename_resolution()
 {
   check_file<3>(std::string(SOURCE_DIR "/grid_in_unv_3d/3D"), GridIn<3>::unv);
+  check_file<3>(std::string(SOURCE_DIR "/grid_in_unv_3d/salome_cube"),
+                GridIn<3>::unv);
 }
 
 

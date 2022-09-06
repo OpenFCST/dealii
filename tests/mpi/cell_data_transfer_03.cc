@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -89,13 +89,13 @@ test()
   // ----- transfer -----
   parallel::distributed::
     CellDataTransfer<dim, spacedim, std::vector<std::vector<int>>>
-    cell_data_transfer(
-      tria,
-      /*transfer_variable_size_data=*/true,
-      /*refinement_strategy=*/
-      &dealii::AdaptationStrategies::Refinement::
-        preserve<dim, spacedim, std::vector<int>>,
-      /*coarsening_strategy=*/&get_data_of_first_child<dim, spacedim>);
+      cell_data_transfer(
+        tria,
+        /*transfer_variable_size_data=*/true,
+        /*refinement_strategy=*/
+        &dealii::AdaptationStrategies::Refinement::
+          preserve<dim, spacedim, std::vector<int>>,
+        /*coarsening_strategy=*/&get_data_of_first_child<dim, spacedim>);
 
   cell_data_transfer.prepare_for_coarsening_and_refinement(cell_data);
   tria.execute_coarsening_and_refinement();

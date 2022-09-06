@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,8 +18,8 @@
 #include <deal.II/fe/fe_nothing.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_q.h>
 #include <deal.II/fe/mapping_q_cache.h>
-#include <deal.II/fe/mapping_q_generic.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria.h>
@@ -59,8 +59,8 @@ do_test(const unsigned int degree,
   Triangulation<dim> tria;
   GridGenerator::subdivided_hyper_cube(tria, 4);
 
-  MappingQGeneric<dim> mapping(degree);
-  MappingQCache<dim>   mapping_cache(degree);
+  MappingQ<dim>      mapping(degree);
+  MappingQCache<dim> mapping_cache(degree);
   mapping_cache.initialize(mapping, tria, fu, is_displacement_function);
 
   {
@@ -88,28 +88,29 @@ main()
   initlog();
   do_test<2>(3, Solution<2>(true), true);
   do_test<2>(3, Solution<2>(false), false);
-  do_test<2>(3,
-             [](const typename Triangulation<2>::cell_iterator &,
-                const Point<2> &p) -> Point<2> {
-               Point<2> result;
+  do_test<2>(
+    3,
+    [](const typename Triangulation<2>::cell_iterator &,
+       const Point<2> &p) -> Point<2> {
+      Point<2> result;
 
-               for (unsigned int compontent = 0; compontent < 2; ++compontent)
-                 result[compontent] =
-                   std::sin(p[compontent] * 0.5 * numbers::PI) - p[compontent];
+      for (unsigned int compontent = 0; compontent < 2; ++compontent)
+        result[compontent] =
+          std::sin(p[compontent] * 0.5 * numbers::PI) - p[compontent];
 
-               return result;
-             },
-             true);
-  do_test<2>(3,
-             [](const typename Triangulation<2>::cell_iterator &,
-                const Point<2> &p) -> Point<2> {
-               Point<2> result;
+      return result;
+    },
+    true);
+  do_test<2>(
+    3,
+    [](const typename Triangulation<2>::cell_iterator &,
+       const Point<2> &p) -> Point<2> {
+      Point<2> result;
 
-               for (unsigned int compontent = 0; compontent < 2; ++compontent)
-                 result[compontent] =
-                   std::sin(p[compontent] * 0.5 * numbers::PI);
+      for (unsigned int compontent = 0; compontent < 2; ++compontent)
+        result[compontent] = std::sin(p[compontent] * 0.5 * numbers::PI);
 
-               return result;
-             },
-             false);
+      return result;
+    },
+    false);
 }

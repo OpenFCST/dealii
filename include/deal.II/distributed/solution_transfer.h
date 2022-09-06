@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2019 by the deal.II authors
+// Copyright (C) 2009 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -54,12 +54,14 @@ namespace parallel
      * vector type, e.g. PETScWrappers::MPI::Vector,
      * TrilinosWrappers::MPI::Vector, or corresponding block vectors.
      * @code
-     * SolutionTransfer<dim, VectorType> soltrans(dof_handler);
+     * parallel::distributed::SolutionTransfer<dim, VectorType>
+     *   soltrans(dof_handler);
      * // flag some cells for refinement and coarsening, e.g.
-     * GridRefinement::refine_and_coarsen_fixed_fraction(tria,
-     *                                                   error_indicators,
-     *                                                   0.3,
-     *                                                   0.05);
+     * parallel::distributed::GridRefinement::
+     *   refine_and_coarsen_fixed_fraction(tria,
+     *                                     error_indicators,
+     *                                     0.3,
+     *                                     0.05);
      *
      * // prepare the triangulation,
      * tria.prepare_coarsening_and_refinement();
@@ -69,10 +71,10 @@ namespace parallel
      * soltrans.prepare_for_coarsening_and_refinement(solution);
      *
      * // actually execute the refinement,
-     * tria.execute_coarsening_and_refinement ();
+     * tria.execute_coarsening_and_refinement();
      *
      * // redistribute dofs,
-     * dof_handler.distribute_dofs (fe);
+     * dof_handler.distribute_dofs(fe);
      *
      * // and interpolate the solution
      * VectorType interpolated_solution;
@@ -90,7 +92,7 @@ namespace parallel
      * IndexSet locally_owned_dofs, locally_relevant_dofs;
      * locally_owned_dofs = dof_handler.locally_owned_dofs();
      * DoFTools::extract_locally_relevant_dofs(dof_handler,
-     * locally_relevant_dofs);
+     *                                         locally_relevant_dofs);
      *
      * // The solution vector only knows about locally owned DoFs
      * TrilinosWrappers::MPI::Vector solution;
@@ -106,7 +108,8 @@ namespace parallel
      * old_solution = solution;
      *
      * // Initialize SolutionTransfer object
-     * SolutionTransfer<dim, VectorType> soltrans(dof_handler);
+     * parallel::distributed::SolutionTransfer<dim, VectorType>
+     *   soltrans(dof_handler);
      * soltrans.prepare_for_coarsening_and_refinement(old_solution);
      * ...
      * // Refine grid
@@ -135,9 +138,9 @@ namespace parallel
      * If vector has the locally relevant DoFs, serialization works as
      * follows:
      * @code
-     * parallel::distributed::SolutionTransfer<dim,VectorType>
+     * parallel::distributed::SolutionTransfer<dim, VectorType>
      *   sol_trans(dof_handler);
-     * sol_trans.prepare_for_serialization (vector);
+     * sol_trans.prepare_for_serialization(vector);
      *
      * triangulation.save(filename);
      * @endcode
@@ -147,9 +150,9 @@ namespace parallel
      * //[create coarse mesh...]
      * triangulation.load(filename);
      *
-     * parallel::distributed::SolutionTransfer<dim,VectorType>
+     * parallel::distributed::SolutionTransfer<dim, VectorType>
      *   sol_trans(dof_handler);
-     * sol_trans.deserialize (distributed_vector);
+     * sol_trans.deserialize(distributed_vector);
      * @endcode
      *
      *
@@ -218,27 +221,24 @@ namespace parallel
      *
      * @ingroup distributed
      */
-    template <int dim,
-              typename VectorType,
-              typename DoFHandlerType = DoFHandler<dim>>
+    template <int dim, typename VectorType, int spacedim = dim>
     class SolutionTransfer
     {
-#ifndef DEAL_II_MSVC
-      static_assert(dim == DoFHandlerType::dimension,
-                    "The dimension explicitly provided as a template "
-                    "argument, and the dimension of the DoFHandlerType "
-                    "template argument must match.");
-#endif
     public:
       /**
        * Constructor.
        *
-       * @param[in] dof The DoFHandler on which all operations will happen.
-       *   At the time when this constructor is called, the DoFHandler still
-       *   points to the Triangulation before the refinement in question
+       * @param[in] dof_handler The DoFHandler on which all operations will
+       * happen. At the time when this constructor is called, the DoFHandler
+       * still points to the Triangulation before the refinement in question
        *   happens.
+       * @param[in] average_values Average the contribututions to the same
+       *   DoF coming from different cells. Note: averaging requires an
+       * additional communication step, since the valence of the DoF has to be
+       * determined.
        */
-      SolutionTransfer(const DoFHandlerType &dof);
+      SolutionTransfer(const DoFHandler<dim, spacedim> &dof_handler,
+                       const bool                       average_values = false);
 
       /**
        * Destructor.
@@ -320,9 +320,14 @@ namespace parallel
       /**
        * Pointer to the degree of freedom handler to work with.
        */
-      SmartPointer<const DoFHandlerType,
-                   SolutionTransfer<dim, VectorType, DoFHandlerType>>
+      SmartPointer<const DoFHandler<dim, spacedim>,
+                   SolutionTransfer<dim, VectorType, spacedim>>
         dof_handler;
+
+      /**
+       * Flag indicating if averaging should be performed.
+       */
+      const bool average_values;
 
       /**
        * A vector that stores pointers to all the vectors we are supposed to
@@ -343,10 +348,8 @@ namespace parallel
        */
       std::vector<char>
       pack_callback(
-        const typename Triangulation<dim, DoFHandlerType::space_dimension>::
-          cell_iterator &cell,
-        const typename Triangulation<dim, DoFHandlerType::space_dimension>::
-          CellStatus status);
+        const typename Triangulation<dim, spacedim>::cell_iterator &cell,
+        const typename Triangulation<dim, spacedim>::CellStatus     status);
 
       /**
        * A callback function used to unpack the data on the current mesh that
@@ -355,13 +358,12 @@ namespace parallel
        */
       void
       unpack_callback(
-        const typename Triangulation<dim, DoFHandlerType::space_dimension>::
-          cell_iterator &cell,
-        const typename Triangulation<dim, DoFHandlerType::space_dimension>::
-          CellStatus status,
+        const typename Triangulation<dim, spacedim>::cell_iterator &cell,
+        const typename Triangulation<dim, spacedim>::CellStatus     status,
         const boost::iterator_range<std::vector<char>::const_iterator>
           &                        data_range,
-        std::vector<VectorType *> &all_out);
+        std::vector<VectorType *> &all_out,
+        VectorType &               valence);
 
 
       /**
@@ -374,27 +376,6 @@ namespace parallel
     };
   } // namespace distributed
 } // namespace parallel
-
-namespace Legacy
-{
-  namespace parallel
-  {
-    namespace distributed
-    {
-      /**
-       * The template arguments of the original
-       * dealii::parallel::distributed::SolutionTransfer class will change in a
-       * future release. If for some reason, you need a code that is compatible
-       * with deal.II 9.3 and the subsequent release, use this alias instead.
-       */
-      template <int dim,
-                typename VectorType,
-                typename DoFHandlerType = DoFHandler<dim>>
-      using SolutionTransfer = dealii::parallel::distributed::
-        SolutionTransfer<dim, VectorType, DoFHandlerType>;
-    } // namespace distributed
-  }   // namespace parallel
-} // namespace Legacy
 
 
 DEAL_II_NAMESPACE_CLOSE

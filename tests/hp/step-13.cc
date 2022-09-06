@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2020 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -186,13 +186,13 @@ namespace Evaluation
   SolutionOutput<dim>::operator()(const DoFHandler<dim> &dof_handler,
                                   const Vector<double> & solution) const
   {
-    DataOut<dim, DoFHandler<dim>> data_out;
+    DataOut<dim> data_out;
     data_out.attach_dof_handler(dof_handler);
     data_out.add_data_vector(solution, "solution");
     data_out.build_patches();
 
     std::ostringstream filename;
-    filename << output_name_base << "-" << this->refinement_cycle
+    filename << output_name_base << '-' << this->refinement_cycle
              << data_out.default_suffix(output_format) << std::ends;
 
     data_out.write(deallog.get_file_stream(), output_format);
@@ -351,6 +351,7 @@ namespace LaplaceSolver
   {
     using active_cell_iterator = typename DoFHandler<dim>::active_cell_iterator;
 
+
     const unsigned int n_threads = MultithreadInfo::n_threads();
     std::vector<std::pair<active_cell_iterator, active_cell_iterator>>
       thread_ranges =
@@ -438,6 +439,7 @@ namespace LaplaceSolver
 
   template <int dim>
   Solver<dim>::LinearSystem::LinearSystem(const DoFHandler<dim> &dof_handler)
+
   {
     hanging_node_constraints.clear();
 
@@ -726,7 +728,7 @@ run_simulation(
 
   for (unsigned int step = 0; true; ++step)
     {
-      deallog << step << " " << std::flush;
+      deallog << step << ' ' << std::flush;
 
       solver.solve_problem();
 

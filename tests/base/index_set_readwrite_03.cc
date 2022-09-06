@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2010 - 2018 by the deal.II authors
+// Copyright (C) 2010 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -42,7 +42,7 @@ test()
 
   Assert(is1 == is2, ExcInternalError());
 
-  deallog << is1.is_element(4) << " " << is2.is_element(4) << std::endl;
+  deallog << is1.is_element(4) << ' ' << is2.is_element(4) << std::endl;
 
   deallog << "OK" << std::endl;
 

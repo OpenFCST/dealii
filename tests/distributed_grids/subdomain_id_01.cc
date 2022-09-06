@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2010 - 2018 by the deal.II authors
+// Copyright (C) 2010 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -42,14 +42,14 @@ check(TRIA &tr)
 
   for (; cell != endc; ++cell)
     {
-      deallog << cell->level_subdomain_id() << " ";
+      deallog << cell->level_subdomain_id() << ' ';
       try
         {
           deallog << cell->subdomain_id();
         }
       catch (...)
         {
-          deallog << ".";
+          deallog << '.';
         }
       deallog << std::endl;
     }

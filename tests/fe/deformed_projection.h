@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -104,7 +104,7 @@ TestMap1<dim>::vector_value(const Point<dim> &p,
          ExcDimensionMismatch(return_value.size(), this->n_components));
 
   // Parabolic inflow profile
-  for (unsigned int iCount = 0; iCount < this->n_components; iCount++)
+  for (unsigned int iCount = 0; iCount < this->n_components; ++iCount)
     return_value(iCount) = value(p, iCount);
 }
 
@@ -113,7 +113,8 @@ TestMap1<dim>::vector_value(const Point<dim> &p,
  * Check the value of the derivative field.
  */
 
-void EvaluateDerivative(DoFHandler<2> *dof_handler, Vector<double> &solution)
+void
+EvaluateDerivative(DoFHandler<2> *dof_handler, Vector<double> &solution)
 {
   // This quadrature rule determines the points, where the
   // derivative will be evaluated.
@@ -654,7 +655,8 @@ create_tria(unsigned int elm, Triangulation<2> &tria)
 }
 
 
-void plot_shapes(DoFHandler<2> &dof_handler)
+void
+plot_shapes(DoFHandler<2> &dof_handler)
 {
   Vector<double>         solution(dof_handler.n_dofs());
   std::set<unsigned int> face_dofs;
@@ -744,7 +746,7 @@ check(const FiniteElement<2> &           fe,
       DoFTools::make_hanging_node_constraints(*dof_handler, hn_constraints);
       hn_constraints.close();
 
-      MappingQGeneric<2> map_default(1);
+      MappingQ<2> map_default(1);
 
       project(map_default,
               *dof_handler,

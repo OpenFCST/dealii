@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2006 - 2020 by the deal.II authors
+// Copyright (C) 2006 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,7 +25,6 @@
 
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/mapping_q.h>
-#include <deal.II/fe/mapping_q_generic.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/grid_tools.h>
@@ -97,8 +96,7 @@ test()
 
   // use an explicit Q1 mapping. this will yield a zero solution
   {
-    VectorTools::project(
-      MappingQGeneric<dim>(1), dh, cm, QGauss<dim>(3), F<dim>(), v);
+    VectorTools::project(MappingQ<dim>(1), dh, cm, QGauss<dim>(3), F<dim>(), v);
     deallog << v.l2_norm() << std::endl;
     Assert(v.l2_norm() == 0, ExcInternalError());
   }

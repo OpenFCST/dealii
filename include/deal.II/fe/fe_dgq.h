@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2019 by the deal.II authors
+// Copyright (C) 2001 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,8 +18,8 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/mutex.h>
 #include <deal.II/base/tensor_product_polynomials.h>
-#include <deal.II/base/thread_management.h>
 
 #include <deal.II/fe/fe_poly.h>
 
@@ -33,8 +33,10 @@ template <int dim>
 class Quadrature;
 #endif
 
-/*!@addtogroup fe */
-/*@{*/
+/**
+ * @addtogroup fe
+ * @{
+ */
 
 /**
  * Implementation of scalar, discontinuous tensor product elements based on
@@ -435,8 +437,15 @@ public:
 /**
  * Implementation of scalar, discontinuous tensor product elements based on
  * Legendre polynomials, described by the tensor product of the polynomial
- * space Polynomials::Legendre. As opposed to the basic FE_DGQ element, these
- * elements are not interpolatory and no support points are defined.
+ * space Polynomials::Legendre. The tensor product is achieved using
+ * TensorProductPolynomials and the ordering of shape functions, like in
+ * TensorProductPolynomials, is lexicographic. For instance, the ordering in 2d
+ * is $P_0(x)P_0(y),\ P_1(x)P_0(y),\ \ldots,\ P_n(x)P_0(y),\ P_0(x)P_1(y),
+ * \ \ldots,\ P_n(x)P_1(y),\ \ldots,\ P_0(x)P_n(y),\ \ldots,\ P_n(x)P_n(y)$
+ * when <tt>degree=n</tt> where $\{P_i\}_{i=0}^{n}$ are the one-dimensional
+ * Legendre polynomials defined on $[0,1]$. As opposed to the basic FE_DGQ
+ * element, these elements are not interpolatory and no support points are
+ * defined.
  *
  * See the base class documentation in FE_DGQ for details.
  */
@@ -513,7 +522,7 @@ public:
 };
 
 
-/*@}*/
+/** @} */
 
 DEAL_II_NAMESPACE_CLOSE
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -54,6 +54,12 @@ namespace parallel
   template <int dim, int spacedim>
   class TriangulationBase;
 }
+
+template <int dim, int spacedim>
+class DoFHandler;
+template <int dim, int spacedim, bool lda>
+class DoFCellAccessor;
+
 
 template <int dim, int spacedim>
 class Manifold;
@@ -268,7 +274,7 @@ namespace TriaAccessorExceptions
     ExcSetOnlyEvenChildren,
     int,
     << "You can only set the child index of an even numbered child."
-    << "The number of the child given was " << arg1 << ".");
+    << "The number of the child given was " << arg1 << '.');
 } // namespace TriaAccessorExceptions
 
 
@@ -306,14 +312,14 @@ public:
    * For example, if this accessor represents a quad that is part of a two-
    * dimensional surface in four-dimensional space, then this value is four.
    */
-  static const unsigned int space_dimension = spacedim;
+  static constexpr unsigned int space_dimension = spacedim;
 
   /**
    * Dimensionality of the object that the thing represented by this accessor
    * is part of. For example, if this accessor represents a line that is part
    * of a hexahedron, then this value will be three.
    */
-  static const unsigned int dimension = dim;
+  static constexpr unsigned int dimension = dim;
 
   /**
    * Dimensionality of the current object represented by this accessor. For
@@ -721,6 +727,17 @@ public:
                const AccessorData *                local_data = nullptr);
 
   /**
+   * The copy constructor is not deleted but copied constructed elements should
+   * not be modified, also the comments to the copy assignment operator.
+   */
+  TriaAccessor(const TriaAccessor &) = default;
+
+  /**
+   * Move constructor.
+   */
+  TriaAccessor(TriaAccessor &&) = default; // NOLINT
+
+  /**
    * Conversion constructor. This constructor exists to make certain
    * constructs simpler to write in dimension independent code. For example,
    * it allows assigning a face iterator to a line iterator, an operation that
@@ -751,8 +768,19 @@ public:
    * this operation is not useful for iterators on triangulations.
    * Consequently, this operator is declared as deleted and can not be used.
    */
-  void
+  TriaAccessor &
   operator=(const TriaAccessor &) = delete;
+
+  /**
+   * Move assignment operator. Moving is allowed.
+   */
+  TriaAccessor &
+  operator=(TriaAccessor &&) = default; // NOLINT
+
+  /**
+   * Defaulted destructor.
+   */
+  ~TriaAccessor() = default;
 
   /**
    * Test for the element being used or not.  The return value is @p true for
@@ -878,6 +906,13 @@ public:
    */
 
   /**
+   * Return an integer representation that uniquely encodes the orientation,
+   * flip, and rotation of a @p face.
+   */
+  unsigned char
+  combined_face_orientation(const unsigned int face) const;
+
+  /**
    * Return whether the face with index @p face has its normal pointing in the
    * standard direction (@p true) or whether it is the opposite (@p false).
    * Which is the standard direction is documented with the GeometryInfo
@@ -956,7 +991,7 @@ public:
   /**
    * @deprecated Use n_active_descendants() instead.
    */
-  DEAL_II_DEPRECATED_EARLY
+  DEAL_II_DEPRECATED
   unsigned int
   number_of_children() const;
 
@@ -1665,7 +1700,7 @@ public:
   /**
    * Number of faces.
    *
-   * @note Only implemented for cells (dim==spacedim).
+   * @note Only implemented for cells (structdim==dim).
    */
   unsigned int
   n_faces() const;
@@ -1688,7 +1723,7 @@ public:
    * Return an object that can be thought of as an array containing all indices
    * from zero to n_faces().
    *
-   * @note Only implemented for cells (dim==spacedim).
+   * @note Only implemented for cells (structdim==dim).
    */
   std_cxx20::ranges::iota_view<unsigned int, unsigned int>
   face_indices() const;
@@ -1852,14 +1887,14 @@ public:
    * For example, if this accessor represents a quad that is part of a two-
    * dimensional surface in four-dimensional space, then this value is four.
    */
-  static const unsigned int space_dimension = spacedim;
+  static constexpr unsigned int space_dimension = spacedim;
 
   /**
    * Dimensionality of the object that the thing represented by this accessor
    * is part of. For example, if this accessor represents a line that is part
    * of a hexahedron, then this value will be three.
    */
-  static const unsigned int dimension = dim;
+  static constexpr unsigned int dimension = dim;
 
   /**
    * Dimensionality of the current object represented by this accessor. For
@@ -2083,6 +2118,12 @@ public:
    */
 
   /**
+   * @brief Always return 0
+   */
+  static unsigned char
+  combined_face_orientation(const unsigned int face);
+
+  /**
    * @brief Always return false
    */
   static bool
@@ -2140,7 +2181,7 @@ public:
   /**
    * @deprecated Use n_active_descendants() instead.
    */
-  DEAL_II_DEPRECATED_EARLY
+  DEAL_II_DEPRECATED
   static unsigned int
   number_of_children();
 
@@ -2264,14 +2305,14 @@ public:
    * For example, if this accessor represents a quad that is part of a two-
    * dimensional surface in four-dimensional space, then this value is four.
    */
-  static const unsigned int space_dimension = spacedim;
+  static constexpr unsigned int space_dimension = spacedim;
 
   /**
    * Dimensionality of the object that the thing represented by this accessor
    * is part of. For example, if this accessor represents a line that is part
    * of a hexahedron, then this value will be three.
    */
-  static const unsigned int dimension = 1;
+  static constexpr unsigned int dimension = 1;
 
   /**
    * Dimensionality of the current object represented by this accessor. For
@@ -2348,6 +2389,14 @@ public:
    */
   void
   copy_from(const TriaAccessor &);
+
+  /**
+   * Copy operator. We need this function to support generic
+   * programming, but it just throws an exception because it cannot do
+   * the required operations.
+   */
+  void
+  copy_from(const TriaAccessorBase<0, 1, spacedim> &);
 
   /**
    * Return the state of the iterator. Since an iterator to points can not be
@@ -2535,11 +2584,206 @@ public:
    * Return the manifold indicator of this object.
    *
    * @see
-   * @ref GlossManifoldIndicator "Glossary entry on manifold indicators"
+   * @ref GlossManifoldIndicator "Glossary entry on manifold indicators".
    */
   types::manifold_id
   manifold_id() const;
 
+
+  /**
+   * @name User data
+   */
+  /**
+   * @{
+   */
+  /**
+   * Read the user flag. See
+   * @ref GlossUserFlags
+   * for more information.
+   */
+  bool
+  user_flag_set() const;
+
+  /**
+   * Set the user flag. See
+   * @ref GlossUserFlags
+   * for more information.
+   */
+  void
+  set_user_flag() const;
+
+  /**
+   * Clear the user flag. See
+   * @ref GlossUserFlags
+   * for more information.
+   */
+  void
+  clear_user_flag() const;
+
+  /**
+   * Set the user flag for this and all descendants. See
+   * @ref GlossUserFlags
+   * for more information.
+   */
+  void
+  recursively_set_user_flag() const;
+
+  /**
+   * Clear the user flag for this and all descendants. See
+   * @ref GlossUserFlags
+   * for more information.
+   */
+  void
+  recursively_clear_user_flag() const;
+
+  /**
+   * Reset the user data to zero, independent if pointer or index. See
+   * @ref GlossUserData
+   * for more information.
+   */
+  void
+  clear_user_data() const;
+
+  /**
+   * Set the user pointer to @p p.
+   *
+   * @note User pointers and user indices are mutually exclusive. Therefore,
+   * you can only use one of them, unless you call
+   * Triangulation::clear_user_data() in between.
+   *
+   * See
+   * @ref GlossUserData
+   * for more information.
+   */
+  void
+  set_user_pointer(void *p) const;
+
+  /**
+   * Reset the user pointer to a @p nullptr pointer. See
+   * @ref GlossUserData
+   * for more information.
+   */
+  void
+  clear_user_pointer() const;
+
+  /**
+   * Access the value of the user pointer. It is in the responsibility of the
+   * user to make sure that the pointer points to something useful. You should
+   * use the new style cast operator to maintain a minimum of type safety,
+   * e.g.
+   *
+   * @note User pointers and user indices are mutually exclusive. Therefore,
+   * you can only use one of them, unless you call
+   * Triangulation::clear_user_data() in between. <tt>A
+   * *a=static_cast<A*>(cell->user_pointer());</tt>.
+   *
+   * See
+   * @ref GlossUserData
+   * for more information.
+   */
+  void *
+  user_pointer() const;
+
+  /**
+   * Set the user pointer of this object and all its children to the given
+   * value. This is useful for example if all cells of a certain subdomain, or
+   * all faces of a certain part of the boundary should have user pointers
+   * pointing to objects describing this part of the domain or boundary.
+   *
+   * Note that the user pointer is not inherited under mesh refinement, so
+   * after mesh refinement there might be cells or faces that don't have user
+   * pointers pointing to the describing object. In this case, simply loop
+   * over all the elements of the coarsest level that has this information,
+   * and use this function to recursively set the user pointer of all finer
+   * levels of the triangulation.
+   *
+   * @note User pointers and user indices are mutually exclusive. Therefore,
+   * you can only use one of them, unless you call
+   * Triangulation::clear_user_data() in between.
+   *
+   * See
+   * @ref GlossUserData
+   * for more information.
+   */
+  void
+  recursively_set_user_pointer(void *p) const;
+
+  /**
+   * Clear the user pointer of this object and all of its descendants. The
+   * same holds as said for the recursively_set_user_pointer() function. See
+   * @ref GlossUserData
+   * for more information.
+   */
+  void
+  recursively_clear_user_pointer() const;
+
+  /**
+   * Set the user index to @p p.
+   *
+   * @note User pointers and user indices are mutually exclusive. Therefore,
+   * you can only use one of them, unless you call
+   * Triangulation::clear_user_data() in between. See
+   * @ref GlossUserData
+   * for more information.
+   */
+  void
+  set_user_index(const unsigned int p) const;
+
+  /**
+   * Reset the user index to 0. See
+   * @ref GlossUserData
+   * for more information.
+   */
+  void
+  clear_user_index() const;
+
+  /**
+   * Access the value of the user index.
+   *
+   * @note User pointers and user indices are mutually exclusive. Therefore,
+   * you can only use one of them, unless you call
+   * Triangulation::clear_user_data() in between.
+   *
+   * See
+   * @ref GlossUserData
+   * for more information.
+   */
+  unsigned int
+  user_index() const;
+
+  /**
+   * Set the user index of this object and all its children.
+   *
+   * Note that the user index is not inherited under mesh refinement, so after
+   * mesh refinement there might be cells or faces that don't have the
+   * expected user indices. In this case, simply loop over all the elements of
+   * the coarsest level that has this information, and use this function to
+   * recursively set the user index of all finer levels of the triangulation.
+   *
+   * @note User pointers and user indices are mutually exclusive. Therefore,
+   * you can only use one of them, unless you call
+   * Triangulation::clear_user_data() in between.
+   *
+   * See
+   * @ref GlossUserData
+   * for more information.
+   */
+  void
+  recursively_set_user_index(const unsigned int p) const;
+
+  /**
+   * Clear the user index of this object and all of its descendants. The same
+   * holds as said for the recursively_set_user_index() function.
+   *
+   * See
+   * @ref GlossUserData
+   * for more information.
+   */
+  void
+  recursively_clear_user_index() const;
+  /**
+   * @}
+   */
 
   /**
    * @name Orientation of sub-objects
@@ -2547,6 +2791,12 @@ public:
   /**
    * @{
    */
+
+  /**
+   * @brief Always return 0
+   */
+  static unsigned char
+  combined_face_orientation(const unsigned int face);
 
   /**
    * @brief Always return false
@@ -2606,7 +2856,7 @@ public:
   /**
    * @deprecated Use n_active_descendants() instead.
    */
-  DEAL_II_DEPRECATED_EARLY
+  DEAL_II_DEPRECATED
   static unsigned int
   number_of_children();
 
@@ -2685,7 +2935,7 @@ public:
    * @ref GlossBoundaryIndicator "Glossary entry on boundary indicators"
    */
   void
-  set_boundary_id(const types::boundary_id);
+  set_boundary_id(const types::boundary_id) const;
 
   /**
    * Set the manifold indicator of this vertex. This does nothing so far since
@@ -2708,7 +2958,7 @@ public:
    * @ref GlossBoundaryIndicator "Glossary entry on boundary indicators"
    */
   void
-  set_all_boundary_ids(const types::boundary_id);
+  set_all_boundary_ids(const types::boundary_id) const;
 
   /**
    * Set the manifold indicator of this object and all of its lower-
@@ -2857,6 +3107,22 @@ public:
   CellAccessor(const TriaAccessor<structdim2, dim2, spacedim2> &);
 
   /**
+   * Copy constructor.
+   */
+  CellAccessor(const CellAccessor<dim, spacedim> &) = default;
+
+  /**
+   * Move constructor.
+   */
+  // NOLINTNEXTLINE OSX does not compile with noexcept
+  CellAccessor(CellAccessor<dim, spacedim> &&) = default;
+
+  /**
+   * Destructor.
+   */
+  ~CellAccessor() = default;
+
+  /**
    * Copy operator. These operators are usually used in a context like
    * <tt>iterator a,b; *a=*b;</tt>. Presumably, the intent here is to copy the
    * object pointed to
@@ -2865,8 +3131,40 @@ public:
    * this operation is not useful for iterators on triangulations.
    * Consequently, this operator is declared as deleted and can not be used.
    */
-  void
+  CellAccessor<dim, spacedim> &
   operator=(const CellAccessor<dim, spacedim> &) = delete;
+
+  /**
+   * Move assignment operator.
+   */
+  // NOLINTNEXTLINE OSX does not compile with noexcept
+  CellAccessor<dim, spacedim> &
+  operator=(CellAccessor<dim, spacedim> &&) = default; // NOLINT
+
+  /**
+   * @}
+   */
+
+  /**
+   * @name Converting iterators
+   */
+  /**
+   * @{
+   */
+
+  /**
+   * A function that converts a Triangulation active cell iterator to a
+   * DoFHandler active cell iterator, or a DoFHandler active cell iterator
+   * to an active cell iterator of another DoFHandler. The @p iterator must be
+   * associated with the triangulation of the @p dof_handler.
+   *
+   * @param dof_handler The DoFHandler for the output active cell iterator.
+   * @return An active cell iterator for the @p dof_handler, matching the cell
+   *         referenced by the input @p iterator. The type of the
+   *         returned object is a DoFHandler::active_cell_iterator.
+   */
+  TriaActiveIterator<DoFCellAccessor<dim, spacedim, false>>
+  as_dof_handler_iterator(const DoFHandler<dim, spacedim> &dof_handler) const;
 
   /**
    * @}
@@ -3492,16 +3790,21 @@ public:
    */
 
   /**
-   * Return globally unique cell index for a non-artificial active cell. The
-   * value is identical to active_cell_index() in the context of a serial
+   * Return a globally unique cell index for the current cell,
+   * assuming it is not artificial. The value is identical to
+   * active_cell_index() if the cell is part of a serial
    * triangulation.
    *
-   * In the context of parallel triangulations, locally-owned cells are
-   * enumerated contiguously within each subdomain of the mesh.
-   *
-   * If a cell-data vector has been set up with
-   * parallel::TriangulationBase::global_active_cell_index_partitioner(), the
-   * returned index can be used to access the correct vector entry.
+   * In the context of parallel triangulations, locally-owned cells
+   * are enumerated contiguously within each subdomain of the
+   * mesh. This ensures that the index returned by this function can
+   * be used as the index into vectors with a total of
+   * Triangulation::n_globally_active_cells() entries, and for which
+   * every process stores a contiguous part.  If such a cell-data
+   * vector has been set up with
+   * parallel::TriangulationBase::global_active_cell_index_partitioner(),
+   * the index returned by this function can then be used to access
+   * the correct vector entry.
    */
   types::global_cell_index
   global_active_cell_index() const;
@@ -3509,7 +3812,9 @@ public:
   /**
    * Return a globally unique index for a non-artificial level cell.
    *
-   * @note Similar to global_active_cell_index().
+   * @note Similar to global_active_cell_index(), with the difference
+   * that the cell-data vector has been set up with
+   * parallel::TriangulationBase::global_level_cell_index_partitioner().
    */
   types::global_cell_index
   global_level_cell_index() const;
@@ -3594,23 +3899,6 @@ public:
    * See the
    * @ref GlossActive "glossary"
    * for more information.
-   *
-   * @deprecated This function is deprecated. Use the is_active()
-   *   function instead, which satisfies the naming scheme of other
-   *   functions inquiring about yes/no properties of cells (e.g.,
-   *   is_ghost(), is_locally_owned(), etc.).
-   */
-  DEAL_II_DEPRECATED
-  bool
-  active() const;
-
-  /**
-   * Test that the cell has no children (this is the criterion for whether a
-   * cell is called "active").
-   *
-   * See the
-   * @ref GlossActive "glossary"
-   * for more information.
    */
   bool
   is_active() const;
@@ -3645,14 +3933,18 @@ public:
   is_locally_owned_on_level() const;
 
   /**
-   * Return whether this cell exists in the global mesh but (i) is owned by
-   * another processor, i.e. has a subdomain_id different from the one the
-   * current processor owns and (ii) is adjacent to a cell owned by the
-   * current processor.
+   * Return true if:
+   * <ol>
+   * <li>This cell exists in the global mesh (i.e., it is not artificial),
+   * and</li>
+   * <li>This cell is owned by another processor (i.e., has a subdomain_id
+   * different from Triangulation::locally_owned_subdomain())</li>
+   * </ol>
    *
-   * This function only makes sense if the triangulation used is of kind
-   * parallel::distributed::Triangulation. In all other cases, the returned
-   * value is always false.
+   * In all other cases the returned value is false. In particular, only
+   * parallel Triangulations (i.e., Triangulations inheriting from
+   * parallel::TriangulationBase) can have ghost cells, so for a serial
+   * Triangulation the returned value is false.
    *
    * See the
    * @ref GlossGhostCell "glossary"
@@ -3663,12 +3955,26 @@ public:
    * @post The returned value is equal to <code>!is_locally_owned() &&
    * !is_artificial()</code>.
    *
-   * @note Whether a cell is a ghost cell, artificial, or is locally owned or
+   * @note For parallel::distributed::Triangulation and
+   * parallel::fullydistributed::Triangulation, ghost cells are always adjacent
+   * to locally owned cells. For parallel::shared::Triangulation they may not
+   * be, dependent on whether or not the triangulation uses artificial cells -
+   * see parallel::shared::Triangulation::Triangulation() for more information.
+   *
+   * @note Whether a cell is a ghost cell, artificial, or is locally owned
    * is a property that only pertains to cells that are active. Consequently,
    * you can only call this function if the cell it refers to has no children.
    */
   bool
   is_ghost() const;
+
+  /**
+   * Return true if either the Triangulation is not distributed or if the
+   * cell is not artificial and the level_subdomain_id() is not equal to the id
+   * of the current processor.
+   */
+  bool
+  is_ghost_on_level() const;
 
   /**
    * Return whether this cell is artificial, i.e. it isn't one of the cells
@@ -3698,6 +4004,15 @@ public:
    */
   bool
   is_artificial() const;
+
+  /**
+   * Similar to is_artificial() but checking the conditions on the levels.
+   *
+   * @post The returned value is equal to <code>!is_ghost_on_level() &&
+   * !is_locally_owned_on_level()</code>.
+   */
+  bool
+  is_artificial_on_level() const;
 
   /**
    * Test whether the point @p p is inside this cell. Points on the boundary

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2020 by the deal.II authors
+// Copyright (C) 2013 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,9 +25,11 @@
 #include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe_q.h>
-#include <deal.II/fe/mapping_q_generic.h>
+#include <deal.II/fe/mapping_q.h>
+#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/grid_generator.h>
+#include <deal.II/grid/manifold_lib.h>
 #include <deal.II/grid/tria.h>
 
 #include <deal.II/lac/affine_constraints.h>
@@ -80,7 +82,7 @@ test()
   MatrixFree<dim>                          mf;
   typename MatrixFree<dim>::AdditionalData data;
   data.tasks_parallel_scheme = MatrixFree<dim>::AdditionalData::none;
-  mf.reinit(dof, constraints, quad, data);
+  mf.reinit(MappingQ1<dim>{}, dof, constraints, quad, data);
 
   const unsigned int        n_cell_batches = mf.n_cell_batches();
   std::vector<unsigned int> n_cell_types(4, 0);
@@ -117,7 +119,7 @@ test_cube()
   MatrixFree<dim>                          mf;
   typename MatrixFree<dim>::AdditionalData data;
   data.tasks_parallel_scheme = MatrixFree<dim>::AdditionalData::none;
-  mf.reinit(dof, constraints, quad, data);
+  mf.reinit(MappingQ1<dim>{}, dof, constraints, quad, data);
 
   const unsigned int        n_cell_batches = mf.n_cell_batches();
   std::vector<unsigned int> n_cell_types(4, 0);
@@ -160,7 +162,7 @@ test_parallelogram()
   MatrixFree<dim>                          mf;
   typename MatrixFree<dim>::AdditionalData data;
   data.tasks_parallel_scheme = MatrixFree<dim>::AdditionalData::none;
-  mf.reinit(dof, constraints, quad, data);
+  mf.reinit(MappingQ1<dim>{}, dof, constraints, quad, data);
 
   const unsigned int        n_cell_batches = mf.n_cell_batches();
   std::vector<unsigned int> n_cell_types(4, 0);
@@ -235,7 +237,7 @@ test_deformed_cube()
   data.mapping_update_flags_boundary_faces =
     update_gradients | update_normal_vectors;
 
-  mf.reinit(dof, constraints, quad, data);
+  mf.reinit(MappingQ1<dim>{}, dof, constraints, quad, data);
   const unsigned int n_cell_batches = mf.n_cell_batches();
   Assert(n_cell_batches > 1, ExcInternalError());
 
@@ -256,7 +258,7 @@ test_deformed_cube()
 
   // check again, now using a mapping that displaces points
   {
-    MappingQGeneric<dim> mapping(3);
+    MappingQ<dim> mapping(3);
     mf.reinit(mapping, dof, constraints, quad, data);
 
     std::vector<unsigned int> n_cell_types(4, 0);

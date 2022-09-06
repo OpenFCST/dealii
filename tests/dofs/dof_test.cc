@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2018 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -14,6 +14,8 @@
 // ---------------------------------------------------------------------
 
 
+
+#include <deal.II/base/numbers.h>
 
 #include <deal.II/dofs/dof_accessor.h>
 #include <deal.II/dofs/dof_handler.h>
@@ -130,14 +132,14 @@ CurvedLine<dim>::get_new_point_on_line(
 
   if (y < x)
     if (y < 1 - x)
-      middle(1) = 0.04 * std::sin(6 * 3.141592 * middle(0));
+      middle(1) = 0.04 * std::sin(6 * numbers::PI * middle(0));
     else
-      middle(0) = 1 + 0.04 * std::sin(6 * 3.141592 * middle(1));
+      middle(0) = 1 + 0.04 * std::sin(6 * numbers::PI * middle(1));
 
   else if (y < 1 - x)
-    middle(0) = 0.04 * std::sin(6 * 3.141592 * middle(1));
+    middle(0) = 0.04 * std::sin(6 * numbers::PI * middle(1));
   else
-    middle(1) = 1 + 0.04 * std::sin(6 * 3.141592 * middle(0));
+    middle(1) = 1 + 0.04 * std::sin(6 * numbers::PI * middle(0));
 
   return middle;
 }
@@ -164,14 +166,14 @@ CurvedLine<dim>::get_new_point_on_quad(
 
   if (y < x)
     if (y < 1 - x)
-      middle(1) = 0.04 * std::sin(6 * 3.141592 * middle(0));
+      middle(1) = 0.04 * std::sin(6 * numbers::PI * middle(0));
     else
-      middle(0) = 1 + 0.04 * std::sin(6 * 3.141592 * middle(1));
+      middle(0) = 1 + 0.04 * std::sin(6 * numbers::PI * middle(1));
 
   else if (y < 1 - x)
-    middle(0) = 0.04 * std::sin(6 * 3.141592 * middle(1));
+    middle(0) = 0.04 * std::sin(6 * numbers::PI * middle(1));
   else
-    middle(1) = 1 + 0.04 * std::sin(6 * 3.141592 * middle(0));
+    middle(1) = 1 + 0.04 * std::sin(6 * numbers::PI * middle(0));
 
   return middle;
 }

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -22,6 +22,7 @@
 #include <deal.II/distributed/grid_refinement.h>
 #include <deal.II/distributed/tria.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_generator.h>
 
 #include <deal.II/lac/vector.h>
@@ -64,15 +65,15 @@ test()
 
   Vector<float> indicator(tria.n_active_cells());
   // assign each cell a globally unique cellid
-  for (const auto &cell : tria.active_cell_iterators())
-    if (cell->is_locally_owned())
-      {
-        const std::string  cellid = cell->id().to_string();
-        const unsigned int fine_cellid =
-          std::stoul(cellid.substr(cellid.find(':') + 1, std::string::npos));
+  for (const auto &cell :
+       tria.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+    {
+      const std::string  cellid = cell->id().to_string();
+      const unsigned int fine_cellid =
+        std::stoul(cellid.substr(cellid.find(':') + 1, std::string::npos));
 
-        indicator[cell->active_cell_index()] = fine_cellid + 1;
-      }
+      indicator[cell->active_cell_index()] = fine_cellid + 1;
+    }
 
   deallog << "l1-norm: ";
   parallel::distributed::GridRefinement::refine_and_coarsen_fixed_fraction(
@@ -81,12 +82,12 @@ test()
   deallog << std::endl;
 
   // reset refinement flags
-  for (const auto &cell : tria.active_cell_iterators())
-    if (cell->is_locally_owned())
-      {
-        cell->clear_refine_flag();
-        cell->clear_coarsen_flag();
-      }
+  for (const auto &cell :
+       tria.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+    {
+      cell->clear_refine_flag();
+      cell->clear_coarsen_flag();
+    }
 
   deallog << "l2-norm: ";
   parallel::distributed::GridRefinement::refine_and_coarsen_fixed_fraction(

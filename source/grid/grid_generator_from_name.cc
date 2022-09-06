@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2020 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -50,7 +50,7 @@ namespace GridGenerator
      * Return true if a grid was actually generated, false otherwise.
      */
     template <int dim, int spacedim>
-    typename std::enable_if<dim != spacedim, bool>::type
+    std::enable_if_t<dim != spacedim, bool>
     generate_codimension_zero_grid(const std::string &,
                                    const std::string &,
                                    Triangulation<dim, spacedim> &)
@@ -111,7 +111,7 @@ namespace GridGenerator
                          double,
                          double,
                          double,
-                         const Point<dim>,
+                         const Point<dim> &,
                          types::manifold_id,
                          types::manifold_id,
                          double,
@@ -129,6 +129,9 @@ namespace GridGenerator
         parse_and_create<dim, dim, const Point<dim> &, double, bool>(hyper_ball,
                                                                      arguments,
                                                                      tria);
+      else if (name == "hyper_ball_balanced")
+        parse_and_create<dim, dim, const Point<dim> &, double>(
+          hyper_ball_balanced, arguments, tria);
 
       else if (name == "quarter_hyper_ball")
         parse_and_create<dim, dim, const Point<dim> &, double>(
@@ -150,6 +153,13 @@ namespace GridGenerator
         parse_and_create<dim, dim, double, double, double>(truncated_cone,
                                                            arguments,
                                                            tria);
+
+      else if (name == "pipe_junction")
+        parse_and_create<dim,
+                         dim,
+                         const std::vector<std::pair<Point<dim>, double>> &,
+                         const std::pair<Point<dim>, double> &,
+                         double>(pipe_junction, arguments, tria);
 
       else if (name == "hyper_L")
         parse_and_create<dim, dim, double, double, bool>(hyper_L,
@@ -188,6 +198,15 @@ namespace GridGenerator
                          unsigned int,
                          bool>(quarter_hyper_shell, arguments, tria);
 
+      else if (name == "eccentric_hyper_shell")
+        parse_and_create<dim,
+                         dim,
+                         const Point<dim> &,
+                         const Point<dim> &,
+                         double,
+                         double,
+                         unsigned int>(eccentric_hyper_shell, arguments, tria);
+
       else if (name == "cylinder_shell")
         parse_and_create<dim,
                          dim,
@@ -224,7 +243,7 @@ namespace GridGenerator
      * Return true if a grid was actually generated, false otherwise.
      */
     template <int dim, int spacedim>
-    typename std::enable_if<dim != spacedim - 1, bool>::type
+    std::enable_if_t<dim != spacedim - 1, bool>
     generate_codimension_one_grid(const std::string &,
                                   const std::string &,
                                   Triangulation<dim, spacedim> &)

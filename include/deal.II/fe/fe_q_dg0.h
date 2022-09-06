@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2012 - 2018 by the deal.II authors
+// Copyright (C) 2012 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -26,8 +26,10 @@
 DEAL_II_NAMESPACE_OPEN
 
 
-/*!@addtogroup fe */
-/*@{*/
+/**
+ * @addtogroup fe
+ * @{
+ */
 
 /**
  * Implementation of a scalar Lagrange finite element @p Qp+DG0 that yields
@@ -44,9 +46,7 @@ DEAL_II_NAMESPACE_OPEN
  * For more information about the <tt>spacedim</tt> template parameter check
  * the documentation of FiniteElement or the one of Triangulation.
  *
- * For more information regarding this element see: Boffi, D., et al. "Local
- * Mass Conservation of Stokes Finite Elements." Journal of Scientific
- * Computing (2012): 1-18.
+ * For more information regarding this element see @cite Boffi2012 .
  *
  * <h3>Implementation</h3>
  *
@@ -327,7 +327,7 @@ private:
 
 
 
-/*@}*/
+/** @} */
 
 
 DEAL_II_NAMESPACE_CLOSE

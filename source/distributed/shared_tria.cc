@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2020 by the deal.II authors
+// Copyright (C) 2015 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -14,6 +14,7 @@
 // ---------------------------------------------------------------------
 
 #include <deal.II/base/mpi.h>
+#include <deal.II/base/mpi.templates.h>
 #include <deal.II/base/utilities.h>
 
 #include <deal.II/distributed/shared_tria.h>
@@ -26,6 +27,8 @@
 #include <deal.II/grid/tria_iterator.h>
 
 #include <deal.II/lac/sparsity_tools.h>
+
+#include <type_traits>
 
 
 DEAL_II_NAMESPACE_OPEN
@@ -282,14 +285,11 @@ namespace parallel
 #  ifdef DEBUG
       {
         // Assert that each cell is owned by a processor
-        unsigned int n_my_cells = 0;
-        typename parallel::shared::Triangulation<dim,
-                                                 spacedim>::active_cell_iterator
-          cell = this->begin_active(),
-          endc = this->end();
-        for (; cell != endc; ++cell)
-          if (cell->is_locally_owned())
-            n_my_cells += 1;
+        const unsigned int n_my_cells = std::count_if(
+          this->begin_active(),
+          typename Triangulation<dim, spacedim>::active_cell_iterator(
+            this->end()),
+          [](const auto &i) { return (i.is_locally_owned()); });
 
         const unsigned int total_cells =
           Utilities::MPI::sum(n_my_cells, this->get_communicator());
@@ -301,13 +301,11 @@ namespace parallel
       // cell is owned by a processor
       if (settings & construct_multigrid_hierarchy)
         {
-          unsigned int n_my_cells = 0;
-          typename parallel::shared::Triangulation<dim, spacedim>::cell_iterator
-            cell = this->begin(),
-            endc = this->end();
-          for (; cell != endc; ++cell)
-            if (cell->is_locally_owned_on_level())
-              n_my_cells += 1;
+          const unsigned int n_my_cells =
+            std::count_if(this->begin(), this->end(), [](const auto &i) {
+              return (i.is_locally_owned_on_level());
+            });
+
 
           const unsigned int total_cells =
             Utilities::MPI::sum(n_my_cells, this->get_communicator());
@@ -356,6 +354,66 @@ namespace parallel
     void
     Triangulation<dim, spacedim>::execute_coarsening_and_refinement()
     {
+      // make sure that all refinement/coarsening flags are the same on all
+      // processes
+      {
+        // Obtain the type used to store the different possibilities
+        // a cell can be refined. This is a bit awkward because
+        // what `cell->refine_flag_set()` returns is a struct
+        // type, RefinementCase, which internally stores a
+        // std::uint8_t, which actually holds integers of
+        // enum type RefinementPossibilities<dim>::Possibilities.
+        // In the following, use the actual name of the enum, but
+        // make sure that it is in fact a `std::uint8_t` or
+        // equally sized type.
+        using int_type = std::underlying_type_t<
+          typename RefinementPossibilities<dim>::Possibilities>;
+        static_assert(sizeof(int_type) == sizeof(std::uint8_t),
+                      "Internal type mismatch.");
+
+        std::vector<int_type> refinement_configurations(this->n_active_cells() *
+                                                          2,
+                                                        int_type(0));
+        for (const auto &cell : this->active_cell_iterators())
+          if (cell->is_locally_owned())
+            {
+              refinement_configurations[cell->active_cell_index() * 2 + 0] =
+                static_cast<int_type>(cell->refine_flag_set());
+              refinement_configurations[cell->active_cell_index() * 2 + 1] =
+                static_cast<int_type>(cell->coarsen_flag_set() ? 1 : 0);
+            }
+
+        Utilities::MPI::max(refinement_configurations,
+                            this->get_communicator(),
+                            refinement_configurations);
+
+        for (const auto &cell : this->active_cell_iterators())
+          {
+            cell->clear_refine_flag();
+            cell->clear_coarsen_flag();
+
+            Assert(
+              (refinement_configurations[cell->active_cell_index() * 2 + 0] >
+                   0 ?
+                 1 :
+                 0) +
+                  refinement_configurations[cell->active_cell_index() * 2 +
+                                            1] <=
+                1,
+              ExcMessage(
+                "Refinement/coarsening flags of cells are not consistent in parallel!"));
+
+            if (refinement_configurations[cell->active_cell_index() * 2 + 0] !=
+                0)
+              cell->set_refine_flag(RefinementCase<dim>(
+                refinement_configurations[cell->active_cell_index() * 2 + 0]));
+
+            if (refinement_configurations[cell->active_cell_index() * 2 + 1] >
+                0)
+              cell->set_coarsen_flag();
+          }
+      }
+
       dealii::Triangulation<dim, spacedim>::execute_coarsening_and_refinement();
       partition();
       this->update_number_cache();
@@ -409,8 +467,8 @@ namespace parallel
     {
       Assert(
         (dynamic_cast<
-           const dealii::parallel::distributed::Triangulation<dim, spacedim> *>(
-           &other_tria) == nullptr),
+           const dealii::parallel::DistributedTriangulationBase<dim, spacedim>
+             *>(&other_tria) == nullptr),
         ExcMessage(
           "Cannot use this function on parallel::distributed::Triangulation."));
 

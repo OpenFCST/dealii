@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -89,7 +89,7 @@ ComputeMagnitudes<dim>::evaluate_vector_field(
          ExcDimensionMismatch(computed_quantities.size(),
                               inputs.solution_values.size()));
 
-  for (unsigned int i = 0; i < computed_quantities.size(); i++)
+  for (unsigned int i = 0; i < computed_quantities.size(); ++i)
     {
       Assert(computed_quantities[i].size() == 2,
              ExcDimensionMismatch(computed_quantities[i].size(), 2));

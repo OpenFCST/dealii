@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2019 by the deal.II authors
+// Copyright (C) 1999 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -21,7 +21,6 @@
 
 #include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_values.h>
-#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/tria_iterator.h>
 
@@ -39,7 +38,7 @@ DEAL_II_NAMESPACE_OPEN
 
 template <int dim, int spacedim>
 std::size_t
-DataOutStack<dim, spacedim, void>::DataVector::memory_consumption() const
+DataOutStack<dim, spacedim>::DataVector::memory_consumption() const
 {
   return (MemoryConsumption::memory_consumption(data) +
           MemoryConsumption::memory_consumption(names));
@@ -49,8 +48,8 @@ DataOutStack<dim, spacedim, void>::DataVector::memory_consumption() const
 
 template <int dim, int spacedim>
 void
-DataOutStack<dim, spacedim, void>::new_parameter_value(const double p,
-                                                       const double dp)
+DataOutStack<dim, spacedim>::new_parameter_value(const double p,
+                                                 const double dp)
 {
   parameter      = p;
   parameter_step = dp;
@@ -72,7 +71,7 @@ DataOutStack<dim, spacedim, void>::new_parameter_value(const double p,
 
 template <int dim, int spacedim>
 void
-DataOutStack<dim, spacedim, void>::attach_dof_handler(
+DataOutStack<dim, spacedim>::attach_dof_handler(
   const DoFHandler<dim, spacedim> &dof)
 {
   dof_handler = &dof;
@@ -81,9 +80,8 @@ DataOutStack<dim, spacedim, void>::attach_dof_handler(
 
 template <int dim, int spacedim>
 void
-DataOutStack<dim, spacedim, void>::declare_data_vector(
-  const std::string &name,
-  const VectorType   vector_type)
+DataOutStack<dim, spacedim>::declare_data_vector(const std::string &name,
+                                                 const VectorType   vector_type)
 {
   std::vector<std::string> names;
   names.push_back(name);
@@ -93,7 +91,7 @@ DataOutStack<dim, spacedim, void>::declare_data_vector(
 
 template <int dim, int spacedim>
 void
-DataOutStack<dim, spacedim, void>::declare_data_vector(
+DataOutStack<dim, spacedim>::declare_data_vector(
   const std::vector<std::string> &names,
   const VectorType                vector_type)
 {
@@ -136,8 +134,8 @@ DataOutStack<dim, spacedim, void>::declare_data_vector(
 template <int dim, int spacedim>
 template <typename number>
 void
-DataOutStack<dim, spacedim, void>::add_data_vector(const Vector<number> &vec,
-                                                   const std::string &   name)
+DataOutStack<dim, spacedim>::add_data_vector(const Vector<number> &vec,
+                                             const std::string &   name)
 {
   const unsigned int n_components = dof_handler->get_fe(0).n_components();
 
@@ -170,7 +168,7 @@ DataOutStack<dim, spacedim, void>::add_data_vector(const Vector<number> &vec,
 template <int dim, int spacedim>
 template <typename number>
 void
-DataOutStack<dim, spacedim, void>::add_data_vector(
+DataOutStack<dim, spacedim>::add_data_vector(
   const Vector<number> &          vec,
   const std::vector<std::string> &names)
 {
@@ -244,8 +242,7 @@ DataOutStack<dim, spacedim, void>::add_data_vector(
 
 template <int dim, int spacedim>
 void
-DataOutStack<dim, spacedim, void>::build_patches(
-  const unsigned int nnnn_subdivisions)
+DataOutStack<dim, spacedim>::build_patches(const unsigned int nnnn_subdivisions)
 {
   // this is mostly copied from the
   // DataOut class
@@ -308,15 +305,17 @@ DataOutStack<dim, spacedim, void>::build_patches(
   // patch with n_q_points (in the plane
   // of the cells) times n_subdivisions+1 (in
   // the time direction) points
-  dealii::DataOutBase::Patch<dim + 1, dim + 1> default_patch;
+  dealii::DataOutBase::Patch<patch_dim, patch_spacedim> default_patch;
   default_patch.n_subdivisions = n_subdivisions;
+  default_patch.reference_cell = ReferenceCells::get_hypercube<dim + 1>();
   default_patch.data.reinit(n_datasets, n_q_points * (n_subdivisions + 1));
   patches.insert(patches.end(), n_patches, default_patch);
 
   // now loop over all cells and
   // actually create the patches
-  typename std::vector<dealii::DataOutBase::Patch<dim + 1, dim + 1>>::iterator
-               patch       = patches.begin() + (patches.size() - n_patches);
+  typename std::vector<
+    dealii::DataOutBase::Patch<patch_dim, patch_spacedim>>::iterator patch =
+    patches.begin() + (patches.size() - n_patches);
   unsigned int cell_number = 0;
   for (typename DoFHandler<dim, spacedim>::active_cell_iterator cell =
          dof_handler->begin_active();
@@ -430,7 +429,7 @@ DataOutStack<dim, spacedim, void>::build_patches(
 
 template <int dim, int spacedim>
 void
-DataOutStack<dim, spacedim, void>::finish_parameter_value()
+DataOutStack<dim, spacedim>::finish_parameter_value()
 {
   // release lock on dof handler
   dof_handler = nullptr;
@@ -449,9 +448,9 @@ DataOutStack<dim, spacedim, void>::finish_parameter_value()
 
 template <int dim, int spacedim>
 std::size_t
-DataOutStack<dim, spacedim, void>::memory_consumption() const
+DataOutStack<dim, spacedim>::memory_consumption() const
 {
-  return (DataOutInterface<dim + 1>::memory_consumption() +
+  return (DataOutInterface<patch_dim, patch_spacedim>::memory_consumption() +
           MemoryConsumption::memory_consumption(parameter) +
           MemoryConsumption::memory_consumption(parameter_step) +
           MemoryConsumption::memory_consumption(dof_handler) +
@@ -463,8 +462,10 @@ DataOutStack<dim, spacedim, void>::memory_consumption() const
 
 
 template <int dim, int spacedim>
-const std::vector<dealii::DataOutBase::Patch<dim + 1, dim + 1>> &
-DataOutStack<dim, spacedim, void>::get_patches() const
+const std::vector<
+  dealii::DataOutBase::Patch<DataOutStack<dim, spacedim>::patch_dim,
+                             DataOutStack<dim, spacedim>::patch_spacedim>> &
+DataOutStack<dim, spacedim>::get_patches() const
 {
   return patches;
 }
@@ -473,7 +474,7 @@ DataOutStack<dim, spacedim, void>::get_patches() const
 
 template <int dim, int spacedim>
 std::vector<std::string>
-DataOutStack<dim, spacedim, void>::get_dataset_names() const
+DataOutStack<dim, spacedim>::get_dataset_names() const
 {
   std::vector<std::string> names;
   for (typename std::vector<DataVector>::const_iterator dataset =

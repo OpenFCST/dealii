@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2014 - 2020 by the deal.II authors
+// Copyright (C) 2014 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -117,7 +117,7 @@ do_test(const DoFHandler<dim> &dof)
                   fe_eval.begin_dof_values()[j][v];
           }
         test_matrix.add(-1., cell_matrix);
-        deallog << test_matrix.frobenius_norm() << " ";
+        deallog << test_matrix.frobenius_norm() << ' ';
       }
     deallog << std::endl;
   }

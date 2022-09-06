@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2002 - 2018 by the deal.II authors
+// Copyright (C) 2002 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -39,7 +39,7 @@ check(const char *content)
       foo.parse_input(ss);
       deallog << "input: ";
       foo.enter_subsection("bar");
-      deallog << foo.get_double("val") << " ";
+      deallog << foo.get_double("val") << ' ';
       foo.leave_subsection();
       deallog << foo.get_double("val2") << std::endl;
     }

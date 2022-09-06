@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2019 by the deal.II authors
+// Copyright (C) 2015 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -21,7 +21,7 @@
 #include <deal.II/base/communication_pattern_base.h>
 #include <deal.II/base/index_set.h>
 #include <deal.II/base/memory_consumption.h>
-#include <deal.II/base/mpi.h>
+#include <deal.II/base/mpi_stub.h>
 #include <deal.II/base/parallel.h>
 #include <deal.II/base/subscriptor.h>
 #include <deal.II/base/template_constraints.h>
@@ -47,6 +47,9 @@ DEAL_II_NAMESPACE_OPEN
 
 // Forward declarations
 #ifndef DOXYGEN
+template <typename>
+class Vector;
+
 namespace LinearAlgebra
 {
   template <typename>
@@ -92,8 +95,9 @@ namespace LinearAlgebra
 
 namespace LinearAlgebra
 {
-  /*! @addtogroup Vectors
-   *@{
+  /**
+   * @addtogroup Vectors
+   * @{
    */
 
   /**
@@ -151,7 +155,7 @@ namespace LinearAlgebra
     /**
      * @name 1: Basic Object-handling
      */
-    //@{
+    /** @{ */
     /**
      * Empty constructor.
      */
@@ -218,7 +222,6 @@ namespace LinearAlgebra
 
 
 #ifdef DEAL_II_WITH_TRILINOS
-#  ifdef DEAL_II_WITH_MPI
     /**
      * Initialize this ReadWriteVector by supplying access to all locally
      * available entries in the given ghosted or non-ghosted vector.
@@ -232,7 +235,6 @@ namespace LinearAlgebra
      */
     void
     reinit(const TrilinosWrappers::MPI::Vector &trilinos_vec);
-#  endif
 #endif
 
     /**
@@ -365,8 +367,7 @@ namespace LinearAlgebra
            const std::shared_ptr<const Utilities::MPI::CommunicationPatternBase>
              &communication_pattern = {});
 
-#  ifdef DEAL_II_WITH_MPI
-#    ifdef DEAL_II_TRILINOS_WITH_TPETRA
+#  ifdef DEAL_II_TRILINOS_WITH_TPETRA
     /**
      * Imports all the elements present in the vector's IndexSet from the input
      * vector @p tpetra_vec. VectorOperation::values @p operation is used to
@@ -380,7 +381,7 @@ namespace LinearAlgebra
            VectorOperation::values               operation,
            const std::shared_ptr<const Utilities::MPI::CommunicationPatternBase>
              &communication_pattern = {});
-#    endif
+#  endif
 
     /**
      * Imports all the elements present in the vector's IndexSet from the input
@@ -395,7 +396,6 @@ namespace LinearAlgebra
            VectorOperation::values       operation,
            const std::shared_ptr<const Utilities::MPI::CommunicationPatternBase>
              &communication_pattern = {});
-#  endif
 #endif
 
 #ifdef DEAL_II_WITH_CUDA
@@ -430,7 +430,7 @@ namespace LinearAlgebra
      *
      * @deprecated use locally_owned_size() instead.
      */
-    DEAL_II_DEPRECATED_EARLY
+    DEAL_II_DEPRECATED
     size_type
     n_elements() const;
 
@@ -475,13 +475,13 @@ namespace LinearAlgebra
      */
     const_iterator
     end() const;
-    //@}
+    /** @} */
 
 
     /**
      * @name 2: Data-Access
      */
-    //@{
+    /** @{ */
 
     /**
      * Read access to the data in the position corresponding to @p
@@ -506,7 +506,8 @@ namespace LinearAlgebra
      *
      * This function does the same thing as operator().
      */
-    Number operator[](const size_type global_index) const;
+    Number
+    operator[](const size_type global_index) const;
 
     /**
      * Read and write access to the data in the position corresponding to @p
@@ -515,7 +516,8 @@ namespace LinearAlgebra
      *
      * This function does the same thing as operator().
      */
-    Number &operator[](const size_type global_index);
+    Number &
+    operator[](const size_type global_index);
 
     /**
      * Instead of getting individual elements of a vector via operator(),
@@ -595,13 +597,13 @@ namespace LinearAlgebra
      */
     Number &
     local_element(const size_type local_index);
-    //@}
+    /** @} */
 
 
     /**
      * @name 3: Modification of vectors
      */
-    //@{
+    /** @{ */
 
     /**
      * This function adds a whole set of values stored in @p values to the
@@ -645,7 +647,7 @@ namespace LinearAlgebra
      */
     std::size_t
     memory_consumption() const;
-    //@}
+    /** @} */
 
   protected:
 #ifdef DEAL_II_WITH_TRILINOS
@@ -697,7 +699,7 @@ namespace LinearAlgebra
     void
     resize_val(const size_type new_allocated_size);
 
-#if defined(DEAL_II_WITH_TRILINOS) && defined(DEAL_II_WITH_MPI)
+#ifdef DEAL_II_WITH_TRILINOS
 #  ifdef DEAL_II_TRILINOS_WITH_TPETRA
     /**
      * Return a TpetraWrappers::CommunicationPattern and store it for future
@@ -783,7 +785,7 @@ namespace LinearAlgebra
     };
   };
 
-  /*@}*/
+  /** @} */
 
 
   /*---------------------------- Inline functions ---------------------------*/
@@ -932,8 +934,8 @@ namespace LinearAlgebra
 
 
   template <typename Number>
-  inline Number ReadWriteVector<Number>::
-                operator[](const size_type global_index) const
+  inline Number
+  ReadWriteVector<Number>::operator[](const size_type global_index) const
   {
     return operator()(global_index);
   }
@@ -941,8 +943,8 @@ namespace LinearAlgebra
 
 
   template <typename Number>
-  inline Number &ReadWriteVector<Number>::
-                 operator[](const size_type global_index)
+  inline Number &
+  ReadWriteVector<Number>::operator[](const size_type global_index)
   {
     return operator()(global_index);
   }
@@ -1066,8 +1068,9 @@ namespace LinearAlgebra
   template <typename Number>
   template <typename Functor>
   void
-  ReadWriteVector<Number>::FunctorTemplate<Functor>::
-  operator()(const size_type begin, const size_type end)
+  ReadWriteVector<Number>::FunctorTemplate<Functor>::operator()(
+    const size_type begin,
+    const size_type end)
   {
     for (size_type i = begin; i < end; ++i)
       functor(parent.values[i]);

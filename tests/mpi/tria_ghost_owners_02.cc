@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2020 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -82,7 +82,7 @@ test()
       for (std::set<types::subdomain_id>::iterator it = ghost_owners.begin();
            it != ghost_owners.end();
            ++it)
-        deallog << *it << " ";
+        deallog << *it << ' ';
       deallog << std::endl;
 
       mpi_check(ghost_owners);
@@ -94,7 +94,7 @@ test()
              level_ghost_owners.begin();
            it != level_ghost_owners.end();
            ++it)
-        deallog << *it << " ";
+        deallog << *it << ' ';
       deallog << std::endl;
 
       mpi_check(level_ghost_owners);

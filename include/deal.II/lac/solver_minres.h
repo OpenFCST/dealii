@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2019 by the deal.II authors
+// Copyright (C) 2000 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -30,8 +30,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup Solvers */
-/*@{*/
+/**
+ * @addtogroup Solvers
+ * @{
+ */
 
 /**
  * Minimal residual method for symmetric matrices.
@@ -54,9 +56,8 @@ DEAL_II_NAMESPACE_OPEN
  *
  * The preconditioner has to be positive definite and symmetric
  *
- * The algorithm is taken from the Master thesis of Astrid Battermann with
- * some changes. The full text can be found at
- * http://scholar.lib.vt.edu/theses/public/etd-12164379662151/etd-title.html
+ * The algorithm is taken from the Master thesis of Astrid Battermann
+ * @cite Battermann1996 with some changes.
  *
  *
  * <h3>Observing the progress of linear solver iterations</h3>
@@ -114,7 +115,7 @@ public:
    * Exception
    */
   DeclException0(ExcPreconditionerNotDefinite);
-  //@}
+  /** @} */
 
 protected:
   /**
@@ -143,7 +144,7 @@ protected:
   double res2;
 };
 
-/*@}*/
+/** @} */
 /*------------------------- Implementation ----------------------------*/
 
 #ifndef DOXYGEN

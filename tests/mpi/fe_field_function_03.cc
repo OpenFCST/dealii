@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2018 by the deal.II authors
+// Copyright (C) 2009 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -93,9 +93,9 @@ test()
   TrilinosWrappers::MPI::Vector x_rel(relevant_set, MPI_COMM_WORLD);
   x_rel = interpolated;
 
-  typename Functions::
-    FEFieldFunction<dim, DoFHandler<dim>, TrilinosWrappers::MPI::Vector>
-      field_func(dofh, x_rel);
+  typename Functions::FEFieldFunction<dim, TrilinosWrappers::MPI::Vector>
+
+    field_func(dofh, x_rel);
 
   Point<2>              p(0.1, 0.0);
   std::vector<Point<2>> points;

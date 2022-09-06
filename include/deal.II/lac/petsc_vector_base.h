@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2020 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -94,7 +94,7 @@ namespace PETScWrappers
 
     public:
       /*
-       * Copy constrcutor.
+       * Copy constructor.
        */
       VectorReference(const VectorReference &vector) = default;
 
@@ -180,7 +180,7 @@ namespace PETScWrappers
         int,
         << "You tried to access element " << arg1
         << " of a distributed vector, but only elements in range [" << arg2
-        << "," << arg3 << "] are stored locally and can be accessed."
+        << ',' << arg3 << "] are stored locally and can be accessed."
         << "\n\n"
         << "A common source for this kind of problem is that you "
         << "are passing a 'fully distributed' vector into a function "
@@ -360,7 +360,7 @@ namespace PETScWrappers
      *
      * @deprecated use locally_owned_size() instead.
      */
-    DEAL_II_DEPRECATED_EARLY
+    DEAL_II_DEPRECATED
     size_type
     local_size() const;
 
@@ -444,24 +444,23 @@ namespace PETScWrappers
      *
      * Exactly the same as operator().
      */
-    reference operator[](const size_type index);
+    reference
+    operator[](const size_type index);
 
     /**
      * Provide read-only access to an element.
      *
      * Exactly the same as operator().
      */
-    PetscScalar operator[](const size_type index) const;
+    PetscScalar
+    operator[](const size_type index) const;
 
     /**
      * A collective set operation: instead of setting individual elements of a
      * vector, this function allows to set a whole set of elements at once.
      * The indices of the elements to be set are stated in the first argument,
      * the corresponding values in the second.
-     *
-     * @deprecated Use import() instead.
      */
-    DEAL_II_DEPRECATED
     void
     set(const std::vector<size_type> &  indices,
         const std::vector<PetscScalar> &values);
@@ -550,7 +549,8 @@ namespace PETScWrappers
      *
      * For complex valued vector, this gives$\left(v^\ast,vec\right)$.
      */
-    PetscScalar operator*(const VectorBase &vec) const;
+    PetscScalar
+    operator*(const VectorBase &vec) const;
 
     /**
      * Return the square of the $l_2$-norm.
@@ -1131,14 +1131,16 @@ namespace PETScWrappers
 
 
 
-  inline internal::VectorReference VectorBase::operator[](const size_type index)
+  inline internal::VectorReference
+  VectorBase::operator[](const size_type index)
   {
     return operator()(index);
   }
 
 
 
-  inline PetscScalar VectorBase::operator[](const size_type index) const
+  inline PetscScalar
+  VectorBase::operator[](const size_type index) const
   {
     return operator()(index);
   }
@@ -1252,7 +1254,14 @@ namespace PETScWrappers
 
             Assert(index >= static_cast<unsigned int>(begin) &&
                      index < static_cast<unsigned int>(end),
-                   ExcInternalError());
+                   ExcMessage("You are accessing elements of a vector without "
+                              "ghost elements that are not actually owned by "
+                              "this vector. A typical case where this may "
+                              "happen is if you are passing a non-ghosted "
+                              "(completely distributed) vector to a function "
+                              "that expects a vector that stores ghost "
+                              "elements for all locally relevant or locally "
+                              "active vector entries."));
 
             *(values_begin + i) = *(ptr + index - begin);
           }

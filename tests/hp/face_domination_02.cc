@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2018 by the deal.II authors
+// Copyright (C) 2015 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -82,7 +82,7 @@ main()
   dof_handler.distribute_dofs(fe_collection);
 
   print_dofs(dof_handler.begin_active());
-  print_dofs(++dof_handler.begin_active());
+  print_dofs(std::next(dof_handler.begin_active()));
 
   AffineConstraints<double> constraints;
   constraints.clear();

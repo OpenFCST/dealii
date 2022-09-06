@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2018 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -46,7 +46,7 @@ test()
     deallog << "Pool properties:";
 
     for (unsigned int i = 0; i < pool.get_properties(handle).size(); ++i)
-      deallog << " " << pool.get_properties(handle)[i];
+      deallog << ' ' << pool.get_properties(handle)[i];
 
     deallog << std::endl;
 

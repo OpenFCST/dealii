@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -101,7 +101,7 @@ test_3()
           cell->face(face)->get_dof_indices(dof_indices);
 
           for (const auto i : dof_indices)
-            deallog << i << " ";
+            deallog << i << ' ';
           deallog << std::endl;
         }
     }

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -59,7 +59,7 @@ plot_shape_functions(const unsigned int degree)
             for (unsigned int i = 0; i < fe_rt_bubbles.dofs_per_cell; ++i)
               {
                 for (unsigned int c = 0; c < dim; ++c)
-                  deallog << " "
+                  deallog << ' '
                           << fe_rt_bubbles.shape_value_component(i, p, c);
                 deallog << "  ";
               }

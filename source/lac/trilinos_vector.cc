@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,6 +18,7 @@
 #ifdef DEAL_II_WITH_TRILINOS
 
 #  include <deal.II/base/mpi.h>
+#  include <deal.II/base/trilinos_utilities.h>
 
 #  include <deal.II/lac/read_write_vector.h>
 #  include <deal.II/lac/trilinos_index_access.h>
@@ -140,11 +141,7 @@ namespace TrilinosWrappers
     {
       // When we clear the vector, reset the pointer and generate an empty
       // vector.
-#  ifdef DEAL_II_WITH_MPI
       Epetra_Map map(0, 0, Epetra_MpiComm(MPI_COMM_SELF));
-#  else
-      Epetra_Map map(0, 0, Epetra_SerialComm());
-#  endif
 
       has_ghosts  = false;
       vector      = std::make_unique<Epetra_FEVector>(map);
@@ -210,7 +207,6 @@ namespace TrilinosWrappers
           // version in case the underlying Epetra_MpiComm object is the same,
           // otherwise we might access an MPI_Comm object that has been
           // deleted
-#  ifdef DEAL_II_WITH_MPI
           const Epetra_MpiComm *my_comm =
             dynamic_cast<const Epetra_MpiComm *>(&vector->Comm());
           const Epetra_MpiComm *v_comm =
@@ -218,9 +214,6 @@ namespace TrilinosWrappers
           const bool same_communicators =
             my_comm != nullptr && v_comm != nullptr &&
             my_comm->DataPtr() == v_comm->DataPtr();
-#  else
-          const bool same_communicators = true;
-#  endif
           if (!same_communicators ||
               vector->Map().SameAs(v.vector->Map()) == false)
             {
@@ -267,7 +260,7 @@ namespace TrilinosWrappers
 
           last_action = Insert;
         }
-#  if defined(DEBUG) && defined(DEAL_II_WITH_MPI)
+#  ifdef DEBUG
       const Epetra_MpiComm *comm_ptr =
         dynamic_cast<const Epetra_MpiComm *>(&(v.vector->Comm()));
       Assert(comm_ptr != nullptr, ExcInternalError());
@@ -343,7 +336,7 @@ namespace TrilinosWrappers
         }
       else
         vector = std::move(actual_vec);
-#  if defined(DEBUG) && defined(DEAL_II_WITH_MPI)
+#  ifdef DEBUG
       const Epetra_MpiComm *comm_ptr =
         dynamic_cast<const Epetra_MpiComm *>(&(vector->Comm()));
       Assert(comm_ptr != nullptr, ExcInternalError());
@@ -422,7 +415,6 @@ namespace TrilinosWrappers
 
       // check equality for MPI communicators to avoid accessing a possibly
       // invalid MPI_Comm object
-#  ifdef DEAL_II_WITH_MPI
       const Epetra_MpiComm *my_comm =
         dynamic_cast<const Epetra_MpiComm *>(&vector->Comm());
       const Epetra_MpiComm *v_comm =
@@ -450,9 +442,6 @@ namespace TrilinosWrappers
       //    else
       //      same_communicators = true;
       //  }
-#  else
-      const bool same_communicators = true;
-#  endif
 
       // distinguish three cases. First case: both vectors have the same
       // layout (just need to copy the local data, not reset the memory and
@@ -612,23 +601,22 @@ namespace TrilinosWrappers
 
 
 #  ifdef DEBUG
-#    ifdef DEAL_II_WITH_MPI
       // check that every process has decided to use the same mode. This will
       // otherwise result in undefined behavior in the call to
       // GlobalAssemble().
-      double                double_mode = mode;
+      const double          double_mode = mode;
       const Epetra_MpiComm *comm_ptr =
         dynamic_cast<const Epetra_MpiComm *>(&(trilinos_partitioner().Comm()));
       Assert(comm_ptr != nullptr, ExcInternalError());
-      Utilities::MPI::MinMaxAvg result =
+
+      const Utilities::MPI::MinMaxAvg result =
         Utilities::MPI::min_max_avg(double_mode, comm_ptr->GetMpiComm());
-      Assert(result.max - result.min < 1e-5,
+      Assert(result.max == result.min,
              ExcMessage(
                "Not all processors agree whether the last operation on "
                "this vector was an addition or a set operation. This will "
                "prevent the compress() operation from succeeding."));
 
-#    endif
 #  endif
 
       // Now pass over the information about what we did last to the vector.
@@ -756,7 +744,6 @@ namespace TrilinosWrappers
           ++ptr;
         }
 
-#  ifdef DEAL_II_WITH_MPI
       // in parallel, check that the vector
       // is zero on _all_ processors.
       const Epetra_MpiComm *mpi_comm =
@@ -764,9 +751,6 @@ namespace TrilinosWrappers
       Assert(mpi_comm != nullptr, ExcInternalError());
       unsigned int num_nonzero = Utilities::MPI::sum(flag, mpi_comm->Comm());
       return num_nonzero == 0;
-#  else
-      return flag == 0;
-#  endif
     }
 
 
@@ -774,38 +758,26 @@ namespace TrilinosWrappers
     bool
     Vector::is_non_negative() const
     {
-#  ifdef DEAL_II_WITH_MPI
-      // if this vector is a parallel one, then
-      // we need to communicate to determine
-      // the answer to the current
-      // function. this still has to be
-      // implemented
-      AssertThrow(local_size() == size(), ExcNotImplemented());
-#  endif
       // get a representation of the vector and
       // loop over all the elements
-      TrilinosScalar *start_ptr;
-      int             leading_dimension;
-      int ierr = vector->ExtractView(&start_ptr, &leading_dimension);
-      AssertThrow(ierr == 0, ExcTrilinosError(ierr));
-
-      // TODO: This
-      // won't work in parallel like
-      // this. Find out a better way to
-      // this in that case.
-      const TrilinosScalar *ptr = start_ptr, *eptr = start_ptr + size();
-      bool                  flag = true;
+      TrilinosScalar *      start_ptr = (*vector)[0];
+      const TrilinosScalar *ptr = start_ptr, *eptr = start_ptr + local_size();
+      unsigned int          flag = 0;
       while (ptr != eptr)
         {
           if (*ptr < 0.0)
             {
-              flag = false;
+              flag = 1;
               break;
             }
           ++ptr;
         }
 
-      return flag;
+      // in parallel, check that the vector
+      // is zero on _all_ processors.
+      const auto max_n_negative =
+        Utilities::MPI::max(flag, get_mpi_communicator());
+      return max_n_negative == 0;
     }
 
 
@@ -816,7 +788,7 @@ namespace TrilinosWrappers
                   const bool         scientific,
                   const bool         across) const
     {
-      AssertThrow(out, ExcIO());
+      AssertThrow(out.fail() == false, ExcIO());
       boost::io::ios_flags_saver restore_flags(out);
 
 
@@ -853,7 +825,7 @@ namespace TrilinosWrappers
           out << std::endl;
         }
 
-      AssertThrow(out, ExcIO());
+      AssertThrow(out.fail() == false, ExcIO());
     }
 
 

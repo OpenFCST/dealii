@@ -1,6 +1,6 @@
 ## ---------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2019 by the deal.II authors
+## Copyright (C) 2012 - 2020 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
@@ -46,7 +46,9 @@ MACRO(DEAL_II_INVOKE_AUTOPILOT)
 
   # Make sure we can treat CUDA targets if available
   IF(DEAL_II_WITH_CUDA)
-    SET(CMAKE_CUDA_HOST_COMPILER "${CMAKE_CXX_COMPILER}")
+    IF(NOT CMAKE_CUDA_HOST_COMPILER)
+      SET(CMAKE_CUDA_HOST_COMPILER "${CMAKE_CXX_COMPILER}")
+    ENDIF()
     ENABLE_LANGUAGE(CUDA)
   ENDIF()
 

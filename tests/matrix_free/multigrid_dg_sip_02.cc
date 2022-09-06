@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2020 by the deal.II authors
+// Copyright (C) 2018 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -209,7 +209,7 @@ private:
     FEFaceEvaluation<dim, -1, 0, 1, number> fe_eval(data, true);
     FEFaceEvaluation<dim, -1, 0, 1, number> fe_eval_neighbor(data, false);
 
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval_neighbor.reinit(face);
@@ -256,7 +256,7 @@ private:
     const std::pair<unsigned int, unsigned int> &     face_range) const
   {
     FEFaceEvaluation<dim, -1, 0, 1, number> fe_eval(data, true);
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval.read_dof_values(src);
@@ -285,7 +285,7 @@ private:
   compute_inverse_diagonal()
   {
     data.initialize_dof_vector(inverse_diagonal_entries);
-    unsigned int dummy;
+    unsigned int dummy = 0;
     data.cell_loop(&LaplaceOperator::local_diagonal_cell,
                    this,
                    inverse_diagonal_entries,
@@ -332,7 +332,7 @@ private:
                         phif.inverse_jacobian(0))[dim - 1]) *
               (number)(std::max(1, fe_degree) * (fe_degree + 1.0)) * 2.;
             std::array<types::boundary_id, VectorizedArray<number>::size()>
-                                    boundary_ids = data.get_faces_by_cells_boundary_id(cell, face);
+              boundary_ids = data.get_faces_by_cells_boundary_id(cell, face);
             VectorizedArray<number> factor_boundary;
             for (unsigned int v = 0; v < VectorizedArray<number>::size(); ++v)
               // interior face

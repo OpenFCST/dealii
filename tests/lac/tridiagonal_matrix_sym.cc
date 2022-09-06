@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2018 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -131,7 +131,7 @@ check(unsigned int size)
   TridiagonalMatrix<number> M(size, true);
   deallog << "all_zero " << M.all_zero();
   matrix1(M);
-  deallog << " " << M.all_zero() << std::endl;
+  deallog << ' ' << M.all_zero() << std::endl;
   deallog << "Matrix [-1,2,-1]" << std::endl;
   M.print(deallog, 7, 0);
   check_vmult(M);

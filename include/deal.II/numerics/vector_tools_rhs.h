@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -35,8 +35,6 @@ class Quadrature;
 namespace hp
 {
   template <int dim, int spacedim>
-  class DoFHandler;
-  template <int dim, int spacedim>
   class MappingCollection;
   template <int dim>
   class QCollection;
@@ -48,7 +46,7 @@ namespace VectorTools
   /**
    * @name Assembling of right hand sides
    */
-  //@{
+  /** @{ */
 
   /**
    * Create a right hand side vector. Prior content of the given @p rhs_vector
@@ -69,7 +67,7 @@ namespace VectorTools
 
   /**
    * Call the create_right_hand_side() function, see above, with
-   * <tt>mapping=MappingQGeneric@<dim@>(1)</tt>.
+   * <tt>mapping=MappingQ@<dim@>(1)</tt>.
    */
   template <int dim, int spacedim, typename VectorType>
   void
@@ -130,7 +128,7 @@ namespace VectorTools
 
   /**
    * Call the create_boundary_right_hand_side() function, see above, with
-   * <tt>mapping=MappingQGeneric@<dim@>(1)</tt>.
+   * <tt>mapping=MappingQ@<dim@>(1)</tt>.
    *
    * @see
    * @ref GlossBoundaryIndicator "Glossary entry on boundary indicators"
@@ -179,7 +177,7 @@ namespace VectorTools
     VectorType &                                               rhs_vector,
     const std::set<types::boundary_id> &                       boundary_ids =
       std::set<types::boundary_id>());
-  // @}
+  /** @} */
 } // namespace VectorTools
 
 DEAL_II_NAMESPACE_CLOSE

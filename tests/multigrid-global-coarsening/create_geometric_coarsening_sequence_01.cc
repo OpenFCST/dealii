@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -38,13 +38,13 @@ test()
   tria.refine_global(1);
 
   // refine cells in the first quadrant
-  for (unsigned int i = 1; i < 3; i++)
+  for (unsigned int i = 1; i < 3; ++i)
     {
       for (auto cell : tria.active_cell_iterators())
         if (cell->is_locally_owned())
           {
             bool flag = true;
-            for (int d = 0; d < dim; d++)
+            for (int d = 0; d < dim; ++d)
               if (cell->center()[d] > 0.0)
                 flag = false;
             if (flag)

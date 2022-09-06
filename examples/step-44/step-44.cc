@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2010 - 2020 by the deal.II authors and
+ * Copyright (C) 2010 - 2022 by the deal.II authors and
  *                              & Jean-Paul Pelteret and Andrew McBride
  *
  * This file is part of the deal.II library.
@@ -43,7 +43,7 @@
 #include <deal.II/grid/grid_in.h>
 #include <deal.II/grid/tria.h>
 
-#include <deal.II/fe/fe_dgp_monomial.h>
+#include <deal.II/fe/fe_dgp.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_tools.h>
@@ -1037,19 +1037,18 @@ namespace Step44
     // The Finite Element System is composed of dim continuous displacement
     // DOFs, and discontinuous pressure and dilatation DOFs. In an attempt to
     // satisfy the Babuska-Brezzi or LBB stability conditions (see Hughes
-    // (2000)), we setup a $Q_n \times DGPM_{n-1} \times DGPM_{n-1}$
-    // system. $Q_2 \times DGPM_1 \times DGPM_1$ elements satisfy this
-    // condition, while $Q_1 \times DGPM_0 \times DGPM_0$ elements do
+    // (2000)), we setup a $Q_n \times DGP_{n-1} \times DGP_{n-1}$
+    // system. $Q_2 \times DGP_1 \times DGP_1$ elements satisfy this
+    // condition, while $Q_1 \times DGP_0 \times DGP_0$ elements do
     // not. However, it has been shown that the latter demonstrate good
     // convergence characteristics nonetheless.
     fe(FE_Q<dim>(parameters.poly_degree),
        dim, // displacement
-       FE_DGPMonomial<dim>(parameters.poly_degree - 1),
+       FE_DGP<dim>(parameters.poly_degree - 1),
        1, // pressure
-       FE_DGPMonomial<dim>(parameters.poly_degree - 1),
-       1)
-    , // dilatation
-    dof_handler(triangulation)
+       FE_DGP<dim>(parameters.poly_degree - 1),
+       1) // dilatation
+    , dof_handler(triangulation)
     , dofs_per_cell(fe.n_dofs_per_cell())
     , u_fe(first_u_component)
     , p_fe(p_component)
@@ -1080,10 +1079,11 @@ namespace Step44
   // constraint $\widetilde{J}=1$ on the initial solution field. The constraint
   // corresponds to the determinant of the deformation gradient in the
   // undeformed configuration, which is the identity tensor. We use
-  // FE_DGPMonomial bases to interpolate the dilatation field, thus we can't
+  // FE_DGP bases to interpolate the dilatation field, thus we can't
   // simply set the corresponding dof to unity as they correspond to the
-  // monomial coefficients. Thus we use the VectorTools::project function to do
-  // the work for us. The VectorTools::project function requires an argument
+  // coefficients of a truncated Legendre polynomial.
+  // Thus we use the VectorTools::project function to do the work for us.
+  // The VectorTools::project function requires an argument
   // indicating the hanging node constraints. We have none in this program
   // So we have to create a constraint object. In its original state, constraint
   // objects are unsorted, and have to be sorted (using the
@@ -1449,24 +1449,7 @@ namespace Step44
     // Setup the sparsity pattern and tangent matrix
     tangent_matrix.clear();
     {
-      const types::global_dof_index n_dofs_u = dofs_per_block[u_dof];
-      const types::global_dof_index n_dofs_p = dofs_per_block[p_dof];
-      const types::global_dof_index n_dofs_J = dofs_per_block[J_dof];
-
-      BlockDynamicSparsityPattern dsp(n_blocks, n_blocks);
-
-      dsp.block(u_dof, u_dof).reinit(n_dofs_u, n_dofs_u);
-      dsp.block(u_dof, p_dof).reinit(n_dofs_u, n_dofs_p);
-      dsp.block(u_dof, J_dof).reinit(n_dofs_u, n_dofs_J);
-
-      dsp.block(p_dof, u_dof).reinit(n_dofs_p, n_dofs_u);
-      dsp.block(p_dof, p_dof).reinit(n_dofs_p, n_dofs_p);
-      dsp.block(p_dof, J_dof).reinit(n_dofs_p, n_dofs_J);
-
-      dsp.block(J_dof, u_dof).reinit(n_dofs_J, n_dofs_u);
-      dsp.block(J_dof, p_dof).reinit(n_dofs_J, n_dofs_p);
-      dsp.block(J_dof, J_dof).reinit(n_dofs_J, n_dofs_J);
-      dsp.collect_sizes();
+      BlockDynamicSparsityPattern dsp(dofs_per_block, dofs_per_block);
 
       // The global system matrix initially has the following structure
       // @f{align*}
@@ -1511,10 +1494,7 @@ namespace Step44
 
     // We then set up storage vectors
     system_rhs.reinit(dofs_per_block);
-    system_rhs.collect_sizes();
-
     solution_n.reinit(dofs_per_block);
-    solution_n.collect_sizes();
 
     // ...and finally set up the quadrature
     // point history:
@@ -1671,7 +1651,7 @@ namespace Step44
   {
     std::cout << std::endl
               << "Timestep " << time.get_timestep() << " @ " << time.current()
-              << "s" << std::endl;
+              << 's' << std::endl;
 
     BlockVector<double> newton_update(dofs_per_block);
 
@@ -1707,7 +1687,7 @@ namespace Step44
     unsigned int newton_iteration = 0;
     for (; newton_iteration < parameters.max_iterations_NR; ++newton_iteration)
       {
-        std::cout << " " << std::setw(2) << newton_iteration << " "
+        std::cout << ' ' << std::setw(2) << newton_iteration << ' '
                   << std::flush;
 
         // We construct the linear system, but hold off on solving it
@@ -1787,7 +1767,7 @@ namespace Step44
     static const unsigned int l_width = 150;
 
     for (unsigned int i = 0; i < l_width; ++i)
-      std::cout << "_";
+      std::cout << '_';
     std::cout << std::endl;
 
     std::cout << "               SOLVER STEP               "
@@ -1796,7 +1776,7 @@ namespace Step44
               << " NU_U       NU_P       NU_J " << std::endl;
 
     for (unsigned int i = 0; i < l_width; ++i)
-      std::cout << "_";
+      std::cout << '_';
     std::cout << std::endl;
   }
 
@@ -1808,7 +1788,7 @@ namespace Step44
     static const unsigned int l_width = 150;
 
     for (unsigned int i = 0; i < l_width; ++i)
-      std::cout << "_";
+      std::cout << '_';
     std::cout << std::endl;
 
     const std::pair<double, double> error_dil = get_error_dilation();
@@ -3216,7 +3196,8 @@ namespace Step44
     solution_name.emplace_back("dilatation");
 
     DataOutBase::VtkFlags output_flags;
-    output_flags.write_higher_order_cells = true;
+    output_flags.write_higher_order_cells       = true;
+    output_flags.physical_units["displacement"] = "m";
     data_out.set_flags(output_flags);
 
     data_out.attach_dof_handler(dof_handler);

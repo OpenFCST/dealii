@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2020 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -71,7 +71,7 @@ test()
             if (cell->level_subdomain_id() != 4294967294)
               deallog << cell->level_subdomain_id();
             else
-              deallog << "-";
+              deallog << '-';
           }
         deallog << std::endl;
       }
@@ -104,7 +104,7 @@ test()
     deallog << "locally_owned_mg_dofs_per_processor:" << std::endl;
     for (unsigned int lvl = 0; lvl < tr.n_global_levels(); ++lvl)
       {
-        deallog << "level " << lvl << ":" << std::endl;
+        deallog << "level " << lvl << ':' << std::endl;
 
         const std::vector<IndexSet> vec =
           Utilities::MPI::all_gather(MPI_COMM_WORLD,

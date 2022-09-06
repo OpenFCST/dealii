@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -29,10 +29,11 @@
 #include <deal.II/lac/la_parallel_vector.h>
 
 #include <deal.II/matrix_free/evaluation_kernels.h>
+#include <deal.II/matrix_free/tensor_product_kernels.h>
 
 #include <deal.II/multigrid/mg_tools.h>
 #include <deal.II/multigrid/mg_transfer_internal.h>
-#include <deal.II/multigrid/mg_transfer_matrix_free.h>
+#include <deal.II/multigrid/mg_transfer_matrix_free.templates.h>
 
 #include <algorithm>
 
@@ -92,6 +93,7 @@ MGTransferMatrixFree<dim, Number>::clear()
 }
 
 
+
 template <int dim, typename Number>
 void
 MGTransferMatrixFree<dim, Number>::build(
@@ -99,6 +101,27 @@ MGTransferMatrixFree<dim, Number>::build(
   const std::vector<std::shared_ptr<const Utilities::MPI::Partitioner>>
     &external_partitioners)
 {
+  Assert(dof_handler.has_level_dofs(),
+         ExcMessage(
+           "The underlying DoFHandler object has not had its "
+           "distribute_mg_dofs() function called, but this is a prerequisite "
+           "for multigrid transfers. You will need to call this function, "
+           "probably close to where you already call distribute_dofs()."));
+  if (external_partitioners.size() > 0)
+    {
+      Assert(
+        this->initialize_dof_vector == nullptr,
+        ExcMessage(
+          "A initialize_dof_vector function has already been registered in the constructor!"));
+
+      this->initialize_dof_vector =
+        [external_partitioners](
+          const unsigned int                          level,
+          LinearAlgebra::distributed::Vector<Number> &vec) {
+          vec.reinit(external_partitioners[level]);
+        };
+    }
+
   this->fill_and_communicate_copy_indices(dof_handler);
 
   vector_partitioners.resize(0,
@@ -145,7 +168,7 @@ MGTransferMatrixFree<dim, Number>::build(
 
   // duplicate and put into vectorized array
   prolongation_matrix_1d.resize(elem_info.prolongation_matrix_1d.size());
-  for (unsigned int i = 0; i < elem_info.prolongation_matrix_1d.size(); i++)
+  for (unsigned int i = 0; i < elem_info.prolongation_matrix_1d.size(); ++i)
     prolongation_matrix_1d[i] = elem_info.prolongation_matrix_1d[i];
 
   // reshuffle into aligned vector of vectorized arrays
@@ -174,6 +197,39 @@ MGTransferMatrixFree<dim, Number>::build(
     }
 
   evaluation_data.resize(n_child_cell_dofs);
+}
+
+
+
+template <int dim, typename Number>
+void
+MGTransferMatrixFree<dim, Number>::build(
+  const DoFHandler<dim, dim> &dof_handler,
+  const std::function<void(const unsigned int,
+                           LinearAlgebra::distributed::Vector<Number> &)>
+    &initialize_dof_vector)
+{
+  if (initialize_dof_vector)
+    {
+      const unsigned int n_levels =
+        dof_handler.get_triangulation().n_global_levels();
+
+      std::vector<std::shared_ptr<const Utilities::MPI::Partitioner>>
+        external_partitioners(n_levels);
+
+      for (unsigned int level = 0; level < n_levels; ++level)
+        {
+          LinearAlgebra::distributed::Vector<Number> vector;
+          initialize_dof_vector(level, vector);
+          external_partitioners[level] = vector.get_partitioner();
+        }
+
+      build(dof_handler, external_partitioners);
+    }
+  else
+    {
+      build(dof_handler);
+    }
 }
 
 
@@ -348,41 +404,6 @@ MGTransferMatrixFree<dim, Number>::restrict_and_add(
 
 
 
-namespace
-{
-  template <int dim, int degree, typename Number>
-  void
-  weight_dofs_on_child(const VectorizedArray<Number> *weights,
-                       const unsigned int             n_components,
-                       const unsigned int             fe_degree,
-                       VectorizedArray<Number> *      data)
-  {
-    Assert(fe_degree > 0, ExcNotImplemented());
-    Assert(fe_degree < 100, ExcNotImplemented());
-    const int loop_length = degree != -1 ? 2 * degree + 1 : 2 * fe_degree + 1;
-    unsigned int degree_to_3[100];
-    degree_to_3[0] = 0;
-    for (int i = 1; i < loop_length - 1; ++i)
-      degree_to_3[i] = 1;
-    degree_to_3[loop_length - 1] = 2;
-    for (unsigned int c = 0; c < n_components; ++c)
-      for (int k = 0; k < (dim > 2 ? loop_length : 1); ++k)
-        for (int j = 0; j < (dim > 1 ? loop_length : 1); ++j)
-          {
-            const unsigned int shift = 9 * degree_to_3[k] + 3 * degree_to_3[j];
-            data[0] *= weights[shift];
-            // loop bound as int avoids compiler warnings in case loop_length
-            // == 1 (polynomial degree 0)
-            for (int i = 1; i < loop_length - 1; ++i)
-              data[i] *= weights[shift + 1];
-            data[loop_length - 1] *= weights[shift + 2];
-            data += loop_length;
-          }
-  }
-} // namespace
-
-
-
 template <int dim, typename Number>
 template <int degree>
 void
@@ -487,10 +508,13 @@ MGTransferMatrixFree<dim, Number>::do_prolongate_add(
                                                      c * n_scalar_cell_dofs,
                                                    fe_degree + 1,
                                                    2 * fe_degree + 1);
-          weight_dofs_on_child<dim, degree, Number>(
+          internal::weight_fe_q_dofs_by_entity<dim,
+                                               degree != -1 ? 2 * degree + 1 :
+                                                              -1,
+                                               Number>(
             &weights_on_refined[to_level - 1][(cell / vec_size) * three_to_dim],
             n_components,
-            fe_degree,
+            2 * fe_degree + 1,
             evaluation_data.begin());
         }
       else
@@ -568,12 +592,14 @@ MGTransferMatrixFree<dim, Number>::do_restrict_add(
       // perform tensorized operation
       if (element_is_continuous)
         {
-          weight_dofs_on_child<dim, degree, Number>(
-            &weights_on_refined[from_level - 1]
-                               [(cell / vec_size) * three_to_dim],
-            n_components,
-            fe_degree,
-            evaluation_data.data());
+          internal::weight_fe_q_dofs_by_entity<
+            dim,
+            degree != -1 ? 2 * degree + 1 : -1,
+            Number>(&weights_on_refined[from_level - 1]
+                                       [(cell / vec_size) * three_to_dim],
+                    n_components,
+                    2 * fe_degree + 1,
+                    evaluation_data.data());
           for (unsigned int c = 0; c < n_components; ++c)
             internal::FEEvaluationImplBasisChange<
               internal::evaluate_general,
@@ -681,9 +707,11 @@ MGTransferMatrixFree<dim, Number>::memory_consumption() const
 template <int dim, typename Number>
 MGTransferBlockMatrixFree<dim, Number>::MGTransferBlockMatrixFree(
   const MGConstrainedDoFs &mg_c)
-  : same_for_all(true)
+  : MGTransferBlockMatrixFreeBase<dim,
+                                  Number,
+                                  MGTransferMatrixFree<dim, Number>>(true)
 {
-  matrix_free_transfer_vector.emplace_back(mg_c);
+  this->matrix_free_transfer_vector.emplace_back(mg_c);
 }
 
 
@@ -691,10 +719,12 @@ MGTransferBlockMatrixFree<dim, Number>::MGTransferBlockMatrixFree(
 template <int dim, typename Number>
 MGTransferBlockMatrixFree<dim, Number>::MGTransferBlockMatrixFree(
   const std::vector<MGConstrainedDoFs> &mg_c)
-  : same_for_all(false)
+  : MGTransferBlockMatrixFreeBase<dim,
+                                  Number,
+                                  MGTransferMatrixFree<dim, Number>>(false)
 {
   for (const auto &constrained_block_dofs : mg_c)
-    matrix_free_transfer_vector.emplace_back(constrained_block_dofs);
+    this->matrix_free_transfer_vector.emplace_back(constrained_block_dofs);
 }
 
 
@@ -704,13 +734,13 @@ void
 MGTransferBlockMatrixFree<dim, Number>::initialize_constraints(
   const MGConstrainedDoFs &mg_c)
 {
-  Assert(same_for_all,
+  Assert(this->same_for_all,
          ExcMessage("This object was initialized with support for usage with "
                     "one DoFHandler for each block, but this method assumes "
                     "that the same DoFHandler is used for all the blocks!"));
-  AssertDimension(matrix_free_transfer_vector.size(), 1);
+  AssertDimension(this->matrix_free_transfer_vector.size(), 1);
 
-  matrix_free_transfer_vector[0].initialize_constraints(mg_c);
+  this->matrix_free_transfer_vector[0].initialize_constraints(mg_c);
 }
 
 
@@ -720,24 +750,15 @@ void
 MGTransferBlockMatrixFree<dim, Number>::initialize_constraints(
   const std::vector<MGConstrainedDoFs> &mg_c)
 {
-  Assert(!same_for_all,
+  Assert(!this->same_for_all,
          ExcMessage("This object was initialized with support for using "
                     "the same DoFHandler for all the blocks, but this "
                     "method assumes that there is a separate DoFHandler "
                     "for each block!"));
-  AssertDimension(matrix_free_transfer_vector.size(), mg_c.size());
+  AssertDimension(this->matrix_free_transfer_vector.size(), mg_c.size());
 
   for (unsigned int i = 0; i < mg_c.size(); ++i)
-    matrix_free_transfer_vector[i].initialize_constraints(mg_c[i]);
-}
-
-
-
-template <int dim, typename Number>
-void
-MGTransferBlockMatrixFree<dim, Number>::clear()
-{
-  matrix_free_transfer_vector.clear();
+    this->matrix_free_transfer_vector[i].initialize_constraints(mg_c[i]);
 }
 
 
@@ -747,8 +768,8 @@ void
 MGTransferBlockMatrixFree<dim, Number>::build(
   const DoFHandler<dim, dim> &dof_handler)
 {
-  AssertDimension(matrix_free_transfer_vector.size(), 1);
-  matrix_free_transfer_vector[0].build(dof_handler);
+  AssertDimension(this->matrix_free_transfer_vector.size(), 1);
+  this->matrix_free_transfer_vector[0].build(dof_handler);
 }
 
 
@@ -758,81 +779,9 @@ void
 MGTransferBlockMatrixFree<dim, Number>::build(
   const std::vector<const DoFHandler<dim, dim> *> &dof_handler)
 {
-  AssertDimension(matrix_free_transfer_vector.size(), dof_handler.size());
+  AssertDimension(this->matrix_free_transfer_vector.size(), dof_handler.size());
   for (unsigned int i = 0; i < dof_handler.size(); ++i)
-    matrix_free_transfer_vector[i].build(*dof_handler[i]);
-}
-
-
-
-template <int dim, typename Number>
-void
-MGTransferBlockMatrixFree<dim, Number>::prolongate(
-  const unsigned int                                     to_level,
-  LinearAlgebra::distributed::BlockVector<Number> &      dst,
-  const LinearAlgebra::distributed::BlockVector<Number> &src) const
-{
-  const unsigned int n_blocks = src.n_blocks();
-  AssertDimension(dst.n_blocks(), n_blocks);
-
-  if (!same_for_all)
-    AssertDimension(matrix_free_transfer_vector.size(), n_blocks);
-
-  for (unsigned int b = 0; b < n_blocks; ++b)
-    {
-      const unsigned int data_block = same_for_all ? 0 : b;
-      matrix_free_transfer_vector[data_block].prolongate(to_level,
-                                                         dst.block(b),
-                                                         src.block(b));
-    }
-}
-
-
-
-template <int dim, typename Number>
-void
-MGTransferBlockMatrixFree<dim, Number>::prolongate_and_add(
-  const unsigned int                                     to_level,
-  LinearAlgebra::distributed::BlockVector<Number> &      dst,
-  const LinearAlgebra::distributed::BlockVector<Number> &src) const
-{
-  const unsigned int n_blocks = src.n_blocks();
-  AssertDimension(dst.n_blocks(), n_blocks);
-
-  if (!same_for_all)
-    AssertDimension(matrix_free_transfer_vector.size(), n_blocks);
-
-  for (unsigned int b = 0; b < n_blocks; ++b)
-    {
-      const unsigned int data_block = same_for_all ? 0 : b;
-      matrix_free_transfer_vector[data_block].prolongate_and_add(to_level,
-                                                                 dst.block(b),
-                                                                 src.block(b));
-    }
-}
-
-
-
-template <int dim, typename Number>
-void
-MGTransferBlockMatrixFree<dim, Number>::restrict_and_add(
-  const unsigned int                                     from_level,
-  LinearAlgebra::distributed::BlockVector<Number> &      dst,
-  const LinearAlgebra::distributed::BlockVector<Number> &src) const
-{
-  const unsigned int n_blocks = src.n_blocks();
-  AssertDimension(dst.n_blocks(), n_blocks);
-
-  if (!same_for_all)
-    AssertDimension(matrix_free_transfer_vector.size(), n_blocks);
-
-  for (unsigned int b = 0; b < n_blocks; ++b)
-    {
-      const unsigned int data_block = same_for_all ? 0 : b;
-      matrix_free_transfer_vector[data_block].restrict_and_add(from_level,
-                                                               dst.block(b),
-                                                               src.block(b));
-    }
+    this->matrix_free_transfer_vector[i].build(*dof_handler[i]);
 }
 
 
@@ -842,9 +791,28 @@ std::size_t
 MGTransferBlockMatrixFree<dim, Number>::memory_consumption() const
 {
   std::size_t total_memory_consumption = 0;
-  for (const auto &el : matrix_free_transfer_vector)
+  for (const auto &el : this->matrix_free_transfer_vector)
     total_memory_consumption += el.memory_consumption();
   return total_memory_consumption;
+}
+
+
+
+template <int dim, typename Number>
+const MGTransferMatrixFree<dim, Number> &
+MGTransferBlockMatrixFree<dim, Number>::get_matrix_free_transfer(
+  const unsigned int b) const
+{
+  return matrix_free_transfer_vector[b];
+}
+
+
+
+template <int dim, typename Number>
+void
+MGTransferBlockMatrixFree<dim, Number>::clear()
+{
+  this->matrix_free_transfer_vector.clear();
 }
 
 

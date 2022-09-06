@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -68,7 +68,7 @@ do_test(const FiniteElement<dim> &fe_fine, const FiniteElement<dim> &fe_coarse)
     tria.refine_global();
 
     for (auto &cell : tria.active_cell_iterators())
-      if (cell->active() && cell->center()[0] < 0.5)
+      if (cell->is_active() && cell->center()[0] < 0.5)
         cell->set_refine_flag();
     tria.execute_coarsening_and_refinement();
   };
@@ -107,10 +107,10 @@ do_test(const FiniteElement<dim> &fe_fine, const FiniteElement<dim> &fe_coarse)
 
   // setup transfer operator
   MGTwoLevelTransfer<dim, LinearAlgebra::distributed::Vector<Number>> transfer;
-  transfer.reinit_geometric_transfer(dof_handler_fine,
-                                     dof_handler_coarse,
-                                     constraint_fine,
-                                     constraint_coarse);
+  transfer.reinit(dof_handler_fine,
+                  dof_handler_coarse,
+                  constraint_fine,
+                  constraint_coarse);
 
   test_transfer_operator(transfer, dof_handler_fine, dof_handler_coarse);
 }
@@ -122,17 +122,19 @@ test(int fe_degree)
   const auto str_fine   = std::to_string(fe_degree);
   const auto str_coarse = std::to_string(fe_degree);
 
-  {
-    deallog.push("CG<2>(" + str_fine + ")<->CG<2>(" + str_coarse + ")");
-    do_test<dim, double>(FE_Q<dim>(fe_degree), FE_Q<dim>(fe_degree));
-    deallog.pop();
-  }
+  if (fe_degree > 0)
+    {
+      deallog.push("CG<2>(" + str_fine + ")<->CG<2>(" + str_coarse + ")");
+      do_test<dim, double>(FE_Q<dim>(fe_degree), FE_Q<dim>(fe_degree));
+      deallog.pop();
+    }
 
-  {
-    deallog.push("DG<2>(" + str_fine + ")<->CG<2>(" + str_coarse + ")");
-    do_test<dim, double>(FE_DGQ<dim>(fe_degree), FE_Q<dim>(fe_degree));
-    deallog.pop();
-  }
+  if (fe_degree > 0)
+    {
+      deallog.push("DG<2>(" + str_fine + ")<->CG<2>(" + str_coarse + ")");
+      do_test<dim, double>(FE_DGQ<dim>(fe_degree), FE_Q<dim>(fe_degree));
+      deallog.pop();
+    }
 
   {
     deallog.push("DG<2>(" + str_fine + ")<->DG<2>(" + str_coarse + ")");
@@ -149,6 +151,6 @@ main(int argc, char **argv)
 
   deallog.precision(8);
 
-  for (unsigned int i = 1; i < 5; i++)
+  for (unsigned int i = 0; i < 5; ++i)
     test<2, double>(i);
 }

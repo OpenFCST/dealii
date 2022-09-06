@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2019 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -54,7 +54,7 @@ test(unsigned int plane = 1)
                                                   res[b].end());
             });
 
-  deallog << plane << ":" << std::endl;
+  deallog << plane << ':' << std::endl;
   for (const auto ind : index)
     {
       AssertThrow(res[ind][0] == 0, ExcInternalError());

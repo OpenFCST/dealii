@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2018 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -120,8 +120,8 @@ test(unsigned int ref, const MappingQ<dim> &mapping)
           deallog << "  p(" << q << "): " << fe_values.quadrature_point(q)
                   << std::endl;
           for (unsigned int i = 0; i < fe_values.dofs_per_cell; ++i)
-            deallog << "  shape " << i << "," << q << ": "
-                    << fe_values.shape_value(i, q) << " "
+            deallog << "  shape " << i << ',' << q << ": "
+                    << fe_values.shape_value(i, q) << ' '
                     << fe_values.shape_grad(i, q) << std::endl;
         }
 
@@ -143,8 +143,7 @@ main()
 {
   initlog();
 
-  test<2, 2>(2, MappingQ<2>(4, false));
-  test<2, 2>(2, MappingQ<2>(4, true));
+  test<2, 2>(2, MappingQ<2>(4));
 
 
   return 0;

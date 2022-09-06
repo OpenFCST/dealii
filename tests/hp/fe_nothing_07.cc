@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2020 by the deal.II authors
+// Copyright (C) 2009 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -88,7 +88,7 @@ test()
                                                       endc =
                                                         triangulation.end();
 
-    for (; cell != endc; cell++)
+    for (; cell != endc; ++cell)
       {
         Point<dim> center = cell->center();
 
@@ -125,7 +125,7 @@ test()
                                                      dof_handler.begin_active(),
                                                    endc = dof_handler.end();
 
-    for (; cell != endc; cell++)
+    for (; cell != endc; ++cell)
       {
         if (cell->subdomain_id() == 1)
           cell->set_active_fe_index(1);
@@ -163,7 +163,7 @@ test()
                                                      dof_handler.begin_active(),
                                                    endc = dof_handler.end();
 
-    for (; cell != endc; cell++)
+    for (; cell != endc; ++cell)
       {
         deallog << cell << ' ' << cell->active_fe_index() << std::endl << "   ";
         std::vector<types::global_dof_index> local_dof_indices(

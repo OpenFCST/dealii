@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -51,7 +51,7 @@ template <int dim>
 void
 test2cellsFESystem(const unsigned int p_feq = 2, const unsigned int p_feen = 1)
 {
-  deallog << "2cells: " << dim << " " << p_feq << " " << p_feen << std::endl;
+  deallog << "2cells: " << dim << ' ' << p_feq << ' ' << p_feen << std::endl;
   Triangulation<dim> triangulation;
   {
     Triangulation<dim> triangulationL;

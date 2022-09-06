@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2018 by the deal.II authors
+// Copyright (C) 2009 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -86,8 +86,8 @@ test()
   TrilinosWrappers::MPI::Vector vec_rel(locally_relevant_set);
   vec_rel = vec;
 
-  MappingQGeneric<dim> mapping(1);
-  Vector<float>        indicators(tr.n_active_cells());
+  MappingQ<dim> mapping(1);
+  Vector<float> indicators(tr.n_active_cells());
   DerivativeApproximation::approximate_gradient(mapping,
                                                 dofh,
                                                 vec_rel,

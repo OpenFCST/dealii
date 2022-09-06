@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -15,6 +15,7 @@
 
 // Test Utilities::MPI::create_evenly_distributed_partitioning()
 
+#include <deal.II/base/index_set.h>
 #include <deal.II/base/mpi.h>
 
 #include <vector>
@@ -80,7 +81,7 @@ test()
   deallog << "Total size=" << size << std::endl;
   for (unsigned int p = 0; p < vec.size(); ++p)
     {
-      deallog << "p=" << p << ":" << std::endl;
+      deallog << "p=" << p << ':' << std::endl;
       vec[p].print(deallog.get_file_stream());
     }
 }

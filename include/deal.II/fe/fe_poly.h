@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2020 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -28,8 +28,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup febase */
-/*@{*/
+/**
+ * @addtogroup fe
+ * @{
+ */
 
 /**
  * This class gives a unified framework for the implementation of
@@ -42,7 +44,7 @@ DEAL_II_NAMESPACE_OPEN
  * functions can be used as template parameter @p PolynomialType.
  *
  * @code
- *  static const unsigned int dimension;
+ *  static constexpr unsigned int dimension;
  *
  *  void evaluate (const Point<dim>            &unit_point,
  *                 std::vector<double>         &values,
@@ -534,7 +536,7 @@ protected:
   const std::unique_ptr<ScalarPolynomialsBase<dim>> poly_space;
 };
 
-/*@}*/
+/** @} */
 
 DEAL_II_NAMESPACE_CLOSE
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -112,7 +112,7 @@ FE_ABF<dim>::FE_ABF(const unsigned int deg)
         ++target_row;
       }
 
-  // We need to initialize the dof permuation table and the one for the sign
+  // We need to initialize the dof permutation table and the one for the sign
   // change.
   initialize_quad_dof_index_permutation_and_sign_change();
 }
@@ -500,7 +500,7 @@ FE_ABF<dim>::get_dpo_vector(const unsigned int rt_order)
   // Initiative...), and we have
   // (rt_order+1)^(dim-1) DoFs per face
   unsigned int dofs_per_face = 1;
-  for (int d = 0; d < dim - 1; ++d)
+  for (unsigned int d = 0; d < dim - 1; ++d)
     dofs_per_face *= rt_order + 1;
 
   // and then there are interior dofs

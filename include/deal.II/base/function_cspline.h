@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2019 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -20,10 +20,12 @@
 
 #ifdef DEAL_II_WITH_GSL
 #  include <deal.II/base/function.h>
+#  include <deal.II/base/mutex.h>
 #  include <deal.II/base/point.h>
-#  include <deal.II/base/thread_management.h>
 
 #  include <gsl/gsl_spline.h>
+
+#  include <memory>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -49,7 +51,7 @@ namespace Functions
                  << "The input interpolation points are not strictly ordered : "
                  << std::endl
                  << "x[" << arg1 << "] = " << arg2 << " >= x[" << (arg1 + 1)
-                 << "] = " << arg3 << ".");
+                 << "] = " << arg3 << '.');
 
   DeclException3(
     ExcCSplineRange,
@@ -58,7 +60,7 @@ namespace Functions
     double,
     << "Spline function can not be evaluated outside of the interpolation range: "
     << std::endl
-    << arg1 << " is not in [" << arg2 << ";" << arg3 << "].");
+    << arg1 << " is not in [" << arg2 << ';' << arg3 << "].");
 
   /**
    * The cubic spline function using GNU Scientific Library.
@@ -81,11 +83,6 @@ namespace Functions
      */
     CSpline(const std::vector<double> &interpolation_points,
             const std::vector<double> &interpolation_values);
-
-    /**
-     * Virtual destructor.
-     */
-    virtual ~CSpline() override;
 
     virtual double
     value(const Point<dim> & point,
@@ -123,12 +120,12 @@ namespace Functions
     /**
      * GSL accelerator for spline interpolation
      */
-    gsl_interp_accel *acc;
+    std::unique_ptr<gsl_interp_accel, void (*)(gsl_interp_accel *)> acc;
 
     /**
      * GSL cubic spline interpolator
      */
-    gsl_spline *cspline;
+    std::unique_ptr<gsl_spline, void (*)(gsl_spline *)> cspline;
 
     /**
      * A mutex for accelerator object.

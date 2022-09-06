@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2018 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -157,7 +157,7 @@ main(int argc, char **argv)
       unsigned int cell_id = cell->index();
       deallog << cell_id << ":predicates=";
       for (auto predicate : vec_predicates)
-        deallog << predicate(cell) << ":";
+        deallog << predicate(cell) << ':';
 
       /*
        * Check if a color and enrichment index map exists for the cell.

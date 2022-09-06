@@ -1,7 +1,7 @@
 #!/bin/bash
 ## ---------------------------------------------------------------------
 ##
-## Copyright (C) 2018 - 2020 by the deal.II authors
+## Copyright (C) 2018 - 2022 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
@@ -39,7 +39,7 @@ checks() {
 
   # Add the location 'download_clang_format' or 'compile_clang_format'
   # installs clang-format to the local PATH.
-  CLANG_FORMAT_PATH="$(cd "$(dirname "$0")" && pwd)/programs/clang-6/bin"
+  CLANG_FORMAT_PATH="$(cd "$(dirname "$0")" && pwd)/programs/clang-11/bin"
   export PATH="${CLANG_FORMAT_PATH}:${PATH}"
 
   if ! [ -x "$(command -v "${DEAL_II_CLANG_FORMAT}")" ]; then
@@ -51,14 +51,13 @@ checks() {
     exit 1
   fi
 
-  # Make sure to have the right version. We know that clang-6.0.0
-  # and clang-6.0.1 work. Hence, test for clang-6.0.
+  # Make sure to have the right version.
   CLANG_FORMAT_VERSION="$(${DEAL_II_CLANG_FORMAT} --version)"
   CLANG_FORMAT_MAJOR_VERSION=$(echo "${CLANG_FORMAT_VERSION}" | sed 's/^[^0-9]*\([0-9]*\).*$/\1/g')
   CLANG_FORMAT_MINOR_VERSION=$(echo "${CLANG_FORMAT_VERSION}" | sed 's/^[^0-9]*[0-9]*\.\([0-9]*\).*$/\1/g')
 
-  if [ "${CLANG_FORMAT_MAJOR_VERSION}" -ne 6 ] || [ "${CLANG_FORMAT_MINOR_VERSION}" -ne 0 ]; then
-    echo "***   This indent script requires clang-format version 6.0,"
+  if [ "${CLANG_FORMAT_MAJOR_VERSION}" -ne 11 ] || [ "${CLANG_FORMAT_MINOR_VERSION}" -ne 1 ]; then
+    echo "***   This indent script requires clang-format version 11.1,"
     echo "***   but version ${CLANG_FORMAT_MAJOR_VERSION}.${CLANG_FORMAT_MINOR_VERSION} was found instead."
     echo "***"
     echo "***   You can run the './contrib/utilities/download_clang_format'"
@@ -84,11 +83,11 @@ checks() {
   # first user names:
   git log --since "2019-01-01" --format="%aN" --no-merges | sort -u | while read name ; do
       words=($name)
-      if [ "${#words[@]}" -lt "2" ]; then
+      if [ "${#words[@]}" -lt "2" -a "$name" != "dependabot[bot]" ]; then
 	  echo "invalid author '$name' without firstname and lastname"
 	  echo ""
 	  echo "hint: for possible solutions, consult the webpage:"
-	  echo "      https://github.com/dealii/dealii/wiki/Indentation#commit-authorship"
+	  echo "      https://github.com/dealii/dealii/wiki/Commit-authorship"
 	  exit 2
       fi
   done || exit 2
@@ -100,14 +99,14 @@ checks() {
 	  echo "invalid email '$email'"
           echo ""
           echo "hint: for possible solutions, consult the webpage:"
-          echo "      https://github.com/dealii/dealii/wiki/Indentation#commit-authorship"
+          echo "      https://github.com/dealii/dealii/wiki/Commit-authorship"
 	  exit 3
       fi
       if ! echo "$email" | grep -q -v -e "\.local$"; then
 	  echo "invalid email '$email'"
           echo ""
           echo "hint: for possible solutions, consult the webpage:"
-          echo "      https://github.com/dealii/dealii/wiki/Indentation#commit-authorship"
+          echo "      https://github.com/dealii/dealii/wiki/Commit-authorship"
 	  exit 3
       fi
   done || exit 3
@@ -145,7 +144,7 @@ fix_or_report()
 export -f fix_or_report
 
 #
-# In order to format .cc and .h files we have to make sure that we override
+# In order to format .cc and .h files we have to make sure that we overwrite
 # the source/header file only if the actual contents changed.
 # Unfortunately, clang-format isn't exactly helpful there. Thus, use a
 # temporary file and diff as a workaround.
@@ -228,7 +227,7 @@ dos_to_unix()
   tr -d '\015' <"${file}" >"${tmpfile}"
 
   fix_or_report "${file}" "${tmpfile}" "file has non-unix line-ending '\\r\\n'"
-  rm -f "${tmpfile}" "${tmpfile}"
+  rm -f "${tmpfile}"
 }
 export -f dos_to_unix
 
@@ -260,8 +259,8 @@ fix_permissions()
 export -f fix_permissions
 
 #
-# Collect all files found in a list of directories "${1}$" matching a
-# regular expression "${2}$", and process them with a command "${3}" on 10
+# Collect all files found in a list of directories "${1}" matching a
+# regular expression "${2}", and process them with a command "${3}" on 10
 # threads in parallel.
 #
 # The command line is a bit complicated, so let's discuss the more
@@ -272,9 +271,9 @@ export -f fix_permissions
 #   serves as a good candidate to separate individual file names.
 # - For 'xargs', -0 does the opposite: it separates filenames that are
 #   delimited by \0
-# - the options "-n 1 -P 10" make sure that the following script will be
-#   called exactly with one file name as argument at a time, but we allow
-#   execution for up to 10 times in parallel
+# - the option "-P 10" starts up to 10 processes in parallel. -0 implies '-L 1'
+#   (one argument to each command) so each launch of clang-format corresponds
+#   to exactly one file.
 #
 
 process()
@@ -283,11 +282,11 @@ process()
   case "${OSTYPE}" in
     darwin*)
       find -E ${directories} -regex "${2}" -print0 |
-        xargs -0 -n 1 -P 10 -I {} bash -c "${3} {}"
+        xargs -0 -P 10 -I {} bash -c "${3} {}"
       ;;
     *)
       find ${directories} -regextype egrep -regex "${2}" -print0 |
-        xargs -0 -n 1 -P 10 -I {} bash -c "${3} {}"
+        xargs -0 -P 10 -I {} bash -c "${3} {}"
       ;;
   esac
 }
@@ -319,7 +318,7 @@ process_changed()
       sort -u |
       xargs -n 1 ls -d 2>/dev/null |
       grep -E "^${2}$" |
-      ${XARGS} '\n' -n 1 -P 10 -I {} bash -c "${3} {}"
+      ${XARGS} '\n' -P 10 -I {} bash -c "${3} {}"
 }
 
 #

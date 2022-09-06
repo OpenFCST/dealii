@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2001 - 2020 by the deal.II authors
+ * Copyright (C) 2001 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -199,9 +199,9 @@ namespace Step13
     // Now for the function that is mainly of interest in this class, the
     // computation of the point value:
     template <int dim>
-    void PointValueEvaluation<dim>::
-         operator()(const DoFHandler<dim> &dof_handler,
-               const Vector<double> & solution) const
+    void
+    PointValueEvaluation<dim>::operator()(const DoFHandler<dim> &dof_handler,
+                                          const Vector<double> & solution) const
     {
       // First allocate a variable that will hold the point value. Initialize
       // it with a value that is clearly bogus, so that if we fail to set it
@@ -913,10 +913,10 @@ namespace Step13
     // independent, we do that in parallel (if the library was configured to
     // use concurrency, at least; otherwise, the actions are performed
     // sequentially). Note that we start only one thread, and do the second
-    // action in the main thread. Since only one thread is generated, we don't
-    // use the <code>Threads::ThreadGroup</code> class here, but rather use
-    // the one created thread object directly to wait for this particular
-    // thread's exit.
+    // action in the main thread. Since only one task is generated, we don't
+    // use the <code>Threads::TaskGroup</code> class here, but rather use
+    // the one created task object directly to wait for this particular
+    // task's exit.
     //
     // Note that taking up the address of the
     // <code>DoFTools::make_hanging_node_constraints</code> function is a
@@ -1299,7 +1299,7 @@ namespace Step13
         // iteration. Note that the <code>std::flush</code> is needed to have
         // the text actually appear on the screen, rather than only in some
         // buffer that is only flushed the next time we issue an end-line.
-        std::cout << step << " " << std::flush;
+        std::cout << step << ' ' << std::flush;
 
         // Now solve the problem on the present grid, and run the evaluators
         // on it. The long type name of iterators into the list is a little

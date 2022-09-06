@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -14,6 +14,8 @@
 // ---------------------------------------------------------------------
 
 
+#include <deal.II/base/polynomial.h>
+#include <deal.II/base/polynomials_raviart_thomas.h>
 #include <deal.II/base/qprojector.h>
 #include <deal.II/base/quadrature.h>
 #include <deal.II/base/quadrature_lib.h>
@@ -42,16 +44,17 @@ DEAL_II_NAMESPACE_OPEN
 template <int dim>
 FE_RaviartThomas<dim>::FE_RaviartThomas(const unsigned int deg)
   : FE_PolyTensor<dim>(
-      PolynomialsRaviartThomas<dim>(deg),
+      PolynomialsRaviartThomas<dim>(deg + 1, deg),
       FiniteElementData<dim>(get_dpo_vector(deg),
                              dim,
                              deg + 1,
                              FiniteElementData<dim>::Hdiv),
-      std::vector<bool>(PolynomialsRaviartThomas<dim>::n_polynomials(deg),
+      std::vector<bool>(PolynomialsRaviartThomas<dim>::n_polynomials(deg + 1,
+                                                                     deg),
                         true),
-      std::vector<ComponentMask>(PolynomialsRaviartThomas<dim>::n_polynomials(
-                                   deg),
-                                 std::vector<bool>(dim, true)))
+      std::vector<ComponentMask>(
+        PolynomialsRaviartThomas<dim>::n_polynomials(deg + 1, deg),
+        std::vector<bool>(dim, true)))
 {
   Assert(dim >= 2, ExcImpossibleInDim(dim));
   const unsigned int n_dofs = this->n_dofs_per_cell();
@@ -110,7 +113,7 @@ FE_RaviartThomas<dim>::FE_RaviartThomas(const unsigned int deg)
         ++target_row;
       }
 
-  // We need to initialize the dof permuation table and the one for the sign
+  // We need to initialize the dof permutation table and the one for the sign
   // change.
   initialize_quad_dof_index_permutation_and_sign_change();
 }

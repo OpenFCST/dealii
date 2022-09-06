@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2019 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -30,8 +30,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup mg */
-/*@{*/
+/**
+ * @addtogroup mg
+ * @{
+ */
 
 namespace mg
 {
@@ -73,7 +75,8 @@ namespace mg
     /**
      * Access matrix on a level.
      */
-    const LinearOperator<VectorType> &operator[](unsigned int level) const;
+    const LinearOperator<VectorType> &
+    operator[](unsigned int level) const;
 
     virtual void
     vmult(const unsigned int level,
@@ -190,7 +193,7 @@ private:
   unsigned int col;
 };
 
-/*@}*/
+/** @} */
 
 /*----------------------------------------------------------------------*/
 
@@ -235,8 +238,8 @@ namespace mg
 
 
   template <typename VectorType>
-  inline const LinearOperator<VectorType> &Matrix<VectorType>::
-                                           operator[](unsigned int level) const
+  inline const LinearOperator<VectorType> &
+  Matrix<VectorType>::operator[](unsigned int level) const
   {
     return matrices[level];
   }

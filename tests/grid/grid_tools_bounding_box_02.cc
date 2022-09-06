@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2018 by the deal.II authors
+// Copyright (C) 2001 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -69,7 +69,7 @@ test()
   BoundingBox<dim> bounding_box =
     GridTools::compute_bounding_box(tria, predicate); // General predicate
 
-  deallog << bounding_box.get_boundary_points().first << " "
+  deallog << bounding_box.get_boundary_points().first << ' '
           << bounding_box.get_boundary_points().second << std::endl;
 }
 

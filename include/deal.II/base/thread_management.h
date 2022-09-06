@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -14,36 +14,38 @@
 // ---------------------------------------------------------------------
 
 #ifndef dealii_thread_management_h
-#  define dealii_thread_management_h
+#define dealii_thread_management_h
 
 
-#  include <deal.II/base/config.h>
+#include <deal.II/base/config.h>
 
-#  include <deal.II/base/exceptions.h>
-#  include <deal.II/base/multithread_info.h>
-#  include <deal.II/base/std_cxx17/tuple.h>
-#  include <deal.II/base/template_constraints.h>
+#include <deal.II/base/exceptions.h>
+#include <deal.II/base/multithread_info.h>
+#include <deal.II/base/mutex.h>
+#include <deal.II/base/std_cxx17/tuple.h>
+#include <deal.II/base/template_constraints.h>
 
-#  include <atomic>
-#  include <condition_variable>
-#  include <functional>
-#  include <future>
-#  include <iterator>
-#  include <list>
-#  include <memory>
-#  include <mutex>
-#  include <thread>
-#  include <tuple>
-#  include <utility>
-#  include <vector>
+#include <atomic>
+#include <functional>
+#include <future>
+#include <list>
+#include <memory>
+#include <thread>
+#include <utility>
+#include <vector>
 
-
+#ifdef DEAL_II_WITH_TBB
+DEAL_II_DISABLE_EXTRA_DIAGNOSTICS
+#  include <tbb/task_group.h>
+DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
+#endif
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup threads */
-/*@{*/
-
+/**
+ * @addtogroup threads
+ * @{
+ */
 
 /**
  * A namespace for the implementation of thread management in deal.II. Most of
@@ -52,55 +54,6 @@ DEAL_II_NAMESPACE_OPEN
  *
  * @ingroup threads
  */
-namespace Threads
-{
-  /**
-   * A class implementing a <a
-   * href="https://en.wikipedia.org/wiki/Lock_(computer_science)">mutex</a>.
-   * Mutexes are used to lock data structures to ensure that only a
-   * single thread of execution can access them at the same time.
-   *
-   * This class is a thin wrapper around `std::mutex`. The only difference
-   * is that this class is copyable when `std::mutex` is not.  Indeed, when
-   * copied, the receiving object does not copy any state from the object
-   * being copied, i.e. an entirely new mutex is created. These semantics
-   * are consistent with the common use case if a mutex is used as a member
-   * variable to lock the other member variables of a class: in that case,
-   * the mutex of the copied-to object should only guard the members of the
-   * copied-to object, not the members of both the copied-to and
-   * copied-from object. Since at the time when the class is copied, the
-   * destination's member variable is not used yet, its corresponding mutex
-   * should also remain in its original state.
-   */
-  class Mutex : public std::mutex
-  {
-  public:
-    /**
-     * Default constructor.
-     */
-    Mutex() = default;
-
-    /**
-     * Copy constructor. As discussed in this class's documentation, no state
-     * is copied from the object given as argument.
-     */
-    Mutex(const Mutex &)
-      : std::mutex()
-    {}
-
-    /**
-     * Copy operators. As discussed in this class's documentation, no state
-     * is copied from the object given as argument.
-     */
-    Mutex &
-    operator=(const Mutex &)
-    {
-      return *this;
-    }
-  };
-} // namespace Threads
-
-
 namespace Threads
 {
   /**
@@ -183,7 +136,7 @@ namespace Threads
 } // namespace Threads
 
 /* ----------- implementation of functions in namespace Threads ---------- */
-#  ifndef DOXYGEN
+#ifndef DOXYGEN
 namespace Threads
 {
   template <typename ForwardIterator>
@@ -234,7 +187,7 @@ namespace Threads
   }
 } // namespace Threads
 
-#  endif // DOXYGEN
+#endif // DOXYGEN
 
 namespace Threads
 {
@@ -569,7 +522,12 @@ namespace Threads
    * omit the template argument.
    *
    * @ingroup threads
-   * @ingroup threads
+   *
+   * @deprecated Use std::thread or std::jthread instead.
+   *
+   * @note Since this class is used in ThreadGroup, its constructors, rather
+   * than the class itself, are deprecated to allow compilation with
+   * -Werror=deprecated-declarations.
    */
   template <typename RT = void>
   class Thread
@@ -578,6 +536,7 @@ namespace Threads
     /**
      * Construct a thread object with a function object.
      */
+    DEAL_II_DEPRECATED
     Thread(const std::function<RT()> &function)
       : thread_descriptor(new internal::ThreadDescriptor<RT>())
     {
@@ -590,11 +549,13 @@ namespace Threads
      * this way, except for assigning it a thread object that holds data
      * created by the new_thread() functions.
      */
+    DEAL_II_DEPRECATED
     Thread() = default;
 
     /**
      * Copy constructor.
      */
+    DEAL_II_DEPRECATED
     Thread(const Thread<RT> &t)
       : thread_descriptor(t.thread_descriptor)
     {}
@@ -742,13 +703,21 @@ namespace Threads
    * function object without arguments and returning an object of type RT (or
    * void).
    *
+   * @deprecated Use std::thread or std::jthread instead.
+   *
    * @ingroup threads
    */
   template <typename RT>
-  inline Thread<RT>
+  DEAL_II_DEPRECATED inline Thread<RT>
   new_thread(const std::function<RT()> &function)
   {
+    // Here and below we need to disable deprecation warnings for calling the
+    // constructor in this function - as this function itself is deprecated
+    // these warnings are not helpful. This problem only appears in some
+    // configurations (e.g., Debian 11 with GCC-10).
+    DEAL_II_DISABLE_EXTRA_DIAGNOSTICS
     return Thread<RT>(function);
+    DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
   }
 
 
@@ -815,15 +784,20 @@ namespace Threads
    *   or capture have a lifetime that extends at least until the time
    *   where the thread finishes.
    *
+   * @deprecated Use std::thread or std::jthread instead.
+   *
    * @ingroup CPP11
    */
   template <typename FunctionObjectType>
-  inline auto
+  DEAL_II_DEPRECATED inline auto
   new_thread(FunctionObjectType function_object)
     -> Thread<decltype(function_object())>
   {
+    // See the comment in the first new_thread() implementation
+    DEAL_II_DISABLE_EXTRA_DIAGNOSTICS
     using return_type = decltype(function_object());
     return Thread<return_type>(std::function<return_type()>(function_object));
+    DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
   }
 
 
@@ -832,15 +806,20 @@ namespace Threads
    * Overload of the new_thread function for non-member or static member
    * functions.
    *
+   * @deprecated Use std::thread or std::jthread instead.
+   *
    * @ingroup threads
    */
   template <typename RT, typename... Args>
-  inline Thread<RT>
+  DEAL_II_DEPRECATED inline Thread<RT>
   new_thread(RT (*fun_ptr)(Args...), typename identity<Args>::type... args)
   {
+    // See the comment in the first new_thread() implementation
+    DEAL_II_DISABLE_EXTRA_DIAGNOSTICS
     auto dummy = std::make_tuple(internal::maybe_make_ref<Args>::act(args)...);
     return new_thread(
       [dummy, fun_ptr]() -> RT { return std_cxx17::apply(fun_ptr, dummy); });
+    DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
   }
 
 
@@ -848,10 +827,12 @@ namespace Threads
   /**
    * Overload of the non-const new_thread function for member functions.
    *
+   * @deprecated Use std::thread or std::jthread instead.
+   *
    * @ingroup threads
    */
   template <typename RT, typename C, typename... Args>
-  inline Thread<RT>
+  DEAL_II_DEPRECATED inline Thread<RT>
   new_thread(RT (C::*fun_ptr)(Args...),
              typename identity<C>::type &c,
              typename identity<Args>::type... args)
@@ -864,17 +845,22 @@ namespace Threads
   /**
    * Overload of the new_thread function for const member functions.
    *
+   * @deprecated Use std::thread or std::jthread instead.
+   *
    * @ingroup threads
    */
   template <typename RT, typename C, typename... Args>
-  inline Thread<RT>
+  DEAL_II_DEPRECATED inline Thread<RT>
   new_thread(RT (C::*fun_ptr)(Args...) const,
              typename identity<const C>::type &c,
              typename identity<Args>::type... args)
   {
+    // See the comment in the first new_thread() implementation
+    DEAL_II_DISABLE_EXTRA_DIAGNOSTICS
     // NOLINTNEXTLINE(modernize-avoid-bind) silence clang-tidy
     return new_thread(std::function<RT()>(std::bind(
       fun_ptr, std::cref(c), internal::maybe_make_ref<Args>::act(args)...)));
+    DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
   }
 
   // ------------------------ ThreadGroup -------------------------------------
@@ -885,9 +871,11 @@ namespace Threads
    * value for the called function.
    *
    * @ingroup threads
+   *
+   * @deprecated Use TaskGroup instead.
    */
   template <typename RT = void>
-  class ThreadGroup
+  class DEAL_II_DEPRECATED ThreadGroup
   {
   public:
     /**
@@ -909,10 +897,8 @@ namespace Threads
     void
     join_all() const
     {
-      for (typename std::list<Thread<RT>>::const_iterator t = threads.begin();
-           t != threads.end();
-           ++t)
-        t->join();
+      for (auto &t : threads)
+        t.join();
     }
 
   private:
@@ -998,8 +984,98 @@ namespace Threads
     Task(const std::function<RT()> &function_object)
     {
       if (MultithreadInfo::n_threads() > 1)
-        task_data = std::make_shared<TaskData>(
-          std::async(std::launch::async, function_object));
+        {
+#ifdef DEAL_II_WITH_TBB
+          // Create a promise object and from it extract a future that
+          // we can use to refer to the outcome of the task. For reasons
+          // explained below, we can't just create a std::promise object,
+          // but have to make do with a pointer to such an object.
+          std::unique_ptr<std::promise<RT>> promise =
+            std::make_unique<std::promise<RT>>();
+          task_data =
+            std::make_shared<TaskData>(std::move(promise->get_future()));
+
+          // Then start the task, using a task_group object (for just this one
+          // task) that is associated with the TaskData object. Note that we
+          // have to *copy* the function object being executed so that it is
+          // guaranteed to live on the called thread as well -- the copying is
+          // facilitated by capturing the 'function_object' variable by value.
+          //
+          // We also have to *move* the promise object into the new task's
+          // memory space because promises can not be copied and we can't refer
+          // to it by reference because it's a local variable of the current
+          // (surrounding) function that may go out of scope before the promise
+          // is ultimately set. This leads to a conundrum: if we had just
+          // declared 'promise' as an object of type std::promise, then we could
+          // capture it in the lambda function via
+          //     [..., promise=std::move(promise)]() {...}
+          // and set the promise in the body of the lambda. But setting a
+          // promise is a non-const operation on the promise, and so we would
+          // actually have to declare the lambda function as 'mutable' because
+          // by default, lambda captures are 'const'. That is, we would have
+          // to write
+          //     [..., promise=std::move(promise)]() mutable {...}
+          // But this leads to other problems: It turns out that the
+          // tbb::task_group::run() function cannot take mutable lambdas as
+          // argument :-(
+          //
+          // We work around this issue by not declaring the 'promise' variable
+          // as an object of type std::promise, but as a pointer to such an
+          // object. This pointer we can move, and the *pointer* itself can
+          // be 'const' (meaning we can leave the lambda as non-mutable)
+          // even though we modify the object *pointed to*. One would think
+          // that a std::unique_ptr would be the right choice for this, but
+          // that's not true: the resulting lambda function can then be
+          // non-mutable, but the lambda function object is not copyable
+          // and at least some TBB variants require that as well. So
+          // instead we move the std::unique_ptr used above into a
+          // std::shared_ptr to be stored within the lambda function object.
+          task_data->task_group.run(
+            [function_object,
+             promise =
+               std::shared_ptr<std::promise<RT>>(std::move(promise))]() {
+              try
+                {
+                  internal::evaluate_and_set_promise(function_object, *promise);
+                }
+              catch (...)
+                {
+                  try
+                    {
+                      // store anything thrown in the promise
+                      promise->set_exception(std::current_exception());
+                    }
+                  catch (...)
+                    {
+                      // set_exception() may throw too. But ignore this on
+                      // the task.
+                    }
+                }
+            });
+
+#else
+          // If no threading library is supported, just fall back onto C++11
+          // facilities. The problem with this is that the standard does
+          // not actually say what std::async should do. The first
+          // argument to that function can be std::launch::async or
+          // std::launch::deferred, or both. The *intent* of the standard's
+          // authors was probably that if one sets it to
+          //   std::launch::async | std::launch::deferred,
+          // that the task is run in a thread pool. But at least as of
+          // 2021, GCC doesn't do that: It just runs it on a new thread.
+          // If one chooses std::launch::deferred, it runs the task on
+          // the same thread but only when one calls join() on the task's
+          // std::future object. In the former case, this leads to
+          // oversubscription, in the latter case to undersubscription of
+          // resources. We choose oversubscription here.
+          //
+          // The issue illustrates why relying on external libraries
+          // with task schedulers is the way to go.
+          task_data = std::make_shared<TaskData>(
+            std::async(std::launch::async | std::launch::deferred,
+                       function_object));
+#endif
+        }
       else
         {
           // Only one thread allowed. So let the task run to completion
@@ -1026,8 +1102,10 @@ namespace Threads
                   promise.set_exception(std::current_exception());
                 }
               catch (...)
-                {}
-              // set_exception() may throw too
+                {
+                  // set_exception() may throw too. But ignore this on
+                  // the task.
+                }
             }
         }
     }
@@ -1174,7 +1252,7 @@ namespace Threads
                      "The current object is not associated with a task that "
                      "can be joined. It may have been detached, or you "
                      "may have already joined it in the past.");
-    //@}
+    /** @} */
   private:
     /**
      * A data structure that holds a std::future into which the task deposits
@@ -1191,10 +1269,76 @@ namespace Threads
        * Constructor. Initializes an std::future object and assumes
        * that the task so set has not finished yet.
        */
-      TaskData(std::future<RT> &&future)
+      TaskData(std::future<RT> &&future) noexcept
         : future(std::move(future))
         , task_has_finished(false)
       {}
+
+      /**
+       * There can only be one TaskData object referencing
+       * a task. Make sure that these objects are not copied.
+       */
+      TaskData(const TaskData &) = delete;
+
+      /**
+       * There can only be one TaskData object referencing
+       * a task. Make sure that these objects are not moved.
+       */
+      TaskData(TaskData &&) = delete;
+
+      /**
+       * There can only be one TaskData object referencing
+       * a task. Make sure that these objects are not copied.
+       */
+      TaskData &
+      operator=(const TaskData &) = delete;
+
+      /**
+       * There can only be one TaskData object referencing
+       * a task. Make sure that these objects are not moved.
+       */
+      TaskData &
+      operator=(TaskData &&) = delete;
+
+      /**
+       * Destructor. Wait for the results to be ready. This ensures that the
+       * last Task object holding a shared pointer to the current TaskData
+       * object blocks until the task has actually finished -- in essence,
+       * this makes sure that one cannot just abandon a task completely
+       * by letting all Task objects that point to it go out of scope.
+       */
+      ~TaskData() noexcept
+      {
+        // Explicitly wait for the results to be ready. This class stores
+        // a std::future object, and we could just let the compiler generate
+        // the destructor which would then call the destructor of std::future
+        // which *may* block until the future is ready. As explained in
+        //   https://en.cppreference.com/w/cpp/thread/future/~future
+        // this is only a *may*, not a *must*. (The standard does not
+        // appear to say anything about it at all.) As a consequence,
+        // let's be explicit about waiting.
+        //
+        // One of the corner cases we have to worry about is that if a task
+        // ends by throwing an exception, then wait() will re-throw that
+        // exception on the thread that calls it, the first time around
+        // someone calls wait() (or the return_value() function of the
+        // surrounding class). So if we get to this constructor and an exception
+        // is thrown by wait(), then that means that the last Task object
+        // referring to a task is going out of scope with nobody having
+        // ever checked the return value of the task itself. In that case,
+        // one could argue that they would also not have cared about whether
+        // an exception is thrown, and that we should simply ignore the
+        // exception. This is what we do here. It is also the simplest solution,
+        // because we don't know what one should do with the exception to begin
+        // with: destructors aren't allowed to throw exceptions, so we can't
+        // just rethrow it here if one had been triggered.
+        try
+          {
+            wait();
+          }
+        catch (...)
+          {}
+      }
 
       /**
        * Wait for the std::future object to be ready, i.e., for the
@@ -1217,6 +1361,17 @@ namespace Threads
           return;
         else
           {
+#ifdef DEAL_II_WITH_TBB
+            // If we build on the TBB, then we can't just wait for the
+            // std::future object to get ready. Apparently the TBB happily
+            // enqueues a task into an arena and then just sits on it without
+            // ever executing it unless someone expresses an interest in the
+            // task. The way to avoid this is to add the task to a
+            // tbb::task_group, and then here wait for the single task
+            // associated with that task group.
+            task_group.wait();
+#endif
+
             // Wait for the task to finish and then move its
             // result. (We could have made the set_from() function
             // that we call here wait for the future to be ready --
@@ -1283,6 +1438,15 @@ namespace Threads
        * has delivered.
        */
       internal::return_value<RT> returned_object;
+
+#ifdef DEAL_II_WITH_TBB
+      /**
+       * A task group object we can wait for.
+       */
+      tbb::task_group task_group;
+
+      friend class Task<RT>;
+#endif
     };
 
     /**
@@ -1308,14 +1472,8 @@ namespace Threads
    *
    * @note Threads::new_task() is, in essence, equivalent to calling
    *   `std::async(std::launch::async, ...)` in that it runs the given task
-   *   in the background. (See https://en.cppreference.com/w/cpp/thread/async
-   *   for more information.) The only difference is if you configured deal.II
-   *   with `DEAL_II_WITH_THREADS=OFF`, then the operation described by the
-   *   arguments of this function are executed immediately and the returned
-   *   value is placed in the Task object returned here. This is useful for
-   *   cases where one wants to run a program in a way where deal.II does not
-   *   internally create parallel tasks, for example because one is already
-   *   using one MPI process per core in a parallel computation.
+   *   in the background. See https://en.cppreference.com/w/cpp/thread/async
+   *   for more information.
    *
    * @ingroup threads
    */
@@ -1398,14 +1556,8 @@ namespace Threads
    *
    * @note Threads::new_task() is, in essence, equivalent to calling
    *   `std::async(std::launch::async, ...)` in that it runs the given task
-   *   in the background. (See https://en.cppreference.com/w/cpp/thread/async
-   *   for more information.) The only difference is if you configured deal.II
-   *   with `DEAL_II_WITH_THREADS=OFF`, then the operation described by the
-   *   arguments of this function are executed immediately and the returned
-   *   value is placed in the Task object returned here. This is useful for
-   *   cases where one wants to run a program in a way where deal.II does not
-   *   internally create parallel tasks, for example because one is already
-   *   using one MPI process per core in a parallel computation.
+   *   in the background. See https://en.cppreference.com/w/cpp/thread/async
+   *   for more information.
    *
    * @ingroup CPP11
    */
@@ -1543,8 +1695,5 @@ namespace Threads
  */
 
 
-//---------------------------------------------------------------------------
 DEAL_II_NAMESPACE_CLOSE
-// end of #ifndef dealii_thread_management_h
 #endif
-//---------------------------------------------------------------------------

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -49,7 +49,7 @@ test()
 {
   VectorizedArray<Number> vector;
 
-  for (unsigned int v = 0; v < VectorizedArray<Number>::size(); v++)
+  for (unsigned int v = 0; v < VectorizedArray<Number>::size(); ++v)
     vector[v] = v;
 
   test_const(vector);

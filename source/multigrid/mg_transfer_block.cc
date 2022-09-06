@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -198,17 +198,6 @@ MGTransferBlock<number>::copy_to_mg(
             dst[level].block(mg_block[block])(i->second) =
               src.block(block)(i->first);
     }
-}
-
-
-
-template <int dim, int spacedim>
-void
-MGTransferBlockBase::build_matrices(
-  const DoFHandler<dim, spacedim> & /*dof*/,
-  const DoFHandler<dim, spacedim> &mg_dof_handler)
-{
-  build(mg_dof_handler);
 }
 
 
@@ -480,17 +469,6 @@ MGTransferBlockBase::build(const DoFHandler<dim, spacedim> &dof_handler)
 template <typename number>
 template <int dim, int spacedim>
 void
-MGTransferBlockSelect<number>::build_matrices(
-  const DoFHandler<dim, spacedim> & /*dof*/,
-  const DoFHandler<dim, spacedim> &mg_dof,
-  unsigned int                     select)
-{
-  build(mg_dof, select);
-}
-
-template <typename number>
-template <int dim, int spacedim>
-void
 MGTransferBlockSelect<number>::build(
   const DoFHandler<dim, spacedim> &dof_handler,
   unsigned int                     select)
@@ -575,17 +553,6 @@ MGTransferBlockSelect<number>::build(
     }
 }
 
-
-template <typename number>
-template <int dim, int spacedim>
-void
-MGTransferBlock<number>::build_matrices(
-  const DoFHandler<dim, spacedim> & /*dof*/,
-  const DoFHandler<dim, spacedim> &mg_dof,
-  const std::vector<bool> &        sel)
-{
-  build(mg_dof, sel);
-}
 
 template <typename number>
 template <int dim, int spacedim>

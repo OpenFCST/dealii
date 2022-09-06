@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -28,7 +28,7 @@ namespace Particles
   {
     /**
      * Cache structure used to store the elements which are required to
-     * exchange the particle information (location and properties) accross
+     * exchange the particle information (location and properties) across
      * processors in order to update the ghost particles.
      *
      * This structure should only be used when one wishes to carry out work
@@ -94,9 +94,7 @@ namespace Particles
        * without clearing the multimap of ghost particles, thus greatly
        * reducing the cost of exchanging the ghost particles information.
        */
-      std::vector<typename std::multimap<internal::LevelInd,
-                                         Particle<dim, spacedim>>::iterator>
-        ghost_particles_iterators;
+      std::vector<particle_iterator> ghost_particles_iterators;
 
       /**
        * Temporary storage that holds the data of the particles to be sent
@@ -109,7 +107,7 @@ namespace Particles
       /**
        * Temporary storage that holds the data of the particles to receive
        * the ghost particles information from other processors in
-       * in update_ghost_particles()
+       * update_ghost_particles()
        * send_recv_particles_properties_and_location()
        */
       std::vector<char> recv_data;

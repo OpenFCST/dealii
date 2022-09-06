@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2000 - 2020 by the deal.II authors
+ * Copyright (C) 2000 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -138,8 +138,7 @@ namespace Step8
   void right_hand_side(const std::vector<Point<dim>> &points,
                        std::vector<Tensor<1, dim>> &  values)
   {
-    Assert(values.size() == points.size(),
-           ExcDimensionMismatch(values.size(), points.size()));
+    AssertDimension(values.size(), points.size());
     Assert(dim >= 2, ExcNotImplemented());
 
     // The rest of the function implements computing force values. We will use

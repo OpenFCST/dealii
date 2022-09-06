@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2018 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,11 +25,14 @@
 
 #  include <memory>
 
+#  ifdef DEAL_II_WITH_TASKFLOW
 // forward declaration from <taskflow/taskflow.hpp>
 namespace tf
 {
   class Executor;
 }
+#  endif
+
 
 DEAL_II_NAMESPACE_OPEN
 

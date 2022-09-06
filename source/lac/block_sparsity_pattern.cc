@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -107,8 +107,8 @@ BlockSparsityPatternBase<SparsityPatternBase>::reinit(
 
 template <class SparsityPatternBase>
 BlockSparsityPatternBase<SparsityPatternBase> &
-BlockSparsityPatternBase<SparsityPatternBase>::
-operator=(const BlockSparsityPatternBase<SparsityPatternBase> &bsp)
+BlockSparsityPatternBase<SparsityPatternBase>::operator=(
+  const BlockSparsityPatternBase<SparsityPatternBase> &bsp)
 {
   Assert(rows == bsp.rows, ExcDimensionMismatch(rows, bsp.rows));
   Assert(columns == bsp.columns, ExcDimensionMismatch(columns, bsp.columns));

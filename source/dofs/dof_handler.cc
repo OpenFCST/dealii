@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2021 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,6 +18,7 @@
 #include <deal.II/base/geometry_info.h>
 #include <deal.II/base/memory_consumption.h>
 #include <deal.II/base/mpi.templates.h>
+#include <deal.II/base/thread_management.h>
 
 #include <deal.II/distributed/cell_data_transfer.templates.h>
 #include <deal.II/distributed/fully_distributed_tria.h>
@@ -27,6 +28,7 @@
 #include <deal.II/dofs/dof_handler.h>
 #include <deal.II/dofs/dof_handler_policy.h>
 
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/tria_accessor.h>
@@ -41,8 +43,8 @@
 DEAL_II_NAMESPACE_OPEN
 
 template <int dim, int spacedim>
-const typename DoFHandler<dim, spacedim>::active_fe_index_type
-  DoFHandler<dim, spacedim>::invalid_active_fe_index;
+const unsigned int DoFHandler<dim, spacedim>::default_fe_index;
+
 
 namespace internal
 {
@@ -439,7 +441,8 @@ namespace internal
       }
 
       template <int spacedim>
-      static void reserve_space_mg(DoFHandler<1, spacedim> &dof_handler)
+      static void
+      reserve_space_mg(DoFHandler<1, spacedim> &dof_handler)
       {
         Assert(dof_handler.get_triangulation().n_levels() > 0,
                ExcMessage("Invalid triangulation"));
@@ -508,7 +511,8 @@ namespace internal
       }
 
       template <int spacedim>
-      static void reserve_space_mg(DoFHandler<2, spacedim> &dof_handler)
+      static void
+      reserve_space_mg(DoFHandler<2, spacedim> &dof_handler)
       {
         Assert(dof_handler.get_triangulation().n_levels() > 0,
                ExcMessage("Invalid triangulation"));
@@ -584,7 +588,8 @@ namespace internal
       }
 
       template <int spacedim>
-      static void reserve_space_mg(DoFHandler<3, spacedim> &dof_handler)
+      static void
+      reserve_space_mg(DoFHandler<3, spacedim> &dof_handler)
       {
         Assert(dof_handler.get_triangulation().n_levels() > 0,
                ExcMessage("Invalid triangulation"));
@@ -663,281 +668,6 @@ namespace internal
               Assert(max_level[vertex] == 0, ExcInternalError());
               dof_handler.mg_vertex_dofs[vertex].init(1, 0, 0);
             }
-      }
-
-      template <int spacedim>
-      static types::global_dof_index
-      get_dof_index(
-        const DoFHandler<1, spacedim> &dof_handler,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFLevel<1>>
-          &mg_level,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFFaces<1>>
-          &,
-        const unsigned int obj_index,
-        const unsigned int fe_index,
-        const unsigned int local_index,
-        const std::integral_constant<int, 1>)
-      {
-        Assert(dof_handler.hp_capability_enabled == false,
-               (typename DoFHandler<1, spacedim>::ExcNotImplementedWithHP()));
-
-        return mg_level->dof_object.get_dof_index(
-          static_cast<const DoFHandler<1, spacedim> &>(dof_handler),
-          obj_index,
-          fe_index,
-          local_index);
-      }
-
-      template <int spacedim>
-      static types::global_dof_index
-      get_dof_index(
-        const DoFHandler<2, spacedim> &dof_handler,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFLevel<2>>
-          &,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFFaces<2>>
-          &                mg_faces,
-        const unsigned int obj_index,
-        const unsigned int fe_index,
-        const unsigned int local_index,
-        const std::integral_constant<int, 1>)
-      {
-        return mg_faces->lines.get_dof_index(
-          static_cast<const DoFHandler<2, spacedim> &>(dof_handler),
-          obj_index,
-          fe_index,
-          local_index);
-      }
-
-      template <int spacedim>
-      static types::global_dof_index
-      get_dof_index(
-        const DoFHandler<2, spacedim> &dof_handler,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFLevel<2>>
-          &mg_level,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFFaces<2>>
-          &,
-        const unsigned int obj_index,
-        const unsigned int fe_index,
-        const unsigned int local_index,
-        const std::integral_constant<int, 2>)
-      {
-        Assert(dof_handler.hp_capability_enabled == false,
-               (typename DoFHandler<2, spacedim>::ExcNotImplementedWithHP()));
-        return mg_level->dof_object.get_dof_index(
-          static_cast<const DoFHandler<2, spacedim> &>(dof_handler),
-          obj_index,
-          fe_index,
-          local_index);
-      }
-
-      template <int spacedim>
-      static types::global_dof_index
-      get_dof_index(
-        const DoFHandler<3, spacedim> &dof_handler,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFLevel<3>>
-          &,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFFaces<3>>
-          &                mg_faces,
-        const unsigned int obj_index,
-        const unsigned int fe_index,
-        const unsigned int local_index,
-        const std::integral_constant<int, 1>)
-      {
-        Assert(dof_handler.hp_capability_enabled == false,
-               (typename DoFHandler<3, spacedim>::ExcNotImplementedWithHP()));
-        return mg_faces->lines.get_dof_index(
-          static_cast<const DoFHandler<3, spacedim> &>(dof_handler),
-          obj_index,
-          fe_index,
-          local_index);
-      }
-
-      template <int spacedim>
-      static types::global_dof_index
-      get_dof_index(
-        const DoFHandler<3, spacedim> &dof_handler,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFLevel<3>>
-          &,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFFaces<3>>
-          &                mg_faces,
-        const unsigned int obj_index,
-        const unsigned int fe_index,
-        const unsigned int local_index,
-        const std::integral_constant<int, 2>)
-      {
-        Assert(dof_handler.hp_capability_enabled == false,
-               (typename DoFHandler<3, spacedim>::ExcNotImplementedWithHP()));
-        return mg_faces->quads.get_dof_index(
-          static_cast<const DoFHandler<3, spacedim> &>(dof_handler),
-          obj_index,
-          fe_index,
-          local_index);
-      }
-
-      template <int spacedim>
-      static types::global_dof_index
-      get_dof_index(
-        const DoFHandler<3, spacedim> &dof_handler,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFLevel<3>>
-          &mg_level,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFFaces<3>>
-          &,
-        const unsigned int obj_index,
-        const unsigned int fe_index,
-        const unsigned int local_index,
-        const std::integral_constant<int, 3>)
-      {
-        Assert(dof_handler.hp_capability_enabled == false,
-               (typename DoFHandler<3, spacedim>::ExcNotImplementedWithHP()));
-        return mg_level->dof_object.get_dof_index(
-          static_cast<const DoFHandler<3, spacedim> &>(dof_handler),
-          obj_index,
-          fe_index,
-          local_index);
-      }
-
-      template <int spacedim>
-      static void
-      set_dof_index(
-        const DoFHandler<1, spacedim> &dof_handler,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFLevel<1>>
-          &mg_level,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFFaces<1>>
-          &,
-        const unsigned int            obj_index,
-        const unsigned int            fe_index,
-        const unsigned int            local_index,
-        const types::global_dof_index global_index,
-        const std::integral_constant<int, 1>)
-      {
-        Assert(dof_handler.hp_capability_enabled == false,
-               (typename DoFHandler<1, spacedim>::ExcNotImplementedWithHP()));
-        mg_level->dof_object.set_dof_index(
-          static_cast<const DoFHandler<1, spacedim> &>(dof_handler),
-          obj_index,
-          fe_index,
-          local_index,
-          global_index);
-      }
-
-      template <int spacedim>
-      static void
-      set_dof_index(
-        const DoFHandler<2, spacedim> &dof_handler,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFLevel<2>>
-          &,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFFaces<2>>
-          &                           mg_faces,
-        const unsigned int            obj_index,
-        const unsigned int            fe_index,
-        const unsigned int            local_index,
-        const types::global_dof_index global_index,
-        const std::integral_constant<int, 1>)
-      {
-        Assert(dof_handler.hp_capability_enabled == false,
-               (typename DoFHandler<2, spacedim>::ExcNotImplementedWithHP()));
-        mg_faces->lines.set_dof_index(
-          static_cast<const DoFHandler<2, spacedim> &>(dof_handler),
-          obj_index,
-          fe_index,
-          local_index,
-          global_index);
-      }
-
-      template <int spacedim>
-      static void
-      set_dof_index(
-        const DoFHandler<2, spacedim> &dof_handler,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFLevel<2>>
-          &mg_level,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFFaces<2>>
-          &,
-        const unsigned int            obj_index,
-        const unsigned int            fe_index,
-        const unsigned int            local_index,
-        const types::global_dof_index global_index,
-        const std::integral_constant<int, 2>)
-      {
-        Assert(dof_handler.hp_capability_enabled == false,
-               (typename DoFHandler<2, spacedim>::ExcNotImplementedWithHP()));
-        mg_level->dof_object.set_dof_index(
-          static_cast<const DoFHandler<2, spacedim> &>(dof_handler),
-          obj_index,
-          fe_index,
-          local_index,
-          global_index);
-      }
-
-      template <int spacedim>
-      static void
-      set_dof_index(
-        const DoFHandler<3, spacedim> &dof_handler,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFLevel<3>>
-          &,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFFaces<3>>
-          &                           mg_faces,
-        const unsigned int            obj_index,
-        const unsigned int            fe_index,
-        const unsigned int            local_index,
-        const types::global_dof_index global_index,
-        const std::integral_constant<int, 1>)
-      {
-        Assert(dof_handler.hp_capability_enabled == false,
-               (typename DoFHandler<3, spacedim>::ExcNotImplementedWithHP()));
-        mg_faces->lines.set_dof_index(
-          static_cast<const DoFHandler<3, spacedim> &>(dof_handler),
-          obj_index,
-          fe_index,
-          local_index,
-          global_index);
-      }
-
-      template <int spacedim>
-      static void
-      set_dof_index(
-        const DoFHandler<3, spacedim> &dof_handler,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFLevel<3>>
-          &,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFFaces<3>>
-          &                           mg_faces,
-        const unsigned int            obj_index,
-        const unsigned int            fe_index,
-        const unsigned int            local_index,
-        const types::global_dof_index global_index,
-        const std::integral_constant<int, 2>)
-      {
-        Assert(dof_handler.hp_capability_enabled == false,
-               (typename DoFHandler<3, spacedim>::ExcNotImplementedWithHP()));
-        mg_faces->quads.set_dof_index(
-          static_cast<const DoFHandler<3, spacedim> &>(dof_handler),
-          obj_index,
-          fe_index,
-          local_index,
-          global_index);
-      }
-
-      template <int spacedim>
-      static void
-      set_dof_index(
-        const DoFHandler<3, spacedim> &dof_handler,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFLevel<3>>
-          &mg_level,
-        const std::unique_ptr<internal::DoFHandlerImplementation::DoFFaces<3>>
-          &,
-        const unsigned int            obj_index,
-        const unsigned int            fe_index,
-        const unsigned int            local_index,
-        const types::global_dof_index global_index,
-        const std::integral_constant<int, 3>)
-      {
-        Assert(dof_handler.hp_capability_enabled == false,
-               (typename DoFHandler<3, spacedim>::ExcNotImplementedWithHP()));
-        mg_level->dof_object.set_dof_index(
-          static_cast<const DoFHandler<3, spacedim> &>(dof_handler),
-          obj_index,
-          fe_index,
-          local_index,
-          global_index);
       }
     };
   } // namespace DoFHandlerImplementation
@@ -1187,43 +917,14 @@ namespace internal
           // *have* to be different, and so we need to prepare for this
           // as well.
           //
-          // The way we do things is that we loop over all active
-          // cells (these are the only ones that have DoFs
-          // anyway) and all their faces. We note in the
-          // user flags whether we have previously visited a face and
-          // if so skip it (consequently, we have to save and later
-          // restore the face flags)
+          // The way we do things is that we loop over all active cells (these
+          // are the only ones that have DoFs anyway) and all their faces. We
+          // note in the vector face_touched whether we have previously
+          // visited a face and if so skip it
           {
-            std::vector<bool> saved_face_user_flags;
-            switch (dim)
-              {
-                case 2:
-                  {
-                    const_cast<dealii::Triangulation<dim, spacedim> &>(
-                      *dof_handler.tria)
-                      .save_user_flags_line(saved_face_user_flags);
-                    const_cast<dealii::Triangulation<dim, spacedim> &>(
-                      *dof_handler.tria)
-                      .clear_user_flags_line();
-
-                    break;
-                  }
-
-                case 3:
-                  {
-                    const_cast<dealii::Triangulation<dim, spacedim> &>(
-                      *dof_handler.tria)
-                      .save_user_flags_quad(saved_face_user_flags);
-                    const_cast<dealii::Triangulation<dim, spacedim> &>(
-                      *dof_handler.tria)
-                      .clear_user_flags_quad();
-
-                    break;
-                  }
-
-                default:
-                  Assert(false, ExcNotImplemented());
-              }
+            std::vector<bool> face_touched(dim == 2 ?
+                                             dof_handler.tria->n_raw_lines() :
+                                             dof_handler.tria->n_raw_quads());
 
             const unsigned int d = dim - 1;
             const unsigned int l = 0;
@@ -1243,7 +944,7 @@ namespace internal
             for (const auto &cell : dof_handler.active_cell_iterators())
               if (!cell->is_artificial())
                 for (const auto face : cell->face_indices())
-                  if (cell->face(face)->user_flag_set() == false)
+                  if (!face_touched[cell->face(face)->index()])
                     {
                       unsigned int fe_slots_needed = 0;
 
@@ -1275,7 +976,7 @@ namespace internal
                         }
 
                       // mark this face as visited
-                      cell->face(face)->set_user_flag();
+                      face_touched[cell->face(face)->index()] = true;
 
                       dof_handler
                         .hp_object_fe_ptr[d][cell->face(face)->index() + 1] =
@@ -1299,34 +1000,12 @@ namespace internal
             // With the memory now allocated, loop over the
             // dof_handler cells again and prime the _offset values as
             // well as the fe_index fields
-            switch (dim)
-              {
-                case 2:
-                  {
-                    const_cast<dealii::Triangulation<dim, spacedim> &>(
-                      *dof_handler.tria)
-                      .clear_user_flags_line();
-
-                    break;
-                  }
-
-                case 3:
-                  {
-                    const_cast<dealii::Triangulation<dim, spacedim> &>(
-                      *dof_handler.tria)
-                      .clear_user_flags_quad();
-
-                    break;
-                  }
-
-                default:
-                  Assert(false, ExcNotImplemented());
-              }
+            face_touched = std::vector<bool>(face_touched.size());
 
             for (const auto &cell : dof_handler.active_cell_iterators())
               if (!cell->is_artificial())
                 for (const auto face : cell->face_indices())
-                  if (!cell->face(face)->user_flag_set())
+                  if (!face_touched[cell->face(face)->index()])
                     {
                       // Same decision tree as before
                       if (cell->at_boundary(face) ||
@@ -1350,7 +1029,7 @@ namespace internal
                           dof_handler.hp_object_fe_indices[d][offset]  = fe;
                           dof_handler.object_dof_ptr[l][d][offset + 1] = n_dofs;
 
-                          for (unsigned int i = 0; i < n_dofs; i++)
+                          for (unsigned int i = 0; i < n_dofs; ++i)
                             dof_handler.object_dof_indices[l][d].push_back(
                               numbers::invalid_dof_index);
                         }
@@ -1395,13 +1074,13 @@ namespace internal
                             n_dofs_2;
 
 
-                          for (unsigned int i = 0; i < n_dofs_1 + n_dofs_2; i++)
+                          for (unsigned int i = 0; i < n_dofs_1 + n_dofs_2; ++i)
                             dof_handler.object_dof_indices[l][d].push_back(
                               numbers::invalid_dof_index);
                         }
 
                       // mark this face as visited
-                      cell->face(face)->set_user_flag();
+                      face_touched[cell->face(face)->index()] = true;
                     }
 
             for (unsigned int i = 1;
@@ -1409,31 +1088,6 @@ namespace internal
                  i++)
               dof_handler.object_dof_ptr[l][d][i] +=
                 dof_handler.object_dof_ptr[l][d][i - 1];
-
-            // at the end, restore the user flags for the faces
-            switch (dim)
-              {
-                case 2:
-                  {
-                    const_cast<dealii::Triangulation<dim, spacedim> &>(
-                      *dof_handler.tria)
-                      .load_user_flags_line(saved_face_user_flags);
-
-                    break;
-                  }
-
-                case 3:
-                  {
-                    const_cast<dealii::Triangulation<dim, spacedim> &>(
-                      *dof_handler.tria)
-                      .load_user_flags_quad(saved_face_user_flags);
-
-                    break;
-                  }
-
-                default:
-                  Assert(false, ExcNotImplemented());
-              }
           }
         }
 
@@ -1446,7 +1100,8 @@ namespace internal
          * selected when calling @p distribute_dofs the last time.
          */
         template <int spacedim>
-        static void reserve_space(dealii::DoFHandler<1, spacedim> &dof_handler)
+        static void
+        reserve_space(dealii::DoFHandler<1, spacedim> &dof_handler)
         {
           Assert(dof_handler.fe_collection.size() > 0,
                  (typename dealii::DoFHandler<1, spacedim>::ExcNoFESelected()));
@@ -1470,7 +1125,8 @@ namespace internal
 
 
         template <int spacedim>
-        static void reserve_space(dealii::DoFHandler<2, spacedim> &dof_handler)
+        static void
+        reserve_space(dealii::DoFHandler<2, spacedim> &dof_handler)
         {
           Assert(dof_handler.fe_collection.size() > 0,
                  (typename dealii::DoFHandler<1, spacedim>::ExcNoFESelected()));
@@ -1496,7 +1152,8 @@ namespace internal
 
 
         template <int spacedim>
-        static void reserve_space(dealii::DoFHandler<3, spacedim> &dof_handler)
+        static void
+        reserve_space(dealii::DoFHandler<3, spacedim> &dof_handler)
         {
           Assert(dof_handler.fe_collection.size() > 0,
                  (typename dealii::DoFHandler<1, spacedim>::ExcNoFESelected()));
@@ -1660,9 +1317,6 @@ namespace internal
             dof_handler.hp_capability_enabled == true,
             (typename DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
 
-          using active_fe_index_type =
-            typename dealii::DoFHandler<dim, spacedim>::active_fe_index_type;
-
           if (const dealii::parallel::shared::Triangulation<dim, spacedim> *tr =
                 dynamic_cast<
                   const dealii::parallel::shared::Triangulation<dim, spacedim>
@@ -1678,7 +1332,7 @@ namespace internal
               // on the other cells to zero. then we add all of these vectors
               // up, and because every vector entry has exactly one processor
               // that owns it, the sum is correct
-              std::vector<active_fe_index_type> active_fe_indices(
+              std::vector<types::fe_index> active_fe_indices(
                 tr->n_active_cells(), 0u);
               for (const auto &cell : dof_handler.active_cell_iterators())
                 if (cell->is_locally_owned())
@@ -1714,17 +1368,15 @@ namespace internal
               // to have functions that can pack and unpack the data we want to
               // transport -- namely, the single unsigned int active_fe_index
               // objects
-              auto pack =
-                [](const typename dealii::DoFHandler<dim, spacedim>::
-                     active_cell_iterator &cell) -> active_fe_index_type {
+              auto pack = [](const typename dealii::DoFHandler<dim, spacedim>::
+                               active_cell_iterator &cell) -> types::fe_index {
                 return cell->active_fe_index();
               };
 
-              auto unpack =
-                [&dof_handler](
-                  const typename dealii::DoFHandler<dim, spacedim>::
-                    active_cell_iterator &   cell,
-                  const active_fe_index_type active_fe_index) -> void {
+              auto unpack = [&dof_handler](
+                              const typename dealii::DoFHandler<dim, spacedim>::
+                                active_cell_iterator &cell,
+                              const types::fe_index   active_fe_index) -> void {
                 // we would like to say
                 //   cell->set_active_fe_index(active_fe_index);
                 // but this is not allowed on cells that are not
@@ -1735,7 +1387,7 @@ namespace internal
               };
 
               GridTools::exchange_cell_data_to_ghosts<
-                active_fe_index_type,
+                types::fe_index,
                 dealii::DoFHandler<dim, spacedim>>(dof_handler, pack, unpack);
             }
           else
@@ -1772,21 +1424,18 @@ namespace internal
             dof_handler.hp_capability_enabled == true,
             (typename DoFHandler<dim, spacedim>::ExcOnlyAvailableWithHP()));
 
-          using active_fe_index_type =
-            typename dealii::DoFHandler<dim, spacedim>::active_fe_index_type;
-
           if (const dealii::parallel::shared::Triangulation<dim, spacedim> *tr =
                 dynamic_cast<
                   const dealii::parallel::shared::Triangulation<dim, spacedim>
                     *>(&dof_handler.get_triangulation()))
             {
-              std::vector<active_fe_index_type> future_fe_indices(
+              std::vector<types::fe_index> future_fe_indices(
                 tr->n_active_cells(), 0u);
-              for (const auto &cell : dof_handler.active_cell_iterators())
-                if (cell->is_locally_owned())
-                  future_fe_indices[cell->active_cell_index()] =
-                    dof_handler
-                      .hp_cell_future_fe_indices[cell->level()][cell->index()];
+              for (const auto &cell : dof_handler.active_cell_iterators() |
+                                        IteratorFilters::LocallyOwnedCell())
+                future_fe_indices[cell->active_cell_index()] =
+                  dof_handler
+                    .hp_cell_future_fe_indices[cell->level()][cell->index()];
 
               Utilities::MPI::sum(future_fe_indices,
                                   tr->get_communicator(),
@@ -1805,26 +1454,24 @@ namespace internal
                            DistributedTriangulationBase<dim, spacedim> *>(
                          &dof_handler.get_triangulation()))
             {
-              auto pack =
-                [&dof_handler](
-                  const typename dealii::DoFHandler<dim, spacedim>::
-                    active_cell_iterator &cell) -> active_fe_index_type {
+              auto pack = [&dof_handler](
+                            const typename dealii::DoFHandler<dim, spacedim>::
+                              active_cell_iterator &cell) -> types::fe_index {
                 return dof_handler
                   .hp_cell_future_fe_indices[cell->level()][cell->index()];
               };
 
-              auto unpack =
-                [&dof_handler](
-                  const typename dealii::DoFHandler<dim, spacedim>::
-                    active_cell_iterator &   cell,
-                  const active_fe_index_type future_fe_index) -> void {
+              auto unpack = [&dof_handler](
+                              const typename dealii::DoFHandler<dim, spacedim>::
+                                active_cell_iterator &cell,
+                              const types::fe_index   future_fe_index) -> void {
                 dof_handler
                   .hp_cell_future_fe_indices[cell->level()][cell->index()] =
                   future_fe_index;
               };
 
               GridTools::exchange_cell_data_to_ghosts<
-                active_fe_index_type,
+                types::fe_index,
                 dealii::DoFHandler<dim, spacedim>>(dof_handler, pack, unpack);
             }
           else
@@ -2142,27 +1789,6 @@ DoFHandler<dim, spacedim>::~DoFHandler()
   // current object disappears because the policy objects
   // store references to the DoFhandler object they work on
   this->policy.reset();
-}
-
-
-
-template <int dim, int spacedim>
-void
-DoFHandler<dim, spacedim>::initialize(const Triangulation<dim, spacedim> &tria,
-                                      const FiniteElement<dim, spacedim> &fe)
-{
-  this->initialize(tria, hp::FECollection<dim, spacedim>(fe));
-}
-
-
-
-template <int dim, int spacedim>
-void
-DoFHandler<dim, spacedim>::initialize(const Triangulation<dim, spacedim> &tria,
-                                      const hp::FECollection<dim, spacedim> &fe)
-{
-  this->reinit(tria);
-  this->distribute_dofs(fe);
 }
 
 
@@ -2524,81 +2150,6 @@ DoFHandler<dim, spacedim>::memory_consumption() const
     }
 
   return mem;
-}
-
-
-
-template <int dim, int spacedim>
-void
-DoFHandler<dim, spacedim>::set_fe(const FiniteElement<dim, spacedim> &fe)
-{
-  this->set_fe(hp::FECollection<dim, spacedim>(fe));
-}
-
-
-
-template <int dim, int spacedim>
-void
-DoFHandler<dim, spacedim>::set_fe(const hp::FECollection<dim, spacedim> &ff)
-{
-  Assert(
-    this->tria != nullptr,
-    ExcMessage(
-      "You need to set the Triangulation in the DoFHandler using reinit() or "
-      "in the constructor before you can distribute DoFs."));
-  Assert(this->tria->n_levels() > 0,
-         ExcMessage("The Triangulation you are using is empty!"));
-  Assert(ff.size() > 0, ExcMessage("The hp::FECollection given is empty!"));
-
-  // don't create a new object if the one we have is already appropriate
-  if (this->fe_collection != ff)
-    {
-      this->fe_collection = hp::FECollection<dim, spacedim>(ff);
-
-      const bool contains_multiple_fes = (this->fe_collection.size() > 1);
-
-      // disable hp-mode if only a single finite element has been registered
-      if (hp_capability_enabled && !contains_multiple_fes)
-        {
-          hp_capability_enabled = false;
-
-          // unsubscribe connections to signals that are only relevant for
-          // hp-mode, since we only have a single element here
-          for (auto &connection : this->tria_listeners_for_transfer)
-            connection.disconnect();
-          this->tria_listeners_for_transfer.clear();
-
-          // release active and future finite element tables
-          this->hp_cell_active_fe_indices.clear();
-          this->hp_cell_active_fe_indices.shrink_to_fit();
-          this->hp_cell_future_fe_indices.clear();
-          this->hp_cell_future_fe_indices.shrink_to_fit();
-        }
-
-      // re-enabling hp-mode is not permitted since the active and future FE
-      // tables are no longer available
-      AssertThrow(
-        hp_capability_enabled || !contains_multiple_fes,
-        ExcMessage(
-          "You cannot re-enable hp-capabilities after you registered a single "
-          "finite element. Please create a new DoFHandler object instead."));
-    }
-
-  if (hp_capability_enabled)
-    {
-      // make sure every processor knows the active FE indices
-      // on both its own cells and all ghost cells
-      dealii::internal::hp::DoFHandlerImplementation::Implementation::
-        communicate_active_fe_indices(*this);
-
-      // make sure that the FE collection is large enough to
-      // cover all FE indices presently in use on the mesh
-      for (const auto &cell : this->active_cell_iterators())
-        if (!cell->is_artificial())
-          Assert(cell->active_fe_index() < this->fe_collection.size(),
-                 ExcInvalidFEIndex(cell->active_fe_index(),
-                                   this->fe_collection.size()));
-    }
 }
 
 
@@ -3058,65 +2609,6 @@ DoFHandler<dim, spacedim>::max_couplings_between_dofs() const
 
 
 template <int dim, int spacedim>
-template <int structdim>
-types::global_dof_index
-DoFHandler<dim, spacedim>::get_dof_index(const unsigned int obj_level,
-                                         const unsigned int obj_index,
-                                         const unsigned int fe_index,
-                                         const unsigned int local_index) const
-{
-  if (hp_capability_enabled)
-    {
-      Assert(false, ExcNotImplemented());
-      return numbers::invalid_dof_index;
-    }
-  else
-    {
-      return internal::DoFHandlerImplementation::Implementation::get_dof_index(
-        *this,
-        this->mg_levels[obj_level],
-        this->mg_faces,
-        obj_index,
-        fe_index,
-        local_index,
-        std::integral_constant<int, structdim>());
-    }
-}
-
-
-
-template <int dim, int spacedim>
-template <int structdim>
-void
-DoFHandler<dim, spacedim>::set_dof_index(
-  const unsigned int            obj_level,
-  const unsigned int            obj_index,
-  const unsigned int            fe_index,
-  const unsigned int            local_index,
-  const types::global_dof_index global_index) const
-{
-  if (hp_capability_enabled)
-    {
-      Assert(false, ExcNotImplemented());
-      return;
-    }
-  else
-    {
-      internal::DoFHandlerImplementation::Implementation::set_dof_index(
-        *this,
-        this->mg_levels[obj_level],
-        this->mg_faces,
-        obj_index,
-        fe_index,
-        local_index,
-        global_index,
-        std::integral_constant<int, structdim>());
-    }
-}
-
-
-
-template <int dim, int spacedim>
 void
 DoFHandler<dim, spacedim>::set_active_fe_indices(
   const std::vector<unsigned int> &active_fe_indices)
@@ -3138,11 +2630,11 @@ DoFHandler<dim, spacedim>::set_active_fe_indices(
 
 
 template <int dim, int spacedim>
-void
-DoFHandler<dim, spacedim>::get_active_fe_indices(
-  std::vector<unsigned int> &active_fe_indices) const
+std::vector<unsigned int>
+DoFHandler<dim, spacedim>::get_active_fe_indices() const
 {
-  active_fe_indices.resize(this->get_triangulation().n_active_cells());
+  std::vector<unsigned int> active_fe_indices(
+    this->get_triangulation().n_active_cells(), numbers::invalid_fe_index);
 
   // we could try to extract the values directly, since they are
   // stored as protected data of this object, but for simplicity we
@@ -3150,6 +2642,60 @@ DoFHandler<dim, spacedim>::get_active_fe_indices(
   for (const auto &cell : this->active_cell_iterators())
     if (!cell->is_artificial())
       active_fe_indices[cell->active_cell_index()] = cell->active_fe_index();
+
+  return active_fe_indices;
+}
+
+
+
+template <int dim, int spacedim>
+void
+DoFHandler<dim, spacedim>::get_active_fe_indices(
+  std::vector<unsigned int> &active_fe_indices) const
+{
+  active_fe_indices = get_active_fe_indices();
+}
+
+
+
+template <int dim, int spacedim>
+void
+DoFHandler<dim, spacedim>::set_future_fe_indices(
+  const std::vector<unsigned int> &future_fe_indices)
+{
+  Assert(future_fe_indices.size() == this->get_triangulation().n_active_cells(),
+         ExcDimensionMismatch(future_fe_indices.size(),
+                              this->get_triangulation().n_active_cells()));
+
+  this->create_active_fe_table();
+  // we could set the values directly, since they are stored as
+  // protected data of this object, but for simplicity we use the
+  // cell-wise access. this way we also have to pass some debug-mode
+  // tests which we would have to duplicate ourselves otherwise
+  for (const auto &cell : this->active_cell_iterators())
+    if (cell->is_locally_owned() &&
+        future_fe_indices[cell->active_cell_index()] !=
+          numbers::invalid_fe_index)
+      cell->set_future_fe_index(future_fe_indices[cell->active_cell_index()]);
+}
+
+
+
+template <int dim, int spacedim>
+std::vector<unsigned int>
+DoFHandler<dim, spacedim>::get_future_fe_indices() const
+{
+  std::vector<unsigned int> future_fe_indices(
+    this->get_triangulation().n_active_cells(), numbers::invalid_fe_index);
+
+  // we could try to extract the values directly, since they are
+  // stored as protected data of this object, but for simplicity we
+  // use the cell-wise access.
+  for (const auto &cell : this->active_cell_iterators())
+    if (cell->is_locally_owned() && cell->future_fe_index_set())
+      future_fe_indices[cell->active_cell_index()] = cell->future_fe_index();
+
+  return future_fe_indices;
 }
 
 
@@ -3271,7 +2817,7 @@ DoFHandler<dim, spacedim>::create_active_fe_table()
           this->hp_cell_active_fe_indices[level].resize(
             this->tria->n_raw_cells(level), 0);
           this->hp_cell_future_fe_indices[level].resize(
-            this->tria->n_raw_cells(level), invalid_active_fe_index);
+            this->tria->n_raw_cells(level), numbers::invalid_fe_index);
         }
       else
         {
@@ -3330,7 +2876,7 @@ DoFHandler<dim, spacedim>::update_active_fe_table()
       // We have used future FE indices to update all active FE indices
       // before refinement happened, thus we are safe to clear them now.
       this->hp_cell_future_fe_indices[i].assign(this->tria->n_raw_cells(i),
-                                                invalid_active_fe_index);
+                                                numbers::invalid_fe_index);
     }
 }
 
@@ -3519,7 +3065,7 @@ DoFHandler<dim, spacedim>::prepare_for_serialization_of_active_fe_indices()
   // active FE indices since ownership of cells may change.
 
   // Gather all current active FE indices
-  get_active_fe_indices(active_fe_index_transfer->active_fe_indices);
+  active_fe_index_transfer->active_fe_indices = get_active_fe_indices();
 
   // Attach to transfer object
   active_fe_index_transfer->cell_data_transfer->prepare_for_serialization(

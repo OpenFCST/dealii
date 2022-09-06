@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -22,22 +22,18 @@
 #  ifdef DEAL_II_WITH_TRILINOS
 
 #    include <deal.II/base/index_set.h>
+#    include <deal.II/base/mpi_stub.h>
 #    include <deal.II/base/subscriptor.h>
 
 #    include <deal.II/lac/exceptions.h>
 
 #    include <Epetra_FECrsGraph.h>
 #    include <Epetra_Map.h>
+#    include <Epetra_MpiComm.h>
 
 #    include <cmath>
 #    include <memory>
 #    include <vector>
-#    ifdef DEAL_II_WITH_MPI
-#      include <Epetra_MpiComm.h>
-#      include <mpi.h>
-#    else
-#      include <Epetra_SerialComm.h>
-#    endif
 
 
 DEAL_II_NAMESPACE_OPEN
@@ -207,12 +203,14 @@ namespace TrilinosWrappers
       /**
        * Dereferencing operator.
        */
-      const Accessor &operator*() const;
+      const Accessor &
+      operator*() const;
 
       /**
        * Dereferencing operator.
        */
-      const Accessor *operator->() const;
+      const Accessor *
+      operator->() const;
 
       /**
        * Comparison. True, if both iterators point to the same matrix
@@ -289,7 +287,7 @@ namespace TrilinosWrappers
     /**
      * @name Basic constructors and initialization
      */
-    //@{
+    /** @{ */
     /**
      * Default constructor. Generates an empty (zero-size) sparsity pattern.
      */
@@ -417,12 +415,12 @@ namespace TrilinosWrappers
      */
     void
     compress();
-    //@}
+    /** @} */
 
     /**
      * @name Constructors and initialization using an IndexSet description
      */
-    //@{
+    /** @{ */
 
     /**
      * Constructor for a square sparsity pattern using an IndexSet and an MPI
@@ -650,11 +648,11 @@ namespace TrilinosWrappers
            const SparsityPatternType &nontrilinos_sparsity_pattern,
            const MPI_Comm &           communicator  = MPI_COMM_WORLD,
            const bool                 exchange_data = false);
-    //@}
+    /** @} */
     /**
      * @name Information on the sparsity pattern
      */
-    //@{
+    /** @{ */
 
     /**
      * Return the state of the sparsity pattern, i.e., whether compress()
@@ -714,7 +712,7 @@ namespace TrilinosWrappers
     /**
      * Return the number of nonzero elements of this sparsity pattern.
      */
-    size_type
+    std::uint64_t
     n_nonzero_elements() const;
 
     /**
@@ -765,11 +763,11 @@ namespace TrilinosWrappers
     std::size_t
     memory_consumption() const;
 
-    //@}
+    /** @} */
     /**
      * @name Adding entries
      */
-    //@{
+    /** @{ */
     /**
      * Add the element (<i>i,j</i>) to the sparsity pattern.
      */
@@ -786,11 +784,11 @@ namespace TrilinosWrappers
                 ForwardIterator begin,
                 ForwardIterator end,
                 const bool      indices_are_sorted = false);
-    //@}
+    /** @} */
     /**
      * @name Access of underlying Trilinos data
      */
-    //@{
+    /** @{ */
 
     /**
      * Return a const reference to the underlying Trilinos Epetra_CrsGraph
@@ -822,12 +820,12 @@ namespace TrilinosWrappers
      */
     MPI_Comm
     get_mpi_communicator() const;
-    //@}
+    /** @} */
 
     /**
      * @name Partitioners
      */
-    //@{
+    /** @{ */
 
     /**
      * Return the partitioning of the domain space of this pattern, i.e., the
@@ -845,12 +843,12 @@ namespace TrilinosWrappers
     IndexSet
     locally_owned_range_indices() const;
 
-    //@}
+    /** @} */
 
     /**
      * @name Iterators
      */
-    //@{
+    /** @{ */
 
     /**
      * Iterator starting at the first entry.
@@ -886,11 +884,11 @@ namespace TrilinosWrappers
     const_iterator
     end(const size_type r) const;
 
-    //@}
+    /** @} */
     /**
      * @name Input/Output
      */
-    //@{
+    /** @{ */
 
     /**
      * Abstract Trilinos object that helps view in ASCII other Trilinos
@@ -928,7 +926,7 @@ namespace TrilinosWrappers
     void
     print_gnuplot(std::ostream &out) const;
 
-    //@}
+    /** @} */
     /**
      * @addtogroup Exceptions
      * @{
@@ -967,10 +965,10 @@ namespace TrilinosWrappers
                    size_type,
                    size_type,
                    size_type,
-                   << "You tried to access element (" << arg1 << "/" << arg2
-                   << ")"
+                   << "You tried to access element (" << arg1 << '/' << arg2
+                   << ')'
                    << " of a distributed matrix, but only rows in range ["
-                   << arg3 << "," << arg4
+                   << arg3 << ',' << arg4
                    << "] are stored locally and can be accessed.");
 
     /**
@@ -979,11 +977,10 @@ namespace TrilinosWrappers
     DeclException2(ExcAccessToNonPresentElement,
                    size_type,
                    size_type,
-                   << "You tried to access element (" << arg1 << "/" << arg2
-                   << ")"
-                   << " of a sparse matrix, but it appears to not"
+                   << "You tried to access element (" << arg1 << '/' << arg2
+                   << ')' << " of a sparse matrix, but it appears to not"
                    << " exist in the Trilinos sparsity pattern.");
-    //@}
+    /** @} */
   private:
     /**
      * Pointer to the user-supplied Epetra Trilinos mapping of the matrix
@@ -1118,14 +1115,16 @@ namespace TrilinosWrappers
 
 
 
-    inline const Accessor &Iterator::operator*() const
+    inline const Accessor &
+    Iterator::operator*() const
     {
       return accessor;
     }
 
 
 
-    inline const Accessor *Iterator::operator->() const
+    inline const Accessor *
+    Iterator::operator->() const
     {
       return &accessor;
     }

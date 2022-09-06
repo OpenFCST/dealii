@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2006 - 2020 by the deal.II authors
+// Copyright (C) 2006 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -81,8 +81,8 @@ namespace MeshWorker
     std::vector<std::shared_ptr<FEValuesBase<dim, spacedim>>> fevalv;
 
   public:
-    static const unsigned int dimension       = dim;
-    static const unsigned int space_dimension = spacedim;
+    static constexpr unsigned int dimension       = dim;
+    static constexpr unsigned int space_dimension = spacedim;
 
     /**
      * Constructor.
@@ -466,7 +466,7 @@ namespace MeshWorker
      * The quadrature rule used on interior faces.
      */
     Quadrature<dim - 1> face_quadrature;
-    /* @} */
+    /** @} */
 
     /**
      * @name Data vectors
@@ -503,7 +503,7 @@ namespace MeshWorker
     std::shared_ptr<MeshWorker::VectorDataBase<dim, spacedim>> cell_data;
     std::shared_ptr<MeshWorker::VectorDataBase<dim, spacedim>> boundary_data;
     std::shared_ptr<MeshWorker::VectorDataBase<dim, spacedim>> face_data;
-    /* @} */
+    /** @} */
 
     /**
      * @name Interface for MeshWorker::loop()
@@ -572,7 +572,7 @@ namespace MeshWorker
      */
     CellInfo neighbor;
 
-    /* @} */
+    /** @} */
   };
 
 

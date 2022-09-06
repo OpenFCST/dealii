@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,13 +18,12 @@
 #include <deal.II/base/mpi.templates.h>
 #include <deal.II/base/mpi_compute_index_owner_internal.h>
 #include <deal.II/base/mpi_consensus_algorithms.h>
+#include <deal.II/base/partitioner.h>
 #include <deal.II/base/timer.h>
 
 #include <deal.II/matrix_free/vector_data_exchange.h>
 
-#ifdef DEAL_II_WITH_64BIT_INDICES
-#  include <deal.II/base/mpi_consensus_algorithms.templates.h>
-#endif
+#include <boost/serialization/utility.hpp>
 
 #include <map>
 #include <vector>
@@ -332,7 +331,7 @@ namespace internal
           std::vector<unsigned int> recv_indices;
           std::vector<unsigned int> recv_len;
 
-          for (unsigned int i = 0; i + 1 < sm_export_ptr.size(); i++)
+          for (unsigned int i = 0; i + 1 < sm_export_ptr.size(); ++i)
             {
               if (sm_export_ptr[i] != sm_export_ptr[i + 1])
                 {
@@ -441,8 +440,9 @@ namespace internal
                   /*track_index_requests = */ true);
 
         Utilities::MPI::ConsensusAlgorithms::Selector<
-          std::pair<types::global_dof_index, types::global_dof_index>,
-          unsigned int>
+          std::vector<
+            std::pair<types::global_dof_index, types::global_dof_index>>,
+          std::vector<unsigned int>>
           consensus_algorithm(process, comm);
         consensus_algorithm.run();
 
@@ -459,7 +459,7 @@ namespace internal
           std::map<unsigned int, std::vector<types::global_dof_index>>
             rank_to_local_indices;
 
-          for (unsigned int i = 0; i < owning_ranks_of_ghosts.size(); i++)
+          for (unsigned int i = 0; i < owning_ranks_of_ghosts.size(); ++i)
             rank_to_local_indices[owning_ranks_of_ghosts[i]].push_back(i);
 
           unsigned int compressed_offset = 0;
@@ -575,7 +575,7 @@ namespace internal
           std::vector<MPI_Request> requests(sm_ghost_ranks.size() +
                                             sm_import_ranks.size());
 
-          for (unsigned int i = 0; i < sm_ghost_ranks.size(); i++)
+          for (unsigned int i = 0; i < sm_ghost_ranks.size(); ++i)
             {
               const int ierr = MPI_Isend(sm_export_data_this_indices.data() +
                                            sm_export_data_this_ptr[i],
@@ -589,7 +589,7 @@ namespace internal
               AssertThrowMPI(ierr);
             }
 
-          for (unsigned int i = 0; i < sm_import_ranks.size(); i++)
+          for (unsigned int i = 0; i < sm_import_ranks.size(); ++i)
             {
               const int ierr =
                 MPI_Irecv(sm_import_data_indices.data() + sm_import_data_ptr[i],
@@ -612,7 +612,7 @@ namespace internal
           std::vector<MPI_Request> requests(sm_import_ranks.size() +
                                             sm_ghost_ranks.size());
 
-          for (unsigned int i = 0; i < sm_import_ranks.size(); i++)
+          for (unsigned int i = 0; i < sm_import_ranks.size(); ++i)
             {
               const int ierr = MPI_Isend(sm_import_data_this_indices.data() +
                                            sm_import_data_this_ptr[i],
@@ -626,7 +626,7 @@ namespace internal
               AssertThrowMPI(ierr);
             }
 
-          for (unsigned int i = 0; i < sm_ghost_ranks.size(); i++)
+          for (unsigned int i = 0; i < sm_ghost_ranks.size(); ++i)
             {
               const int ierr =
                 MPI_Irecv(sm_export_data_indices.data() + sm_export_data_ptr[i],
@@ -860,7 +860,7 @@ namespace internal
 
         int dummy;
         // receive a signal that relevant sm neighbors are ready
-        for (unsigned int i = 0; i < sm_ghost_ranks.size(); i++)
+        for (unsigned int i = 0; i < sm_ghost_ranks.size(); ++i)
           {
             const int ierr =
               MPI_Irecv(&dummy,
@@ -874,7 +874,7 @@ namespace internal
           }
 
         // signal to all relevant sm neighbors that this process is ready
-        for (unsigned int i = 0; i < sm_import_ranks.size(); i++)
+        for (unsigned int i = 0; i < sm_import_ranks.size(); ++i)
           {
             const int ierr = MPI_Isend(&dummy,
                                        0,
@@ -887,26 +887,26 @@ namespace internal
           }
 
         // receive data from remote processes
-        for (unsigned int i = 0; i < ghost_targets_data.size(); i++)
+        for (unsigned int i = 0; i < ghost_targets_data.size(); ++i)
           {
             const unsigned int offset =
               n_ghost_indices_in_larger_set_by_remote_rank[i] -
               ghost_targets_data[i][2];
 
-            const int ierr =
-              MPI_Irecv(buffer.data() + ghost_targets_data[i][1] + offset,
-                        ghost_targets_data[i][2],
-                        Utilities::MPI::internal::mpi_type_id(buffer.data()),
-                        ghost_targets_data[i][0],
-                        communication_channel + 1,
-                        comm,
-                        requests.data() + sm_import_ranks.size() +
-                          sm_ghost_ranks.size() + i);
+            const int ierr = MPI_Irecv(
+              buffer.data() + ghost_targets_data[i][1] + offset,
+              ghost_targets_data[i][2],
+              Utilities::MPI::mpi_type_id_for_type<decltype(*buffer.data())>,
+              ghost_targets_data[i][0],
+              communication_channel + 1,
+              comm,
+              requests.data() + sm_import_ranks.size() + sm_ghost_ranks.size() +
+                i);
             AssertThrowMPI(ierr);
           }
 
         // send data to remote processes
-        for (unsigned int i = 0, k = 0; i < import_targets_data.size(); i++)
+        for (unsigned int i = 0, k = 0; i < import_targets_data.size(); ++i)
           {
             for (unsigned int j = import_indices_data.first[i];
                  j < import_indices_data.first[i + 1];
@@ -917,16 +917,15 @@ namespace internal
                   data_this[import_indices_data.second[j].first + l];
 
             // send data away
-            const int ierr =
-              MPI_Isend(temporary_storage.data() + import_targets_data[i][1],
-                        import_targets_data[i][2],
-                        Utilities::MPI::internal::mpi_type_id(data_this.data()),
-                        import_targets_data[i][0],
-                        communication_channel + 1,
-                        comm,
-                        requests.data() + sm_import_ranks.size() +
-                          sm_ghost_ranks.size() + ghost_targets_data.size() +
-                          i);
+            const int ierr = MPI_Isend(
+              temporary_storage.data() + import_targets_data[i][1],
+              import_targets_data[i][2],
+              Utilities::MPI::mpi_type_id_for_type<decltype(*data_this.data())>,
+              import_targets_data[i][0],
+              communication_channel + 1,
+              comm,
+              requests.data() + sm_import_ranks.size() + sm_ghost_ranks.size() +
+                ghost_targets_data.size() + i);
             AssertThrowMPI(ierr);
           }
 #endif
@@ -1107,7 +1106,7 @@ namespace internal
                         ghost_targets_data.size() + import_targets_data.size());
 
         int dummy;
-        for (unsigned int i = 0; i < sm_ghost_ranks.size(); i++)
+        for (unsigned int i = 0; i < sm_ghost_ranks.size(); ++i)
           {
             const int ierr = MPI_Isend(&dummy,
                                        0,
@@ -1119,7 +1118,7 @@ namespace internal
             AssertThrowMPI(ierr);
           }
 
-        for (unsigned int i = 0; i < sm_import_ranks.size(); i++)
+        for (unsigned int i = 0; i < sm_import_ranks.size(); ++i)
           {
             const int ierr =
               MPI_Irecv(&dummy,
@@ -1132,7 +1131,7 @@ namespace internal
             AssertThrowMPI(ierr);
           }
 
-        for (unsigned int i = 0; i < ghost_targets_data.size(); i++)
+        for (unsigned int i = 0; i < ghost_targets_data.size(); ++i)
           {
             for (unsigned int c  = 0,
                               ko = ghost_indices_subset_data.first[i],
@@ -1170,29 +1169,31 @@ namespace internal
                   }
               }
 
-            const int ierr =
-              MPI_Isend(buffer.data() + ghost_targets_data[i][1],
-                        ghost_targets_data[i][2],
-                        Utilities::MPI::internal::mpi_type_id(buffer.data()),
-                        ghost_targets_data[i][0],
-                        communication_channel + 0,
-                        comm,
-                        requests.data() + sm_ghost_ranks.size() +
-                          sm_import_ranks.size() + i);
-            AssertThrowMPI(ierr);
-          }
-
-        for (unsigned int i = 0; i < import_targets_data.size(); i++)
-          {
-            const int ierr = MPI_Irecv(
-              temporary_storage.data() + import_targets_data[i][1],
-              import_targets_data[i][2],
-              Utilities::MPI::internal::mpi_type_id(temporary_storage.data()),
-              import_targets_data[i][0],
+            const int ierr = MPI_Isend(
+              buffer.data() + ghost_targets_data[i][1],
+              ghost_targets_data[i][2],
+              Utilities::MPI::mpi_type_id_for_type<decltype(*buffer.data())>,
+              ghost_targets_data[i][0],
               communication_channel + 0,
               comm,
               requests.data() + sm_ghost_ranks.size() + sm_import_ranks.size() +
-                ghost_targets_data.size() + i);
+                i);
+            AssertThrowMPI(ierr);
+          }
+
+        for (unsigned int i = 0; i < import_targets_data.size(); ++i)
+          {
+            const int ierr =
+              MPI_Irecv(temporary_storage.data() + import_targets_data[i][1],
+                        import_targets_data[i][2],
+                        Utilities::MPI::mpi_type_id_for_type<decltype(
+                          *temporary_storage.data())>,
+                        import_targets_data[i][0],
+                        communication_channel + 0,
+                        comm,
+                        requests.data() + sm_ghost_ranks.size() +
+                          sm_import_ranks.size() + ghost_targets_data.size() +
+                          i);
             AssertThrowMPI(ierr);
           }
 #endif

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2019 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -190,7 +190,7 @@ public:
                  std::string,
                  std::string,
                  << "The file \"" << arg1 << "\" was not found in the path for "
-                 << "files of class " << arg2 << ".");
+                 << "files of class " << arg2 << '.');
 
 private:
   /**

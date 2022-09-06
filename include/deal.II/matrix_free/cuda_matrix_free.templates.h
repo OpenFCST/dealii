@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -23,6 +23,7 @@
 
 #ifdef DEAL_II_COMPILER_CUDA_AWARE
 
+#  include <deal.II/base/cuda.h>
 #  include <deal.II/base/cuda_size.h>
 #  include <deal.II/base/graph_coloring.h>
 
@@ -30,6 +31,7 @@
 
 #  include <deal.II/fe/fe_dgq.h>
 #  include <deal.II/fe/fe_values.h>
+#  include <deal.II/fe/mapping_q1.h>
 
 #  include <deal.II/matrix_free/cuda_hanging_nodes_internal.h>
 #  include <deal.II/matrix_free/shape_info.h>
@@ -230,7 +232,8 @@ namespace CUDAWrappers
       std::vector<Point<dim, Number>>      q_points_host;
       std::vector<Number>                  JxW_host;
       std::vector<Number>                  inv_jacobian_host;
-      std::vector<unsigned int>            constraint_mask_host;
+      std::vector<dealii::internal::MatrixFreeFunctions::ConstraintKinds>
+        constraint_mask_host;
       // Local buffer
       std::vector<types::global_dof_index> local_dof_indices;
       FEValues<dim>                        fe_values;
@@ -242,7 +245,7 @@ namespace CUDAWrappers
       const unsigned int                   q_points_per_cell;
       const UpdateFlags &                  update_flags;
       const unsigned int                   padding_length;
-      HangingNodes<dim>                    hanging_nodes;
+      dealii::internal::MatrixFreeFunctions::HangingNodes<dim> hanging_nodes;
     };
 
 
@@ -269,8 +272,15 @@ namespace CUDAWrappers
       , lexicographic_inv(shape_info.lexicographic_numbering)
       , update_flags(update_flags)
       , padding_length(data->get_padding_length())
-      , hanging_nodes(fe_degree, dof_handler, lexicographic_inv)
+      , hanging_nodes(dof_handler.get_triangulation())
     {
+      cudaError_t error_code = cudaMemcpyToSymbol(
+        constraint_weights,
+        shape_info.data.front().subface_interpolation_matrices[0].data(),
+        sizeof(double) *
+          shape_info.data.front().subface_interpolation_matrices[0].size());
+      AssertCuda(error_code);
+
       local_dof_indices.resize(data->dofs_per_cell);
       lexicographic_dof_indices.resize(dofs_per_cell);
     }
@@ -373,10 +383,14 @@ namespace CUDAWrappers
       for (unsigned int i = 0; i < dofs_per_cell; ++i)
         lexicographic_dof_indices[i] = local_dof_indices[lexicographic_inv[i]];
 
-      hanging_nodes.setup_constraints(lexicographic_dof_indices,
-                                      cell,
+      const ArrayView<dealii::internal::MatrixFreeFunctions::ConstraintKinds>
+        cell_id_view(constraint_mask_host[cell_id]);
+
+      hanging_nodes.setup_constraints(cell,
                                       partitioner,
-                                      constraint_mask_host[cell_id]);
+                                      {lexicographic_inv},
+                                      lexicographic_dof_indices,
+                                      cell_id_view);
 
       memcpy(&local_to_global_host[cell_id * padding_length],
              lexicographic_dof_indices.data(),
@@ -485,10 +499,11 @@ namespace CUDAWrappers
                          n_cells * dim * dim * padding_length);
         }
 
-      alloc_and_copy(&data->constraint_mask[color],
-                     ArrayView<const unsigned int>(constraint_mask_host.data(),
-                                                   constraint_mask_host.size()),
-                     n_cells);
+      alloc_and_copy(
+        &data->constraint_mask[color],
+        ArrayView<const dealii::internal::MatrixFreeFunctions::ConstraintKinds>(
+          constraint_mask_host.data(), constraint_mask_host.size()),
+        n_cells);
     }
 
 
@@ -573,7 +588,7 @@ namespace CUDAWrappers
         local_cell + cells_per_block * (blockIdx.x + gridDim.x * blockIdx.y);
 
       Number *gq[dim];
-      for (int d = 0; d < dim; ++d)
+      for (unsigned int d = 0; d < dim; ++d)
         gq[d] = &gradients[d][local_cell * Functor::n_q_points];
 
       SharedData<dim, Number> shared_data(
@@ -697,10 +712,13 @@ namespace CUDAWrappers
   MatrixFree<dim, Number>::get_data(unsigned int color) const
   {
     Data data_copy;
-    data_copy.q_points        = q_points[color];
+    if (q_points.size() > 0)
+      data_copy.q_points = q_points[color];
+    if (inv_jacobian.size() > 0)
+      data_copy.inv_jacobian = inv_jacobian[color];
+    if (JxW.size() > 0)
+      data_copy.JxW = JxW[color];
     data_copy.local_to_global = local_to_global[color];
-    data_copy.inv_jacobian    = inv_jacobian[color];
-    data_copy.JxW             = JxW[color];
     data_copy.id              = my_id;
     data_copy.n_cells         = n_cells[color];
     data_copy.padding_length  = padding_length;
@@ -884,7 +902,9 @@ namespace CUDAWrappers
     if (typeid(Number) == typeid(double))
       cudaDeviceSetSharedMemConfig(cudaSharedMemBankSizeEightByte);
 
-    const UpdateFlags &update_flags = additional_data.mapping_update_flags;
+    UpdateFlags update_flags = additional_data.mapping_update_flags;
+    if (update_flags & update_gradients)
+      update_flags |= update_JxW_values;
 
     if (additional_data.parallelization_scheme != parallel_over_elem &&
         additional_data.parallelization_scheme != parallel_in_elem)
@@ -939,7 +959,7 @@ namespace CUDAWrappers
         Assert(
           my_id < static_cast<int>(mf_n_concurrent_objects),
           ExcMessage(
-            "Maximum number of concurrents MatrixFree objects reached. Increase mf_n_concurrent_objects"));
+            "Maximum number of concurrent MatrixFree objects reached. Increase mf_n_concurrent_objects"));
         bool f = false;
         found_id =
           internal::used_objects[my_id].compare_exchange_strong(f, true);
@@ -1005,7 +1025,7 @@ namespace CUDAWrappers
                 std::vector<bool> ghost_vertices(
                   dof_handler->get_triangulation().n_vertices(), false);
 
-                for (const auto cell :
+                for (const auto &cell :
                      dof_handler->get_triangulation().active_cell_iterators())
                   if (cell->is_ghost())
                     for (unsigned int i = 0;
@@ -1035,7 +1055,7 @@ namespace CUDAWrappers
                     else
                       inner_cells.emplace_back(cell);
                   }
-                for (unsigned i = 0; i < inner_cells.size(); i++)
+                for (unsigned i = 0; i < inner_cells.size(); ++i)
                   if (i < inner_cells.size() / 2)
                     graph[0].emplace_back(inner_cells[i]);
                   else
@@ -1058,8 +1078,8 @@ namespace CUDAWrappers
     IndexSet locally_relevant_dofs;
     if (comm)
       {
-        DoFTools::extract_locally_relevant_dofs(*dof_handler,
-                                                locally_relevant_dofs);
+        locally_relevant_dofs =
+          DoFTools::extract_locally_relevant_dofs(*dof_handler);
         partitioner = std::make_shared<Utilities::MPI::Partitioner>(
           dof_handler->locally_owned_dofs(), locally_relevant_dofs, *comm);
       }

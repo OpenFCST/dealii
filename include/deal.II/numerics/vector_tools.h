@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -22,6 +22,7 @@
 #include <deal.II/numerics/vector_tools_boundary.h>
 #include <deal.II/numerics/vector_tools_common.h>
 #include <deal.II/numerics/vector_tools_constraints.h>
+#include <deal.II/numerics/vector_tools_evaluate.h>
 #include <deal.II/numerics/vector_tools_integrate_difference.h>
 #include <deal.II/numerics/vector_tools_interpolate.h>
 #include <deal.II/numerics/vector_tools_mean_value.h>
@@ -45,7 +46,7 @@ DEAL_II_NAMESPACE_OPEN
  * @note There exist two versions of almost all functions, one that takes an
  * explicit Mapping argument and one that does not. The second one generally
  * calls the first with an implicit $Q_1$ argument (i.e., with an argument of
- * kind MappingQGeneric(1)). If your intend your code to use a different
+ * kind MappingQ(1)). If your intend your code to use a different
  * mapping than a (bi-/tri-)linear one, then you need to call the functions
  * <b>with</b> mapping argument should be used.
  *

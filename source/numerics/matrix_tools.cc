@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2018 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -24,12 +24,8 @@
 
 #include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_values.h>
-#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/tria_iterator.h>
-
-#include <deal.II/hp/fe_values.h>
-#include <deal.II/hp/mapping_collection.h>
 
 #include <deal.II/lac/block_sparse_matrix.h>
 #include <deal.II/lac/block_vector.h>
@@ -282,7 +278,7 @@ namespace MatrixTools
       {
         for (unsigned int i = 0; i < matrix.block(diag_block, diag_block).n();
              ++i)
-          if (matrix.block(diag_block, diag_block).diag_element(i) != 0)
+          if (matrix.block(diag_block, diag_block).diag_element(i) != number{})
             {
               first_nonzero_diagonal_entry =
                 matrix.block(diag_block, diag_block).diag_element(i);
@@ -291,12 +287,12 @@ namespace MatrixTools
         // check whether we have found
         // something in the present
         // block
-        if (first_nonzero_diagonal_entry != 0)
+        if (first_nonzero_diagonal_entry != number{})
           break;
       }
     // nothing found on all diagonal
     // blocks? if so, use 1.0 instead
-    if (first_nonzero_diagonal_entry == 0)
+    if (first_nonzero_diagonal_entry == number{})
       first_nonzero_diagonal_entry = 1;
 
 
@@ -361,7 +357,7 @@ namespace MatrixTools
         // the gauss step more efficient
         number new_rhs;
         if (matrix.block(block_index.first, block_index.first)
-              .diag_element(block_index.second) != 0.0)
+              .diag_element(block_index.second) != number{})
           new_rhs =
             dof->second * matrix.block(block_index.first, block_index.first)
                             .diag_element(block_index.second);
@@ -485,7 +481,7 @@ namespace MatrixTools
 
                     // correct right hand side
                     right_hand_side.block(block_row)(row) -=
-                      p->value() / diagonal_entry * new_rhs;
+                      number(p->value()) / diagonal_entry * new_rhs;
 
                     // set matrix entry to zero
                     p->value() = 0.;
@@ -563,17 +559,17 @@ namespace MatrixTools
             // everything remains positive, or
             // by the average diagonal value if
             // zero
-            if (local_matrix(i, i) == 0.)
+            if (local_matrix(i, i) == number{})
               {
                 // if average diagonal hasn't
                 // yet been computed, do so now
-                if (average_diagonal == 0.)
+                if (average_diagonal == number{})
                   {
                     unsigned int nonzero_diagonals = 0;
                     for (unsigned int k = 0; k < n_local_dofs; ++k)
-                      if (local_matrix(k, k) != 0.)
+                      if (local_matrix(k, k) != number{})
                         {
-                          average_diagonal += std::fabs(local_matrix(k, k));
+                          average_diagonal += std::abs(local_matrix(k, k));
                           ++nonzero_diagonals;
                         }
                     if (nonzero_diagonals != 0)
@@ -585,13 +581,13 @@ namespace MatrixTools
                 // only if all diagonal entries
                 // are zero, then resort to the
                 // last measure: choose one
-                if (average_diagonal == 0.)
+                if (average_diagonal == number{})
                   average_diagonal = 1.;
 
                 local_matrix(i, i) = average_diagonal;
               }
             else
-              local_matrix(i, i) = std::fabs(local_matrix(i, i));
+              local_matrix(i, i) = std::abs(local_matrix(i, i));
 
             // and replace rhs entry by correct
             // value

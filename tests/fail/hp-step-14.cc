@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2020 by the deal.II authors
+// Copyright (C) 2005 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -183,9 +183,9 @@ namespace Evaluation
 
   template <int dim>
   void
-  PointXDerivativeEvaluation<dim>::
-  operator()(const DoFHandler<dim> &dof_handler,
-             const Vector<double> & solution) const
+  PointXDerivativeEvaluation<dim>::operator()(
+    const DoFHandler<dim> &dof_handler,
+    const Vector<double> & solution) const
   {
     double point_derivative = 0;
 
@@ -256,7 +256,7 @@ namespace Evaluation
                               const Vector<double> & /*solution*/) const
   {
     std::ostringstream filename;
-    filename << output_name_base << "-" << this->refinement_cycle << ".eps"
+    filename << output_name_base << '-' << this->refinement_cycle << ".eps"
              << std::ends;
 
     GridOut().write_eps(dof_handler.get_triangulation(),
@@ -439,6 +439,7 @@ namespace LaplaceSolver
   {
     using active_cell_iterator = typename DoFHandler<dim>::active_cell_iterator;
 
+
     const unsigned int n_threads = MultithreadInfo::n_threads();
     std::vector<std::pair<active_cell_iterator, active_cell_iterator>>
       thread_ranges =
@@ -524,6 +525,7 @@ namespace LaplaceSolver
 
   template <int dim>
   Solver<dim>::LinearSystem::LinearSystem(const DoFHandler<dim> &dof_handler)
+
   {
     hanging_node_constraints.clear();
 
@@ -646,7 +648,7 @@ namespace LaplaceSolver
   void
   PrimalSolver<dim>::output_solution() const
   {
-    DataOut<dim, DoFHandler<dim>> data_out;
+    DataOut<dim> data_out;
     data_out.attach_dof_handler(this->dof_handler);
     data_out.add_data_vector(this->solution, "solution");
     data_out.build_patches();
@@ -1045,7 +1047,8 @@ namespace Data
 
 
   template <>
-  void Exercise_2_3<2>::create_coarse_grid(Triangulation<2> &coarse_grid)
+  void
+  Exercise_2_3<2>::create_coarse_grid(Triangulation<2> &coarse_grid)
   {
     const unsigned int dim = 2;
 
@@ -1127,6 +1130,7 @@ namespace DualFunctional
     virtual void
     assemble_rhs(const DoFHandler<dim> &dof_handler, Vector<double> &rhs) const;
 
+
     DeclException1(ExcEvaluationPointNotFound,
                    Point<dim>,
                    << "The evaluation point " << arg1
@@ -1147,7 +1151,8 @@ namespace DualFunctional
   template <int dim>
   void
   PointValueEvaluation<dim>::assemble_rhs(const DoFHandler<dim> &dof_handler,
-                                          Vector<double> &       rhs) const
+
+                                          Vector<double> &rhs) const
   {
     rhs.reinit(dof_handler.n_dofs());
 
@@ -1176,6 +1181,7 @@ namespace DualFunctional
 
     virtual void
     assemble_rhs(const DoFHandler<dim> &dof_handler, Vector<double> &rhs) const;
+
 
     DeclException1(ExcEvaluationPointNotFound,
                    Point<dim>,
@@ -1373,8 +1379,11 @@ namespace LaplaceSolver
 
     using active_cell_iterator = typename DoFHandler<dim>::active_cell_iterator;
 
+
     using FaceIntegrals =
       typename std::map<typename DoFHandler<dim>::face_iterator, double>;
+
+
 
     struct CellData
     {
@@ -1597,7 +1606,7 @@ namespace LaplaceSolver
                          primal_hanging_node_constraints,
                          dual_solution);
 
-    DataOut<dim, DoFHandler<dim>> data_out;
+    DataOut<dim> data_out;
     data_out.attach_dof_handler(primal_solver.dof_handler);
 
     data_out.add_data_vector(primal_solver.solution, "primal_solution");
@@ -1864,6 +1873,7 @@ namespace LaplaceSolver
 
     const typename DoFHandler<dim>::face_iterator face = cell->face(face_no);
     const typename DoFHandler<dim>::cell_iterator neighbor =
+
       cell->neighbor(face_no);
     Assert(neighbor.state() == IteratorState::valid, ExcInternalError());
     Assert(neighbor->has_children(), ExcInternalError());

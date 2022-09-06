@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2020 by the deal.II authors
+// Copyright (C) 2001 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -325,19 +325,14 @@ namespace Step40
                                        const int            proc,
                                        Vector<PetscScalar> &value) const
   {
-    try
-      {
-        typename DoFHandler<dim>::active_cell_iterator cell =
-          GridTools::find_active_cell_around_point(dof_handler, point);
+    typename DoFHandler<dim>::active_cell_iterator cell =
+      GridTools::find_active_cell_around_point(dof_handler, point);
 
-        if (cell->is_locally_owned())
-          VectorTools::point_value(dof_handler,
-                                   locally_relevant_solution,
-                                   point,
-                                   value);
-      }
-    catch (GridTools::ExcPointNotFound<dim> &p)
-      {}
+    if (cell.state() == IteratorState::valid && cell->is_locally_owned())
+      VectorTools::point_value(dof_handler,
+                               locally_relevant_solution,
+                               point,
+                               value);
 
     std::vector<double> tmp(value.size());
     std::vector<double> tmp2(value.size());
@@ -366,14 +361,14 @@ namespace Step40
   LaplaceProblem<2>::check_periodicity(const unsigned int cycle) const
   {
     unsigned int n_points = 2;
-    for (unsigned int i = 0; i < cycle; i++)
+    for (unsigned int i = 0; i < cycle; ++i)
       n_points *= 2;
 
     // don't test exactly at the support points, since point_value is not stable
     // there
     const double eps = 1. / (16. * n_points);
 
-    for (unsigned int i = 1; i < n_points; i++)
+    for (unsigned int i = 1; i < n_points; ++i)
       {
         Vector<PetscScalar> value1(1);
         Vector<PetscScalar> value2(1);
@@ -412,15 +407,15 @@ namespace Step40
   LaplaceProblem<3>::check_periodicity(const unsigned int cycle) const
   {
     unsigned int n_points = 2;
-    for (unsigned int i = 0; i < cycle; i++)
+    for (unsigned int i = 0; i < cycle; ++i)
       n_points *= 2;
 
     // don't test exactly at the support points, since point_value is not stable
     // there
     const double eps = 1. / (16. * n_points);
 
-    for (unsigned int i = 1; i < n_points; i++)
-      for (unsigned int j = 1; j < n_points; j++)
+    for (unsigned int i = 1; i < n_points; ++i)
+      for (unsigned int j = 1; j < n_points; ++j)
         {
           Vector<PetscScalar> value1(1);
           Vector<PetscScalar> value2(1);

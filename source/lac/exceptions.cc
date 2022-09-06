@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2018 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -55,7 +55,7 @@ namespace LACExceptions
       }
 #endif // DEAL_II_WITH_PETSC
     out << "The numerical value of the original error code is " << error_code
-        << "." << std::endl;
+        << '.' << std::endl;
   }
 } // namespace LACExceptions
 

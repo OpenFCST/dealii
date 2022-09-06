@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,6 +19,7 @@
 
 #include <deal.II/base/config.h>
 
+#include <deal.II/base/mpi_stub.h>
 #include <deal.II/base/smartpointer.h>
 #include <deal.II/base/subscriptor.h>
 #include <deal.II/base/template_constraints.h>
@@ -37,10 +38,6 @@
 #include <utility>
 #include <vector>
 
-#ifdef DEAL_II_WITH_MPI
-#  include <mpi.h>
-#endif
-
 #ifdef DEAL_II_WITH_P4EST
 #  include <p4est.h>
 #  include <p4est_connectivity.h>
@@ -49,7 +46,6 @@
 #  include <p8est_connectivity.h>
 #  include <p8est_ghost.h>
 #endif
-
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -74,17 +70,14 @@ namespace GridTools
   struct PeriodicFacePair;
 }
 
-namespace internal
+namespace parallel
 {
-  namespace parallel
+  namespace distributed
   {
-    namespace distributed
-    {
-      template <int, int>
-      class TemporarilyMatchRefineFlags;
-    }
-  } // namespace parallel
-} // namespace internal
+    template <int, int>
+    class TemporarilyMatchRefineFlags;
+  }
+} // namespace parallel
 #  endif
 
 namespace parallel
@@ -327,7 +320,14 @@ namespace parallel
          * after a refinement cycle. It can be executed manually by calling
          * repartition().
          */
-        no_automatic_repartitioning = 0x4
+        no_automatic_repartitioning = 0x4,
+        /**
+         * Setting this flag will communicate vertices to p4est. This way one
+         * can use the 'find_point_owner_rank()' to find the MPI rank of the
+         * active cell that owns an arbitrary point in case all attached
+         * manifolds are flat.
+         */
+        communicate_vertices_to_p4est = 0x8
       };
 
 
@@ -366,8 +366,8 @@ namespace parallel
       explicit Triangulation(
         const MPI_Comm &mpi_communicator,
         const typename dealii::Triangulation<dim, spacedim>::MeshSmoothing
-                       smooth_grid = (dealii::Triangulation<dim, spacedim>::none),
-        const Settings settings    = default_setting);
+          smooth_grid           = (dealii::Triangulation<dim, spacedim>::none),
+        const Settings settings = default_setting);
 
       /**
        * Destructor.
@@ -388,6 +388,12 @@ namespace parallel
        */
       bool
       is_multilevel_hierarchy_constructed() const override;
+
+      /**
+       * Return if vertices will be communicated to p4est.
+       */
+      bool
+      are_vertices_communicated_to_p4est() const;
 
       /**
        * Transfer data across forests.
@@ -445,6 +451,36 @@ namespace parallel
           &construction_data) override;
 
       /**
+       * Find the MPI rank of the cell that contains this point in a distributed
+       * mesh.
+       *
+       * @note This function calls `find_point_owner_rank(const std::vector<Point<dim>> &points)`
+       * (requires p4est v2.2 and higher). Please see the documentation of
+       * `find_point_owner_rank(const std::vector<Point<dim>> &points)`.
+       */
+      types::subdomain_id
+      find_point_owner_rank(const Point<dim> &p);
+
+      /**
+       * Find the MPI rank of the cells that contain the input points in a
+       * distributed mesh. If any point is not owned by any mesh cell its return
+       * value will be `numbers::invalid_subdomain_id`.
+       *
+       * @note The query points do not need to be owned locally or in the ghost layer.
+       *
+       * @note This function can only be used with p4est v2.2 and higher, flat manifolds
+       * and requires the settings flag
+       * `Settings::communicate_vertices_to_p4est` to be set.
+       *
+       * @note The algorithm is free of communication.
+       *
+       * @param[in] points a list of query points
+       * @return list of owner ranks
+       */
+      std::vector<types::subdomain_id>
+      find_point_owner_rank(const std::vector<Point<dim>> &points);
+
+      /**
        * Coarsen and refine the mesh according to refinement and coarsening
        * flags set.
        *
@@ -460,7 +496,7 @@ namespace parallel
        * @note This function by default partitions the mesh in such a way that
        * the number of cells on all processors is roughly equal. If you want
        * to set weights for partitioning, e.g. because some cells are more
-       * expensive to compute than others, you can use the signal cell_weight
+       * expensive to compute than others, you can use the signal `weight`
        * as documented in the dealii::Triangulation class. This function will
        * check whether a function is connected to the signal and if so use it.
        * If you prefer to repartition the mesh yourself at user-defined
@@ -469,7 +505,7 @@ namespace parallel
        * flag to the constructor, which ensures that calling the current
        * function only refines and coarsens the triangulation, but doesn't
        * partition it. You can then call the repartition() function manually.
-       * The usage of the cell_weights signal is identical in both cases, if a
+       * The usage of the `weight` signal is identical in both cases, if a
        * function is connected to the signal it will be used to balance the
        * calculated weights, otherwise the number of cells is balanced.
        */
@@ -503,7 +539,7 @@ namespace parallel
        * the same way as execute_coarsening_and_refinement() with respect to
        * dealing with data movement (SolutionTransfer, etc.).
        *
-       * @note If no function is connected to the cell_weight signal described
+       * @note If no function is connected to the `weight` signal described
        * in the dealii::Triangulation class, this function will balance the
        * number of cells on each processor. If one or more functions are
        * connected, it will calculate the sum of the weights and balance the
@@ -528,25 +564,6 @@ namespace parallel
       void
       repartition();
 
-
-      /**
-       * Return true if the triangulation has hanging nodes.
-       *
-       * In the context of parallel distributed triangulations, every
-       * processor stores only that part of the triangulation it locally owns.
-       * However, it also stores the entire coarse mesh, and to guarantee the
-       * 2:1 relationship between cells, this may mean that there are hanging
-       * nodes between cells that are not locally owned or ghost cells (i.e.,
-       * between ghost cells and artificial cells, or between artificial and
-       * artificial cells; see
-       * @ref GlossArtificialCell "the glossary").
-       * One is not typically interested in this case, so the function returns
-       * whether there are hanging nodes between any two cells of the "global"
-       * mesh, i.e., the union of locally owned cells on all processors.
-       */
-      virtual bool
-      has_hanging_nodes() const override;
-
       /**
        * Return the local memory consumption in bytes.
        */
@@ -567,6 +584,9 @@ namespace parallel
        *
        * More than anything else, this function is useful for debugging the
        * interface between deal.II and p4est.
+       *
+       * @note To use the function the flag
+       * `Settings::communicate_vertices_to_p4est` must be set.
        */
       void
       write_mesh_vtk(const std::string &file_basename) const;
@@ -597,21 +617,28 @@ namespace parallel
        * You do not need to load with the same number of MPI processes that
        * you saved with. Rather, if a mesh is loaded with a different number
        * of MPI processes than used at the time of saving, the mesh is
-       * repartitioned appropriately. Cell-based data that was saved with
+       * repartitioned that the number of cells is balanced among all processes.
+       * Individual repartitioning, e.g., based on the number of dofs or
+       * particles per cell, needs to be invoked manually by calling
+       * repartition() afterwards.
+       *
+       * Cell-based data that was saved with
        * DistributedTriangulationBase::DataTransfer::register_data_attach() can
        * be read in with
        * DistributedTriangulationBase::DataTransfer::notify_ready_to_unpack()
        * after calling load().
-       *
-       * If you use p4est version > 0.3.4.2 the @p autopartition flag tells
-       * p4est to ignore the partitioning that the triangulation had when it
-       * was saved and make it uniform upon loading. If @p autopartition is
-       * set to false, the triangulation is only repartitioned if needed (i.e.
-       * if a different number of MPI processes is encountered).
        */
       virtual void
-      load(const std::string &filename,
-           const bool         autopartition = true) override;
+      load(const std::string &filename) override;
+
+      /**
+       * @copydoc load()
+       *
+       * @deprecated The autopartition parameter has been removed.
+       */
+      DEAL_II_DEPRECATED
+      virtual void
+      load(const std::string &filename, const bool autopartition) override;
 
       /**
        * Load the refinement information from a given parallel forest. This
@@ -765,10 +792,8 @@ namespace parallel
        *
        * This function exists in 2d and 3d variants.
        */
-      void
-      copy_new_triangulation_to_p4est(std::integral_constant<int, 2>);
-      void
-      copy_new_triangulation_to_p4est(std::integral_constant<int, 3>);
+      void copy_new_triangulation_to_p4est(std::integral_constant<int, 2>);
+      void copy_new_triangulation_to_p4est(std::integral_constant<int, 3>);
 
       /**
        * Copy the local part of the refined forest from p4est into the
@@ -817,8 +842,7 @@ namespace parallel
       friend class dealii::FETools::internal::ExtrapolateImplementation;
 
       template <int, int>
-      friend class dealii::internal::parallel::distributed::
-        TemporarilyMatchRefineFlags;
+      friend class TemporarilyMatchRefineFlags;
     };
 
 
@@ -839,7 +863,9 @@ namespace parallel
       {
         default_setting                          = 0x0,
         mesh_reconstruction_after_repartitioning = 0x1,
-        construct_multigrid_hierarchy            = 0x2
+        construct_multigrid_hierarchy            = 0x2,
+        no_automatic_repartitioning              = 0x4,
+        communicate_vertices_to_p4est            = 0x8
       };
 
       /**
@@ -871,8 +897,15 @@ namespace parallel
        * compiler.
        */
       virtual void
-      load(const std::string &filename,
-           const bool         autopartition = true) override;
+      load(const std::string &filename) override;
+
+      /**
+       * This function is not implemented, but needs to be present for the
+       * compiler.
+       */
+      DEAL_II_DEPRECATED
+      virtual void
+      load(const std::string &filename, const bool autopartition) override;
 
       /**
        * This function is not implemented, but needs to be present for the
@@ -887,6 +920,13 @@ namespace parallel
        */
       virtual bool
       is_multilevel_hierarchy_constructed() const override;
+
+      /**
+       * This function is not implemented, but needs to be present for the
+       * compiler.
+       */
+      bool
+      are_vertices_communicated_to_p4est() const;
 
       /**
        * This function is not implemented, but needs to be present for the
@@ -928,8 +968,7 @@ namespace parallel
         const unsigned int coarse_cell_index) const override;
 
       template <int, int>
-      friend class dealii::internal::parallel::distributed::
-        TemporarilyMatchRefineFlags;
+      friend class TemporarilyMatchRefineFlags;
     };
   } // namespace distributed
 } // namespace parallel
@@ -958,10 +997,81 @@ namespace parallel
     {
     public:
       /**
+       * Dummy settings to allow defining the deleted constructor.
+       */
+      enum Settings
+      {
+        default_setting                          = 0x0,
+        mesh_reconstruction_after_repartitioning = 0x1,
+        construct_multigrid_hierarchy            = 0x2,
+        no_automatic_repartitioning              = 0x4,
+        communicate_vertices_to_p4est            = 0x8
+      };
+
+      /**
        * Constructor. Deleted to make sure that objects of this type cannot be
        * constructed (see also the class documentation).
        */
-      Triangulation() = delete;
+      explicit Triangulation(
+        const MPI_Comm & /*mpi_communicator*/,
+        const typename dealii::Triangulation<dim, spacedim>::MeshSmoothing
+        /*smooth_grid*/
+        = (dealii::Triangulation<dim, spacedim>::none),
+        const Settings /*settings*/ = default_setting) = delete;
+
+      /**
+       * Dummy replacement to allow for better error messages when compiling
+       * this class.
+       */
+      virtual bool
+      is_multilevel_hierarchy_constructed() const override
+      {
+        return false;
+      }
+
+      /**
+       * Dummy replacement to allow for better error messages when compiling
+       * this class.
+       */
+      bool
+      are_vertices_communicated_to_p4est() const
+      {
+        return false;
+      }
+
+      /**
+       * Dummy replacement to allow for better error messages when compiling
+       * this class.
+       */
+      virtual void
+      save(const std::string & /*filename*/) const override
+      {}
+
+      /**
+       * Dummy replacement to allow for better error messages when compiling
+       * this class.
+       */
+      virtual void
+      load(const std::string & /*filename*/) override
+      {}
+
+      /**
+       * Dummy replacement to allow for better error messages when compiling
+       * this class.
+       */
+      DEAL_II_DEPRECATED
+      virtual void
+      load(const std::string & /*filename*/,
+           const bool /*autopartition*/) override
+      {}
+
+      /**
+       * Dummy replacement to allow for better error messages when compiling
+       * this class.
+       */
+      virtual void
+      update_cell_relations() override
+      {}
     };
   } // namespace distributed
 } // namespace parallel
@@ -970,73 +1080,72 @@ namespace parallel
 #endif
 
 
-namespace internal
+namespace parallel
 {
-  namespace parallel
+  namespace distributed
   {
-    namespace distributed
+    /**
+     * This class temporarily modifies the refine and coarsen flags of all
+     * active cells to match the p4est oracle.
+     *
+     * The modification only happens on parallel::distributed::Triangulation
+     * objects, and persists for the lifetime of an instantiation of this
+     * class.
+     *
+     * The TemporarilyMatchRefineFlags class should only be used in
+     * combination with the Triangulation::Signals::post_p4est_refinement
+     * signal. At this stage, the p4est oracle already has been refined, but
+     * the triangulation is still unchanged. After the modification, all
+     * refine and coarsen flags describe how the triangulation will actually
+     * be refined.
+     *
+     * The use of this class is demonstrated in step-75.
+     */
+    template <int dim, int spacedim = dim>
+    class TemporarilyMatchRefineFlags : public Subscriptor
     {
+    public:
       /**
-       * This class temporarily modifies the refine and coarsen flags of all
-       * active cells to match the p4est oracle.
+       * Constructor.
        *
-       * The modification only happens on parallel::distributed::Triangulation
-       * objects, and persists for the lifetime of an instantiation of this
-       * class.
+       * Stores the refine and coarsen flags of all active cells if the
+       * provided Triangulation is of type
+       * parallel::distributed::Triangulation.
        *
-       * The TemporarilyMatchRefineFlags class should only be used in
-       * combination with the Triangulation::Signals::post_p4est_refinement
-       * signal. At this stage, the p4est orcale already has been refined, but
-       * the triangulation is still unchanged. After the modification, all
-       * refine and coarsen flags describe how the traingulation will acutally
-       * be refined.
+       * Adjusts them to be consistent with the p4est oracle.
        */
-      template <int dim, int spacedim = dim>
-      class TemporarilyMatchRefineFlags : public Subscriptor
-      {
-      public:
-        /**
-         * Constructor.
-         *
-         * Stores the refine and coarsen flags of all active cells if the
-         * provided Triangulation is of type
-         * parallel::distributed::Triangulation.
-         *
-         * Adjusts them to be consistent with the p4est oracle.
-         */
-        TemporarilyMatchRefineFlags(Triangulation<dim, spacedim> &tria);
+      TemporarilyMatchRefineFlags(dealii::Triangulation<dim, spacedim> &tria);
 
-        /**
-         * Destructor.
-         *
-         * Returns the refine and coarsen flags of all active cells on the
-         * parallel::distributed::Triangulation into their previous state.
-         */
-        ~TemporarilyMatchRefineFlags();
+      /**
+       * Destructor.
+       *
+       * Returns the refine and coarsen flags of all active cells on the
+       * parallel::distributed::Triangulation into their previous state.
+       */
+      ~TemporarilyMatchRefineFlags();
 
-      private:
-        /**
-         * The modified parallel::distributed::Triangulation.
-         */
-        const SmartPointer<
-          dealii::parallel::distributed::Triangulation<dim, spacedim>>
-          distributed_tria;
+    private:
+      /**
+       * The modified parallel::distributed::Triangulation.
+       */
+      const SmartPointer<
+        dealii::parallel::distributed::Triangulation<dim, spacedim>>
+        distributed_tria;
 
-        /**
-         * A vector that temporarily stores the refine flags before they have
-         * been modified on the parallel::distributed::Triangulation.
-         */
-        std::vector<bool> saved_refine_flags;
+      /**
+       * A vector that temporarily stores the refine flags before they have
+       * been modified on the parallel::distributed::Triangulation.
+       */
+      std::vector<bool> saved_refine_flags;
 
-        /**
-         * A vector that temporarily stores the coarsen flags before they have
-         * been modified on the parallel::distributed::Triangulation.
-         */
-        std::vector<bool> saved_coarsen_flags;
-      };
-    } // namespace distributed
-  }   // namespace parallel
-} // namespace internal
+      /**
+       * A vector that temporarily stores the coarsen flags before they have
+       * been modified on the parallel::distributed::Triangulation.
+       */
+      std::vector<bool> saved_coarsen_flags;
+    };
+  } // namespace distributed
+} // namespace parallel
 
 
 DEAL_II_NAMESPACE_CLOSE

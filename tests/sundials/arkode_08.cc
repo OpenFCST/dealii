@@ -1,6 +1,6 @@
 //-----------------------------------------------------------
 //
-//    Copyright (C) 2020 by the deal.II authors
+//    Copyright (C) 2020 - 2022 by the deal.II authors
 //
 //    This file is part of the deal.II library.
 //
@@ -47,7 +47,7 @@
  * with SUNDIALS nomenclature.
  */
 int
-main(int argc, char **argv)
+main()
 {
   initlog();
 
@@ -59,12 +59,12 @@ main(int argc, char **argv)
 
   if (false)
     {
-      std::ofstream ofile(SOURCE_DIR "/arkode_08.prm");
+      std::ofstream ofile(SOURCE_DIR "/arkode_08_in.prm");
       prm.print_parameters(ofile, ParameterHandler::ShortText);
       ofile.close();
     }
 
-  std::ifstream ifile(SOURCE_DIR "/arkode_08.prm");
+  std::ifstream ifile(SOURCE_DIR "/arkode_08_in.prm");
   prm.parse_input(ifile);
 
   SUNDIALS::ARKode<VectorType> ode(data);
@@ -148,7 +148,7 @@ main(int argc, char **argv)
   ode.output_step = [&](const double       t,
                         const VectorType & sol,
                         const unsigned int step_number) -> int {
-    deallog << t << " " << sol[0] << " " << sol[1] << std::endl;
+    deallog << t << ' ' << sol[0] << ' ' << sol[1] << std::endl;
     return 0;
   };
 

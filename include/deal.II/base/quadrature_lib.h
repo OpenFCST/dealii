@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -23,8 +23,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup Quadrature */
-/*@{*/
+/**
+ * @addtogroup Quadrature
+ * @{
+ */
 
 /**
  * The Gauss-Legendre family of quadrature rules for numerical integration.
@@ -83,7 +85,12 @@ public:
 
 /**
  * The midpoint rule for numerical quadrature. This one-point formula is exact
- * for linear polynomials.
+ * for linear integrands.
+ *
+ * @note This class only works for cells that are tensor product (hypercube) cells,
+ *   that is, are either ReferenceCells::Line, ReferenceCells::Quadrilateral,
+ *   or ReferenceCells::Hexahedron. For other cell shapes, this class is not
+ *   appropriate. Use ReferenceCell::get_midpoint_quadrature() instead.
  */
 template <int dim>
 class QMidpoint : public Quadrature<dim>
@@ -120,22 +127,6 @@ class QTrapezoid : public Quadrature<dim>
 public:
   QTrapezoid();
 };
-
-
-/**
- * An alias for QTrapezoid available for historic reasons. This name is
- * deprecated.
- *
- * The class was originally named QTrapez, a poorly named choice since the
- * proper name of the quadrature formula
- * is "trapezoidal rule", or sometimes also called the "trapezoid rule". The
- * misnomer resulted from the fact that its original authors' poor English
- * language skills led them to translate the name incorrectly from the German
- * "Trapezregel".
- */
-template <int dim>
-using QTrapez DEAL_II_DEPRECATED = QTrapezoid<dim>;
-
 
 
 /**
@@ -253,7 +244,7 @@ public:
    * formula or it is factored out, to be included in the integrand.
    */
   QGaussLogR(const unsigned int n,
-             const Point<dim>   x0                         = Point<dim>(),
+             const Point<dim> & x0                         = Point<dim>(),
              const double       alpha                      = 1,
              const bool         factor_out_singular_weight = false);
 
@@ -333,7 +324,7 @@ public:
    * @endcode
    */
   QGaussOneOverR(const unsigned int n,
-                 const Point<dim>   singularity,
+                 const Point<dim> & singularity,
                  const bool         factor_out_singular_weight = false);
   /**
    * The constructor takes three arguments: the order of the Gauss formula,
@@ -380,7 +371,7 @@ private:
    * the cell, on an edge of the cell, or on a corner of the cell.
    */
   static unsigned int
-  quad_size(const Point<dim> singularity, const unsigned int n);
+  quad_size(const Point<dim> &singularity, const unsigned int n);
 };
 
 
@@ -588,6 +579,9 @@ public:
  *
  * No transformation is applied to the weights, and the weights referring to
  * points that live outside the reference simplex are simply discarded.
+ * Because this leads to (or *may* lead to) a sum of quadrature weights that
+ * do not equal the area of the simplex, the resulting quadrature formula
+ * is not useful for actually computing integrals.
  *
  * The main use of this quadrature formula is not to chop tensor product
  * quadratures. Ideally you should pass to this class a quadrature formula
@@ -617,6 +611,7 @@ public:
   QSimplex(const Quadrature<dim> &quad);
 
   /**
+   *
    * Return an affine transformation of this quadrature, that can be used to
    * integrate on the simplex identified by `vertices`.
    *
@@ -634,14 +629,36 @@ public:
    * that is $J \dealcoloneq |\text{det}(B)|$. If $J$ is zero, an empty
    * quadrature is returned. This may happen, in two dimensions, if the three
    * vertices are aligned, or in three dimensions if the four vertices are on
-   * the same plane.
+   * the same plane. The present function works also in the codimension one and
+   * codimension two case. For instance, when `dim=2` and `spacedim=3`, we can
+   * map the quadrature points so that they live on the physical triangle
+   * embedded in the three dimensional space. In such a case, the matrix $B$ is
+   * not square anymore.
    *
    * @param[in] vertices The vertices of the simplex you wish to integrate on
    * @return A quadrature object that can be used to integrate on the simplex
    */
-  Quadrature<dim>
+  template <int spacedim = dim>
+  Quadrature<spacedim>
   compute_affine_transformation(
-    const std::array<Point<dim>, dim + 1> &vertices) const;
+    const std::array<Point<spacedim>, dim + 1> &vertices) const;
+
+  /**
+   *
+   * Given a partition of a cell into simplices, this function creates a
+   * quadrature rule on the cell by collecting Quadrature objects on each
+   * simplex. A simplex is identified by its vertices, which are stored into an
+   * array of Points. Hence, this function can provide quadrature rules on
+   * polygons (or polyhedra), as they can be split into simplices.
+   *
+   *
+   * @param simplices A std::vector where each entry is an array of `dim+1` points, which identifies the vertices of a simplex.
+   * @return A Quadrature object on the cell.
+   */
+  template <int spacedim = dim>
+  Quadrature<spacedim>
+  mapped_quadrature(
+    const std::vector<std::array<Point<spacedim>, dim + 1>> &simplices) const;
 };
 
 /**
@@ -800,13 +817,21 @@ public:
  * QGauss quadrature object, even though the present quadrature formula is not
  * a tensor product. The given value is translated for n_points_1D=1,2,3,4 to
  * following number of quadrature points for 2D and 3D:
- *   - 2D: 1, 3, 7, 15
- *   - 3D: 1, 4, 10, 35
+ * - 2D: 1, 4, 7, 15
+ * - 3D: 1, 6, 14, 35
  *
  * For 1D, the quadrature rule degenerates to a
  * `dealii::QGauss<1>(n_points_1D)`.
  *
- * @ingroup simplex
+ * @note The quadrature rules implemented by this class come from a variety of
+ * sources, but all of them have positive quadrature weights.
+ *
+ * @note Several of the schemes implemented by this class are not symmetric with
+ * respect to the vertices - i.e., the locations of the mapped quadrature points
+ * depends on the numbering of the cell vertices. If you need rules that are
+ * independent of the vertex numbering then use QWitherdenVincentSimplex.
+ *
+ * @relates simplex
  */
 template <int dim>
 class QGaussSimplex : public QSimplex<dim>
@@ -824,30 +849,58 @@ public:
  *
  * Like QGauss, users should specify a number `n_points_1D` as an indication
  * of what polynomial degree to be integrated exactly (e.g., for $n$ points,
- * the rule can integrate polynomials of degree $2 n - 1$ exactly). The given
- * value for n_points_1D = 1, 2, 3, 4, 5 results in the following number of
- * quadrature points in 2D and 3D:
- * - 2D: 1, 6, 7, 15, 19
- * - 3D: 1, 8, 14, 35, 59
+ * the rule can integrate polynomials of degree $2 n - 1$ exactly).
+ * Additionally, since these rules were derived for simplices, there are
+ * also even-ordered rules (i.e., they integrate polynomials of degree $2 n$)
+ * available which do not have analogous 1D rules.
+ *
+ * The given value for n_points_1D = 1, 2, 3, 4, 5, 6, 7 (where the last two are
+ * only implemented in 2D) results in the following number of quadrature points
+ * in 2D and 3D:
+ * - 2D: odd (default): 1, 6, 7, 15, 19, 28, 37
+ * - 2D: even: 3, 6, 12, 16, 25, 33, 42
+ * - 3D: odd (default): 1, 8, 14, 35, 59
+ * - 3D: even: 4, 14, 24, 46, 81
  *
  * For 1D, the quadrature rule degenerates to a
- * `dealii::QGauss<1>(n_points_1D)`.
+ * `dealii::QGauss<1>(n_points_1D)` and @p use_odd_order is ignored.
  *
  * These rules match the ones listed for Witherden-Vincent in the quadpy
  * @cite quadpy library and were first described in
  * @cite witherden2015identification.
  *
- * @ingroup simplex
+ * @note Some rules (2D 2 odd and 3D 2 even) do not yet exist and instead a
+ * higher-order rule is used in their place.
+ *
+ * @relates simplex
  */
 template <int dim>
 class QWitherdenVincentSimplex : public QSimplex<dim>
 {
 public:
   /**
-   * Constructor taking the number of quadrature points in 1D direction
-   * @p n_points_1D.
+   * Constructor taking the equivalent number of quadrature points in 1D
+   * @p n_points_1D and boolean indicating whether the rule should be order
+   * $2 n - 1$ or $2 n$: see the general documentation of this class for more
+   * information.
    */
-  explicit QWitherdenVincentSimplex(const unsigned int n_points_1D);
+  explicit QWitherdenVincentSimplex(const unsigned int n_points_1D,
+                                    const bool         use_odd_order = true);
+};
+
+/**
+ * Iterated quadrature for simplices. Since simplex cannot be described as
+ * tensor products the base quadrature has equal dimension.
+ *
+ * At the moment @p n_copies must be a power of 2 due to the complexity of
+ * subdividing a simplex.
+ */
+template <int dim>
+class QIteratedSimplex : public Quadrature<dim>
+{
+public:
+  QIteratedSimplex(const Quadrature<dim> &base_quadrature,
+                   const unsigned int     n_copies);
 };
 
 /**
@@ -880,7 +933,7 @@ public:
   explicit QGaussPyramid(const unsigned int n_points_1D);
 };
 
-/*@}*/
+/** @} */
 
 /* -------------- declaration of explicit specializations ------------- */
 
@@ -911,7 +964,7 @@ template <>
 QGaussLog<1>::QGaussLog(const unsigned int n, const bool revert);
 template <>
 QGaussLogR<1>::QGaussLogR(const unsigned int n,
-                          const Point<1>     x0,
+                          const Point<1> &   x0,
                           const double       alpha,
                           const bool         flag);
 template <>

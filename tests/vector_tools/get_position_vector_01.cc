@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -20,7 +20,7 @@
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_fe_field.h>
-#include <deal.II/fe/mapping_q_generic.h>
+#include <deal.II/fe/mapping_q.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria.h>
@@ -53,7 +53,7 @@ test()
 
   // set up base high-order mapping
   Vector<double> euler_vector_base(dof_handler_dim.n_dofs());
-  VectorTools::get_position_vector(MappingQGeneric<dim, spacedim>(4),
+  VectorTools::get_position_vector(MappingQ<dim, spacedim>(4),
                                    dof_handler_dim,
                                    euler_vector_base);
   MappingFEField<dim, spacedim> mapping_base(dof_handler_dim,
@@ -62,19 +62,18 @@ test()
   // clear manifold
   tria.reset_all_manifolds();
 
-  // output mesh with with MappingQGeneric(degree=4)
+  // output mesh with with MappingQ(degree=4)
   {
     DataOutBase::VtkFlags flags;
 
-    DataOut<dim, DoFHandler<dim, spacedim>> data_out;
+    DataOut<dim, spacedim> data_out;
     data_out.set_flags(flags);
     data_out.attach_dof_handler(dof_handler);
 
     data_out.build_patches(
-      MappingQGeneric<dim, spacedim>(4),
+      MappingQ<dim, spacedim>(4),
       fe_degree + 1,
-      DataOut<dim,
-              DoFHandler<dim, spacedim>>::CurvedCellRegion::curved_inner_cells);
+      DataOut<dim, spacedim>::CurvedCellRegion::curved_inner_cells);
 
 #if false
     std::ofstream output("test.0.vtk");
@@ -94,15 +93,14 @@ test()
     MappingFEField<dim, spacedim> mapping(dof_handler_dim, euler_vector);
     DataOutBase::VtkFlags         flags;
 
-    DataOut<dim, DoFHandler<dim, spacedim>> data_out;
+    DataOut<dim, spacedim> data_out;
     data_out.set_flags(flags);
     data_out.attach_dof_handler(dof_handler);
 
     data_out.build_patches(
       mapping,
       fe_degree + 1,
-      DataOut<dim,
-              DoFHandler<dim, spacedim>>::CurvedCellRegion::curved_inner_cells);
+      DataOut<dim, spacedim>::CurvedCellRegion::curved_inner_cells);
 
 #if false
     std::ofstream output("test.1.vtk");

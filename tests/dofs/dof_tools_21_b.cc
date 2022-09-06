@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -56,7 +56,8 @@ std::ofstream logfile("output");
  */
 
 /* The 2D case */
-void generate_grid(Triangulation<2> &triangulation, int orientation)
+void
+generate_grid(Triangulation<2> &triangulation, int orientation)
 {
   Point<2> vertices_1[] = {
     Point<2>(-1., -3.),
@@ -111,7 +112,8 @@ void generate_grid(Triangulation<2> &triangulation, int orientation)
 }
 
 /* The 2D in 3D case */
-void generate_grid(Triangulation<2, 3> &triangulation, int orientation)
+void
+generate_grid(Triangulation<2, 3> &triangulation, int orientation)
 {
   Point<3> vertices_1[] = {
     Point<3>(-1., -3., 0.),
@@ -166,7 +168,8 @@ void generate_grid(Triangulation<2, 3> &triangulation, int orientation)
 }
 
 /* The 3D case */
-void generate_grid(Triangulation<3> &triangulation, int orientation)
+void
+generate_grid(Triangulation<3> &triangulation, int orientation)
 {
   Point<3>              vertices_1[] = {Point<3>(-1., -1., -3.),
                            Point<3>(+1., -1., -3.),
@@ -292,26 +295,26 @@ print_matching(DoFHandler<dim, spacedim> &dof_handler,
 
   // Print out all DoF support points on the two faces:
   deallog << "DoFs of face_1:";
-  for (unsigned int c = 0; c < fe.n_components(); c++)
+  for (unsigned int c = 0; c < fe.n_components(); ++c)
     {
-      deallog << std::endl << " component " << c << ":";
+      deallog << std::endl << " component " << c << ':';
       for (unsigned int i = 0; i < fe.dofs_per_face; ++i)
         {
           if (fe.face_system_to_component_index(i).first == c)
             deallog << " (" << dofs_1[i] << " - " << support_points[dofs_1[i]]
-                    << ")";
+                    << ')';
         }
     }
   deallog << std::endl;
   deallog << "DoFs of face_2:";
-  for (unsigned int c = 0; c < fe.n_components(); c++)
+  for (unsigned int c = 0; c < fe.n_components(); ++c)
     {
-      deallog << std::endl << " component " << c << ":";
+      deallog << std::endl << " component " << c << ':';
       for (unsigned int i = 0; i < fe.dofs_per_face; ++i)
         {
           if (fe.face_system_to_component_index(i).first == c)
             deallog << " (" << dofs_2[i] << " - " << support_points[dofs_2[i]]
-                    << ")";
+                    << ')';
         }
     }
   deallog << std::endl;

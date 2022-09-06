@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2020 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -26,7 +26,6 @@
 #include <deal.II/dofs/dof_handler.h>
 
 #include <deal.II/fe/mapping.h>
-#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/particles/particle.h>
 #include <deal.II/particles/particle_handler.h>
@@ -70,7 +69,12 @@ namespace Particles
       ParticleHandler<dim, spacedim> &    particle_handler,
       const Mapping<dim, spacedim> &      mapping =
         (ReferenceCells::get_hypercube<dim>()
-           .template get_default_linear_mapping<dim, spacedim>()));
+#ifndef _MSC_VER
+           .template get_default_linear_mapping<dim, spacedim>()
+#else
+           .ReferenceCell::get_default_linear_mapping<dim, spacedim>()
+#endif
+           ));
 
     /**
      * A function that generates one particle at a random location in cell @p cell and with
@@ -109,7 +113,34 @@ namespace Particles
       std::mt19937 &                random_number_generator,
       const Mapping<dim, spacedim> &mapping =
         (ReferenceCells::get_hypercube<dim>()
-           .template get_default_linear_mapping<dim, spacedim>()));
+#ifndef _MSC_VER
+           .template get_default_linear_mapping<dim, spacedim>()
+#else
+           .ReferenceCell::get_default_linear_mapping<dim, spacedim>()
+#endif
+           ));
+
+    /**
+     * A function that generates one particle at a random location in cell @p cell and with
+     * index @p id. This version of the function above immediately inserts the generated
+     * particle into the @p particle_handler and returns a iterator to it instead of
+     * a particle object. This avoids unnecessary copies of the particle.
+     */
+    template <int dim, int spacedim = dim>
+    ParticleIterator<dim, spacedim>
+    random_particle_in_cell_insert(
+      const typename Triangulation<dim, spacedim>::active_cell_iterator &cell,
+      const types::particle_index                                        id,
+      std::mt19937 &                  random_number_generator,
+      ParticleHandler<dim, spacedim> &particle_handler,
+      const Mapping<dim, spacedim> &  mapping =
+        (ReferenceCells::get_hypercube<dim>()
+#ifndef _MSC_VER
+           .template get_default_linear_mapping<dim, spacedim>()
+#else
+           .ReferenceCell::get_default_linear_mapping<dim, spacedim>()
+#endif
+           ));
 
     /**
      * A function that generates particles randomly in the domain with a
@@ -165,7 +196,11 @@ namespace Particles
       ParticleHandler<dim, spacedim> &    particle_handler,
       const Mapping<dim, spacedim> &      mapping =
         (ReferenceCells::get_hypercube<dim>()
+#ifndef _MSC_VER
            .template get_default_linear_mapping<dim, spacedim>()),
+#else
+           .ReferenceCell::get_default_linear_mapping<dim, spacedim>()),
+#endif
       const unsigned int random_number_seed = 5432);
 
 
@@ -212,7 +247,11 @@ namespace Particles
       ParticleHandler<dim, spacedim> &particle_handler,
       const Mapping<dim, spacedim> &  mapping =
         (ReferenceCells::get_hypercube<dim>()
+#ifndef _MSC_VER
            .template get_default_linear_mapping<dim, spacedim>()),
+#else
+           .ReferenceCell::get_default_linear_mapping<dim, spacedim>()),
+#endif
       const ComponentMask &                   components = ComponentMask(),
       const std::vector<std::vector<double>> &properties = {});
 
@@ -235,7 +274,10 @@ namespace Particles
      * @param[in] global_bounding_boxes A vector that contains all the bounding
      * boxes for all processors. This vector can be established by first using
      * 'GridTools::compute_mesh_predicate_bounding_box()' and gathering all the
-     * bounding boxes using 'Utilities::MPI::all_gather.
+     * bounding boxes using 'Utilities::MPI::all_gather. Of course, if you are
+     * applying this function on a sequential triangulation, then this argument
+     * is simply an (outer) vector with just one element, and that one element
+     * would be the result of the function mentioned above.
      *
      * @param[in,out] particle_handler The particle handler that will take
      * ownership of the generated particles.

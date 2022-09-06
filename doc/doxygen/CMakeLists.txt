@@ -1,6 +1,6 @@
 ## ---------------------------------------------------------------------
 ##
-## Copyright (C) 2012 - 2020 by the deal.II authors
+## Copyright (C) 2012 - 2021 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
@@ -297,7 +297,7 @@ ADD_CUSTOM_COMMAND(
     ${CMAKE_CURRENT_BINARY_DIR}/header.html
     ${CMAKE_CURRENT_BINARY_DIR}/footer.html
     ${CMAKE_CURRENT_SOURCE_DIR}/DoxygenLayout.xml
-    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/filter
+    ${CMAKE_CURRENT_SOURCE_DIR}/scripts/filter.pl
     ${_doxygen_depend}
     expand_all_instantiations
   COMMENT "Generating documentation via doxygen."

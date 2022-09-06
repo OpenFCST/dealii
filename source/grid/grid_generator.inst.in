@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -84,6 +84,7 @@ for (deal_II_dimension : DIMENSIONS; deal_II_space_dimension : SPACE_DIMENSIONS)
           const Triangulation<deal_II_dimension, deal_II_space_dimension> *> &,
         Triangulation<deal_II_dimension, deal_II_space_dimension> &,
         const double,
+        const bool,
         const bool);
 
       template void
@@ -94,7 +95,8 @@ for (deal_II_dimension : DIMENSIONS; deal_II_space_dimension : SPACE_DIMENSIONS)
           &triangulation_2,
         Triangulation<deal_II_dimension, deal_II_space_dimension> &result,
         const double duplicated_vertex_tolerance,
-        const bool   copy_manifold_ids);
+        const bool   copy_manifold_ids,
+        const bool   copy_boundary_ids);
 
       template void
       replicate_triangulation(
@@ -240,7 +242,8 @@ for (deal_II_space_dimension : DIMENSIONS)
     \{
 
 #if deal_II_space_dimension >= 2
-      template void hyper_sphere<deal_II_space_dimension>(
+      template void
+      hyper_sphere<deal_II_space_dimension>(
         Triangulation<deal_II_space_dimension - 1, deal_II_space_dimension> &,
         const Point<deal_II_space_dimension> &,
         double);
@@ -271,8 +274,8 @@ for (deal_II_dimension : DIMENSIONS; deal_II_space_dimension : SPACE_DIMENSIONS)
 #if deal_II_dimension <= deal_II_space_dimension
       template void
       reference_cell<deal_II_dimension, deal_II_space_dimension>(
-        const ReferenceCell &,
-        Triangulation<deal_II_dimension, deal_II_space_dimension> &);
+        Triangulation<deal_II_dimension, deal_II_space_dimension> &,
+        const ReferenceCell &);
 
       template void
       convert_hypercube_to_simplex_mesh(

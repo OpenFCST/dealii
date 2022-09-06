@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,9 +19,8 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/communication_pattern_base.h>
-#include <deal.II/base/mpi.h>
 #include <deal.II/base/mpi_compute_index_owner_internal.h>
-#include <deal.II/base/mpi_tags.h>
+#include <deal.II/base/mpi_stub.h>
 
 #include <deal.II/lac/vector_space_vector.h>
 
@@ -257,7 +256,7 @@ namespace Utilities
        *   we use an arbitrary type of size 1 byte. The type is cast to the
        *   requested type in the relevant functions.
        */
-      mutable std::vector<uint8_t> buffers;
+      mutable std::vector<std::uint8_t> buffers;
 
       /**
        * MPI requests for sending and receiving.

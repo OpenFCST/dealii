@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2020 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -73,6 +73,11 @@ namespace PETScWrappers
           else
             {
               // ghost entry
+              Assert(vector.ghost_indices.is_element(index),
+                     ExcMessage(
+                       "You are trying to access an element of a vector "
+                       "that is neither a locally owned element nor a "
+                       "ghost element of the vector."));
               const size_type ghostidx =
                 vector.ghost_indices.index_within_set(index);
 
@@ -337,7 +342,8 @@ namespace PETScWrappers
 
 
 
-  PetscScalar VectorBase::operator*(const VectorBase &vec) const
+  PetscScalar
+  VectorBase::operator*(const VectorBase &vec) const
   {
     Assert(size() == vec.size(), ExcDimensionMismatch(size(), vec.size()));
 
@@ -863,7 +869,7 @@ namespace PETScWrappers
                     const bool         scientific,
                     const bool         across) const
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
     // get a representation of the vector and
     // loop over all the elements
@@ -899,7 +905,7 @@ namespace PETScWrappers
     ierr = VecRestoreArray(vector, &val);
     AssertThrow(ierr == 0, ExcPETScError(ierr));
 
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
   }
 
 

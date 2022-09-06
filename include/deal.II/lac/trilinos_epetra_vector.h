@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2020 by the deal.II authors
+// Copyright (C) 2015 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -19,9 +19,10 @@
 
 #include <deal.II/base/config.h>
 
-#if defined(DEAL_II_WITH_TRILINOS) && defined(DEAL_II_WITH_MPI)
+#ifdef DEAL_II_WITH_TRILINOS
 
 #  include <deal.II/base/index_set.h>
+#  include <deal.II/base/mpi_stub.h>
 #  include <deal.II/base/subscriptor.h>
 
 #  include <deal.II/lac/trilinos_epetra_communication_pattern.h>
@@ -30,7 +31,6 @@
 #  include <deal.II/lac/vector_type_traits.h>
 
 #  include <Epetra_FEVector.h>
-#  include <mpi.h>
 
 #  include <memory>
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -38,7 +38,7 @@ test(const unsigned int degree)
   std::vector<Tensor<3, dim>> third_derivatives;
   std::vector<Tensor<4, dim>> fourth_derivatives;
 
-  for (unsigned int i = 0; i < quad.size(); i++)
+  for (unsigned int i = 0; i < quad.size(); ++i)
     {
       poly.evaluate(quad.point(i),
                     values,
@@ -48,11 +48,11 @@ test(const unsigned int degree)
                     fourth_derivatives);
 
       for (auto v : values)
-        deallog << v << " ";
+        deallog << v << ' ';
       deallog << std::endl;
 
       for (auto v : grads)
-        deallog << v << " ";
+        deallog << v << ' ';
       deallog << std::endl;
     }
 }

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2018 by the deal.II authors
+// Copyright (C) 2017 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -42,7 +42,7 @@ test(const unsigned int degree)
           << ", restriction is additive flags:" << std::endl;
 
   for (unsigned int i = 0; i < fe_bdm.dofs_per_cell; ++i)
-    deallog << fe_bdm.restriction_is_additive(i) << " ";
+    deallog << fe_bdm.restriction_is_additive(i) << ' ';
 
   deallog << std::endl;
 }

@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2018 - 2020 by the deal.II authors
+ * Copyright (C) 2018 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -388,8 +388,7 @@ namespace Step63
                                       std::vector<double> &          values,
                                       const unsigned int component) const
   {
-    Assert(values.size() == points.size(),
-           ExcDimensionMismatch(values.size(), points.size()));
+    AssertDimension(values.size(), points.size());
 
     for (unsigned int i = 0; i < points.size(); ++i)
       values[i] = RightHandSide<dim>::value(points[i], component);
@@ -439,8 +438,7 @@ namespace Step63
                                        std::vector<double> &          values,
                                        const unsigned int component) const
   {
-    Assert(values.size() == points.size(),
-           ExcDimensionMismatch(values.size(), points.size()));
+    AssertDimension(values.size(), points.size());
 
     for (unsigned int i = 0; i < points.size(); ++i)
       values[i] = BoundaryValues<dim>::value(points[i], component);
@@ -816,9 +814,8 @@ namespace Step63
     for (unsigned int level = 0; level < triangulation.n_global_levels();
          ++level)
       {
-        IndexSet locally_owned_level_dof_indices;
-        DoFTools::extract_locally_relevant_level_dofs(
-          dof_handler, level, locally_owned_level_dof_indices);
+        const IndexSet locally_owned_level_dof_indices =
+          DoFTools::extract_locally_relevant_level_dofs(dof_handler, level);
         boundary_constraints[level].reinit(locally_owned_level_dof_indices);
         boundary_constraints[level].add_lines(
           mg_constrained_dofs.get_refinement_edge_indices(level));

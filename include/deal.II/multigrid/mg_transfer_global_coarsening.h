@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -17,13 +17,18 @@
 #define dealii_mg_transfer_global_coarsening_h
 
 #include <deal.II/base/mg_level_object.h>
+#include <deal.II/base/vectorization.h>
 
 #include <deal.II/dofs/dof_handler.h>
 
 #include <deal.II/lac/affine_constraints.h>
 #include <deal.II/lac/la_parallel_vector.h>
 
+#include <deal.II/matrix_free/constraint_info.h>
+#include <deal.II/matrix_free/shape_info.h>
+
 #include <deal.II/multigrid/mg_base.h>
+#include <deal.II/multigrid/mg_transfer_matrix_free.h>
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -32,6 +37,12 @@ DEAL_II_NAMESPACE_OPEN
 namespace internal
 {
   class MGTwoLevelTransferImplementation;
+}
+
+namespace RepartitioningPolicyTools
+{
+  template <int dim, int spacedim>
+  class Base;
 }
 #endif
 
@@ -93,12 +104,50 @@ namespace MGTransferGlobalCoarseningTools
    *
    * @note For convenience, a reference to the input triangulation is stored in
    *   the last entry of the return vector.
-   * @note Currently, only implemented for parallel::distributed::Triangulation.
+   * @note Currently, not implemented for parallel::fullydistributed::Triangulation.
+   * @note The type of the returned triangulations is the same as of the input
+   *   triangulation.
    */
   template <int dim, int spacedim>
   std::vector<std::shared_ptr<const Triangulation<dim, spacedim>>>
   create_geometric_coarsening_sequence(
     const Triangulation<dim, spacedim> &tria);
+
+  /**
+   * Similar to the above function but also taking a @p policy for
+   * repartitioning the triangulations on the coarser levels. If
+   * @p preserve_fine_triangulation is set, the input triangulation is not
+   * altered,
+   * else the triangulation is coarsened. If @p repartition_fine_triangulation
+   * is set, the triangulation on the finest level is repartitioned as well. If
+   * the flags are set to true/false, the input triangulation is simply used as
+   * the finest triangulation.
+   *
+   * @note For convenience, a reference to the input triangulation is stored in
+   *   the last entry of the return vector.
+   * @note The type of the returned triangulations is
+   *   parallel::fullydistributed::Triangulation.
+   * @note Currently, only implemented for parallel::distributed::Triangulation.
+   */
+  template <int dim, int spacedim>
+  std::vector<std::shared_ptr<const Triangulation<dim, spacedim>>>
+  create_geometric_coarsening_sequence(
+    Triangulation<dim, spacedim> &                        tria,
+    const RepartitioningPolicyTools::Base<dim, spacedim> &policy,
+    const bool preserve_fine_triangulation,
+    const bool repartition_fine_triangulation);
+
+  /**
+   * Similar to the above function but taking in a constant version of
+   * @p tria. As a consequence, it can not be used for coarsening directly,
+   * so a temporary copy will be created internally.
+   */
+  template <int dim, int spacedim>
+  std::vector<std::shared_ptr<const Triangulation<dim, spacedim>>>
+  create_geometric_coarsening_sequence(
+    const Triangulation<dim, spacedim> &                  tria,
+    const RepartitioningPolicyTools::Base<dim, spacedim> &policy,
+    const bool repartition_fine_triangulation = false);
 
 } // namespace MGTransferGlobalCoarseningTools
 
@@ -106,6 +155,8 @@ namespace MGTransferGlobalCoarseningTools
 
 /**
  * Class for transfer between two multigrid levels for p- or global coarsening.
+ *
+ * The implementation of this class is explained in detail in @cite munch2022gc.
  */
 template <int dim, typename VectorType>
 class MGTwoLevelTransfer
@@ -115,7 +166,7 @@ public:
    * Perform prolongation.
    */
   void
-  prolongate(VectorType &dst, const VectorType &src) const;
+  prolongate_and_add(VectorType &dst, const VectorType &src) const;
 
   /**
    * Perform restriction.
@@ -131,6 +182,22 @@ public:
    */
   void
   interpolate(VectorType &dst, const VectorType &src) const;
+
+  /**
+   * Enable inplace vector operations if external and internal vectors
+   * are compatible.
+   */
+  void
+  enable_inplace_operations_if_possible(
+    const std::shared_ptr<const Utilities::MPI::Partitioner>
+      &partitioner_coarse,
+    const std::shared_ptr<const Utilities::MPI::Partitioner> &partitioner_fine);
+
+  /**
+   * Return the memory consumption of the allocated memory in this class.
+   */
+  std::size_t
+  memory_consumption() const;
 };
 
 
@@ -138,24 +205,34 @@ public:
 /**
  * Class for transfer between two multigrid levels for p- or global coarsening.
  * Specialization for LinearAlgebra::distributed::Vector.
+ *
+ * The implementation of this class is explained in detail in @cite munch2022gc.
  */
 template <int dim, typename Number>
 class MGTwoLevelTransfer<dim, LinearAlgebra::distributed::Vector<Number>>
 {
 public:
   /**
-   * Set up global coarsening transfer @p transfer between the given
-   * dof-handlers.
+   * Set up global coarsening between the given DoFHandler objects (
+   * @p dof_handler_fine and @p dof_handler_coarse). The transfer
+   * can be only performed on active levels.
    */
   void
-  reinit_geometric_transfer(const DoFHandler<dim> &          dof_handler_fine,
-                            const DoFHandler<dim> &          dof_handler_coarse,
-                            const AffineConstraints<Number> &constraint_fine,
-                            const AffineConstraints<Number> &constraint_coarse);
+  reinit_geometric_transfer(
+    const DoFHandler<dim> &          dof_handler_fine,
+    const DoFHandler<dim> &          dof_handler_coarse,
+    const AffineConstraints<Number> &constraint_fine =
+      AffineConstraints<Number>(),
+    const AffineConstraints<Number> &constraint_coarse =
+      AffineConstraints<Number>(),
+    const unsigned int mg_level_fine   = numbers::invalid_unsigned_int,
+    const unsigned int mg_level_coarse = numbers::invalid_unsigned_int);
 
   /**
-   * Set up polynomial coarsening transfer @p transfer between the given
-   * dof-handlers.
+   * Set up polynomial coarsening between the given DoFHandler objects (
+   * @p dof_handler_fine and @p dof_handler_coarse). Polynomial transfers
+   * can be only performed on active levels (`numbers::invalid_unsigned_int`)
+   * or on coarse-grid levels, i.e., levels without hanging nodes.
    *
    * @note The function polynomial_transfer_supported() can be used to
    *   check if the given polynomial coarsening strategy is supported.
@@ -164,8 +241,35 @@ public:
   reinit_polynomial_transfer(
     const DoFHandler<dim> &          dof_handler_fine,
     const DoFHandler<dim> &          dof_handler_coarse,
-    const AffineConstraints<Number> &constraint_fine,
-    const AffineConstraints<Number> &constraint_coarse);
+    const AffineConstraints<Number> &constraint_fine =
+      AffineConstraints<Number>(),
+    const AffineConstraints<Number> &constraint_coarse =
+      AffineConstraints<Number>(),
+    const unsigned int mg_level_fine   = numbers::invalid_unsigned_int,
+    const unsigned int mg_level_coarse = numbers::invalid_unsigned_int);
+
+  /**
+   * Set up transfer operator between the given DoFHandler objects (
+   * @p dof_handler_fine and @p dof_handler_coarse). Depending on the
+   * underlying Triangulation objects polynomial or geometrical global
+   * coarsening is performed.
+   *
+   * @note While geometric transfer can be only performed on active levels
+   *   (`numbers::invalid_unsigned_int`), polynomial transfers can also be
+   *   performed on coarse-grid levels, i.e., levels without hanging nodes.
+   *
+   * @note The function polynomial_transfer_supported() can be used to
+   *   check if the given polynomial coarsening strategy is supported.
+   */
+  void
+  reinit(const DoFHandler<dim> &          dof_handler_fine,
+         const DoFHandler<dim> &          dof_handler_coarse,
+         const AffineConstraints<Number> &constraint_fine =
+           AffineConstraints<Number>(),
+         const AffineConstraints<Number> &constraint_coarse =
+           AffineConstraints<Number>(),
+         const unsigned int mg_level_fine   = numbers::invalid_unsigned_int,
+         const unsigned int mg_level_coarse = numbers::invalid_unsigned_int);
 
   /**
    * Check if a fast templated version of the polynomial transfer between
@@ -183,8 +287,9 @@ public:
    * Perform prolongation.
    */
   void
-  prolongate(LinearAlgebra::distributed::Vector<Number> &      dst,
-             const LinearAlgebra::distributed::Vector<Number> &src) const;
+  prolongate_and_add(
+    LinearAlgebra::distributed::Vector<Number> &      dst,
+    const LinearAlgebra::distributed::Vector<Number> &src) const;
 
   /**
    * Perform restriction.
@@ -203,6 +308,22 @@ public:
   interpolate(LinearAlgebra::distributed::Vector<Number> &      dst,
               const LinearAlgebra::distributed::Vector<Number> &src) const;
 
+  /**
+   * Enable inplace vector operations if external and internal vectors
+   * are compatible.
+   */
+  void
+  enable_inplace_operations_if_possible(
+    const std::shared_ptr<const Utilities::MPI::Partitioner>
+      &partitioner_coarse,
+    const std::shared_ptr<const Utilities::MPI::Partitioner> &partitioner_fine);
+
+  /**
+   * Return the memory consumption of the allocated memory in this class.
+   */
+  std::size_t
+  memory_consumption() const;
+
 private:
   /**
    * A multigrid transfer scheme. A multrigrid transfer class can have different
@@ -220,35 +341,31 @@ private:
 
     /**
      * Number of degrees of freedom of a coarse cell.
+     *
+     * @note For tensor-product elements, the value equals
+     *   `n_components * (degree_coarse + 1)^dim`.
      */
-    unsigned int dofs_per_cell_coarse;
+    unsigned int n_dofs_per_cell_coarse;
 
     /**
      * Number of degrees of freedom of fine cell.
+     *
+     * @note For tensor-product elements, the value equals
+     *   `n_components * (n_dofs_per_cell_fine + 1)^dim`.
      */
-    unsigned int dofs_per_cell_fine;
+    unsigned int n_dofs_per_cell_fine;
 
     /**
-     * Polynomial degree of the finite element of the coarse cells.
+     * Polynomial degree of the finite element of a coarse cell.
      */
     unsigned int degree_coarse;
 
     /**
-     * Polynomial degree of the finite element of the fine cells.
+     * "Polynomial degree" of the finite element of the union of all children
+     * of a coarse cell, i.e., actually `degree_fine * 2 + 1` if a cell is
+     * refined.
      */
     unsigned int degree_fine;
-
-    /**
-     * Flag if the finite element on the fine cells are continuous. If yes,
-     * the multiplicity of DoF sharing a vertex/line as well as constraints have
-     * to be taken in account via weights.
-     */
-    bool fine_element_is_continuous;
-
-    /**
-     * Weights for continuous elements.
-     */
-    std::vector<Number> weights;
 
     /**
      * Prolongation matrix for non-tensor-product elements.
@@ -271,22 +388,24 @@ private:
     AlignedVector<VectorizedArray<Number>> restriction_matrix_1d;
 
     /**
-     * DoF indices of the coarse cells, expressed in indices local to the MPI
-     * rank.
+     * ShapeInfo description of the coarse cell. Needed during the
+     * fast application of hanging-node constraints.
      */
-    std::vector<unsigned int> level_dof_indices_coarse;
-
-    /**
-     * DoF indices of the fine cells, expressed in indices local to the MPI
-     * rank.
-     */
-    std::vector<unsigned int> level_dof_indices_fine;
+    internal::MatrixFreeFunctions::ShapeInfo<VectorizedArray<Number>>
+      shape_info_coarse;
   };
 
   /**
    * Transfer schemes.
    */
   std::vector<MGTransferScheme> schemes;
+
+  /**
+   * Flag if the finite elements on the fine cells are continuous. If yes,
+   * the multiplicity of DoF sharing a vertex/line as well as constraints have
+   * to be taken into account via weights.
+   */
+  bool fine_element_is_continuous;
 
   /**
    * Partitioner needed by the intermediate vector.
@@ -299,8 +418,11 @@ private:
   std::shared_ptr<const Utilities::MPI::Partitioner> partitioner_coarse;
 
   /**
-   * Internal vector needed for collecting all degrees of freedom of the
-   * fine cells.
+   * Internal vector needed for collecting all degrees of freedom of the fine
+   * cells. It is only initialized if the fine-level DoF indices touch DoFs
+   * other than the locally active ones (which we always assume can be
+   * accessed by the given vectors in the prolongate/restrict functions),
+   * otherwise it is left at size zero.
    */
   mutable LinearAlgebra::distributed::Vector<Number> vec_fine;
 
@@ -310,48 +432,28 @@ private:
   mutable LinearAlgebra::distributed::Vector<Number> vec_coarse;
 
   /**
-   * Internal vector for performing manual constraint_coarse.distribute(), which
-   * is needed for acceptable performance.
+   * Helper class for reading from and writing to global vectors and for
+   * applying constraints.
    */
-  mutable LinearAlgebra::distributed::Vector<Number> vec_coarse_constraints;
+  internal::MatrixFreeFunctions::ConstraintInfo<dim, VectorizedArray<Number>>
+    constraint_info;
 
   /**
-   * Constraint-entry indices for manually performing
-   * constraint_coarse.distribute() in MPI-local indices (for performance
-   * reasons).
+   * Weights for continuous elements.
    */
-  std::vector<unsigned int> constraint_coarse_distribute_indices;
+  std::vector<Number> weights;
 
   /**
-   * Constraint-entry values for manually performing
-   * constraint_coarse.distribute() in MPI-local indices (for performance
-   * reasons).
+   * Weights for continuous elements, compressed into 3^dim doubles per
+   * cell if possible.
    */
-  std::vector<Number> constraint_coarse_distribute_values;
+  AlignedVector<VectorizedArray<Number>> weights_compressed;
 
   /**
-   * Pointers to the constraint entries for performing manual
-   * constraint_coarse.distribute().
+   * DoF indices of the fine cells, expressed in indices local to the MPI
+   * rank.
    */
-  std::vector<unsigned int> constraint_coarse_distribute_ptr;
-
-  /**
-   * Constraint-entry indices for performing manual
-   * constraint_coarse.distribute_local_to_global().
-   */
-  std::vector<unsigned int> distribute_local_to_global_indices;
-
-  /**
-   * Constraint-entry values for performing manual
-   * constraint_coarse.distribute_local_to_global().
-   */
-  std::vector<Number> distribute_local_to_global_values;
-
-  /**
-   * Pointers to the constraint entries for performing manual
-   * constraint_coarse.distribute_local_to_global().
-   */
-  std::vector<unsigned int> distribute_local_to_global_ptr;
+  std::vector<unsigned int> level_dof_indices_fine;
 
   /**
    * Number of components.
@@ -368,10 +470,12 @@ private:
  * other multigrid transfer operators, the user can provide separate
  * transfer operators of type MGTwoLevelTransfer between each level.
  *
- * This class currently only works for tensor-product finite elements based on
- * FE_Q and FE_DGQ elements. Systems involving multiple components of
- * one of these element, as well as, systems with different elements or other
+ * This class currently only works for the tensor-product finite elements
+ * FE_Q and FE_DGQ and simplex elements FE_SimplexP and FE_SimplexDGP as well as
+ * for systems involving multiple components of one of these elements. Other
  * elements are currently not implemented.
+ *
+ * The implementation of this class is explained in detail in @cite munch2022gc.
  */
 template <int dim, typename VectorType>
 class MGTransferGlobalCoarsening : public dealii::MGTransferBase<VectorType>
@@ -395,12 +499,40 @@ public:
       &initialize_dof_vector = {});
 
   /**
+   * Similar function to MGTransferMatrixFree::build() with the difference that
+   * the information for the prolongation for each level has already been built.
+   * So this function only tries to optimize the data structures of the
+   * two-level transfer operators, e.g., by enabling inplace vector operations,
+   * by checking if @p external_partitioners and the internal ones are
+   * compatible.
+   */
+  void
+  build(const std::vector<std::shared_ptr<const Utilities::MPI::Partitioner>>
+          &external_partitioners = {});
+
+  /**
+   * Same as above but taking a lambda for initializing vector instead of
+   * partitioners.
+   */
+  void
+  build(const std::function<void(const unsigned int, VectorType &)>
+          &initialize_dof_vector);
+
+  /**
    * Perform prolongation.
    */
   void
   prolongate(const unsigned int to_level,
              VectorType &       dst,
              const VectorType & src) const override;
+
+  /**
+   * Perform prolongation.
+   */
+  void
+  prolongate_and_add(const unsigned int to_level,
+                     VectorType &       dst,
+                     const VectorType & src) const override;
 
   /**
    * Perform restriction.
@@ -445,8 +577,16 @@ public:
    *
    * If an inner vector of @p dst is empty or has incorrect locally owned size,
    * it will be resized to locally relevant degrees of freedom on each level.
-   *
-   * @note DoFHandler is not needed here, but is required by the interface.
+   */
+  template <class InVector>
+  void
+  interpolate_to_mg(MGLevelObject<VectorType> &dst, const InVector &src) const;
+
+  /**
+   * Like the above function but with a user-provided DoFHandler as
+   * additional argument. However, this DoFHandler is not used internally, but
+   * is required to be able to use MGTransferGlobalCoarsening and
+   * MGTransferMatrixFree as template argument.
    */
   template <class InVector, int spacedim>
   void
@@ -454,17 +594,76 @@ public:
                     MGLevelObject<VectorType> &      dst,
                     const InVector &                 src) const;
 
+  /**
+   * Return the memory consumption of the allocated memory in this class.
+   *
+   * @note Counts also the memory consumption of the underlying two-level
+   *   transfer operators.
+   */
+  std::size_t
+  memory_consumption() const;
+
+  /**
+   * Minimum level.
+   */
+  unsigned int
+  min_level() const;
+
+  /**
+   * Maximum level.
+   */
+  unsigned int
+  max_level() const;
+
 private:
+  /**
+   * Function to initialize internal level vectors.
+   */
+  void
+  initialize_dof_vector(const unsigned int level, VectorType &vector) const;
+
   /**
    * Collection of the two-level transfer operators.
    */
-  const MGLevelObject<MGTwoLevelTransfer<dim, VectorType>> &transfer;
+  MGLevelObject<MGTwoLevelTransfer<dim, VectorType>> transfer;
 
   /**
-   * %Function to initialize internal level vectors.
+   * External partitioners used during initialize_dof_vector().
    */
-  const std::function<void(const unsigned int, VectorType &)>
-    initialize_dof_vector;
+  std::vector<std::shared_ptr<const Utilities::MPI::Partitioner>>
+    external_partitioners;
+};
+
+
+
+/**
+ * This class works with LinearAlgebra::distributed::BlockVector and
+ * performs exactly the same transfer operations for each block as
+ * MGTransferGlobalCoarsening.
+ */
+template <int dim, typename VectorType>
+class MGTransferBlockGlobalCoarsening
+  : public MGTransferBlockMatrixFreeBase<
+      dim,
+      typename VectorType::value_type,
+      MGTransferGlobalCoarsening<dim, VectorType>>
+{
+public:
+  /**
+   * Constructor.
+   */
+  MGTransferBlockGlobalCoarsening(
+    const MGTransferGlobalCoarsening<dim, VectorType> &transfer_operator);
+
+protected:
+  const MGTransferGlobalCoarsening<dim, VectorType> &
+  get_matrix_free_transfer(const unsigned int b) const override;
+
+private:
+  /**
+   * Non-block version of transfer operation.
+   */
+  const MGTransferGlobalCoarsening<dim, VectorType> &transfer_operator;
 };
 
 
@@ -481,8 +680,84 @@ MGTransferGlobalCoarsening<dim, VectorType>::MGTransferGlobalCoarsening(
   const std::function<void(const unsigned int, VectorType &)>
     &initialize_dof_vector)
   : transfer(transfer)
-  , initialize_dof_vector(initialize_dof_vector)
-{}
+{
+  this->build(initialize_dof_vector);
+}
+
+
+
+template <int dim, typename VectorType>
+void
+MGTransferGlobalCoarsening<dim, VectorType>::build(
+  const std::vector<std::shared_ptr<const Utilities::MPI::Partitioner>>
+    &external_partitioners)
+{
+  this->external_partitioners = external_partitioners;
+
+  if (this->external_partitioners.size() > 0)
+    {
+      const unsigned int min_level = transfer.min_level();
+      const unsigned int max_level = transfer.max_level();
+
+      AssertDimension(this->external_partitioners.size(), transfer.n_levels());
+
+      for (unsigned int l = min_level + 1; l <= max_level; ++l)
+        transfer[l].enable_inplace_operations_if_possible(
+          this->external_partitioners[l - 1 - min_level],
+          this->external_partitioners[l - min_level]);
+    }
+}
+
+
+
+template <int dim, typename VectorType>
+void
+MGTransferGlobalCoarsening<dim, VectorType>::build(
+  const std::function<void(const unsigned int, VectorType &)>
+    &initialize_dof_vector)
+{
+  if (initialize_dof_vector)
+    {
+      const unsigned int min_level = transfer.min_level();
+      const unsigned int max_level = transfer.max_level();
+      const unsigned int n_levels  = transfer.n_levels();
+
+      std::vector<std::shared_ptr<const Utilities::MPI::Partitioner>>
+        external_partitioners(n_levels);
+
+      for (unsigned int l = min_level; l <= max_level; ++l)
+        {
+          LinearAlgebra::distributed::Vector<typename VectorType::value_type>
+            vector;
+          initialize_dof_vector(l, vector);
+          external_partitioners[l - min_level] = vector.get_partitioner();
+        }
+
+      this->build(external_partitioners);
+    }
+  else
+    {
+      this->build();
+    }
+}
+
+
+
+template <int dim, typename VectorType>
+void
+MGTransferGlobalCoarsening<dim, VectorType>::initialize_dof_vector(
+  const unsigned int level,
+  VectorType &       vec) const
+{
+  AssertDimension(transfer.n_levels(), external_partitioners.size());
+  AssertIndexRange(level, transfer.max_level() + 1);
+
+  const auto &external_partitioner =
+    external_partitioners[level - transfer.min_level()];
+
+  if (vec.get_partitioner().get() != external_partitioner.get())
+    vec.reinit(external_partitioner);
+}
 
 
 
@@ -493,7 +768,20 @@ MGTransferGlobalCoarsening<dim, VectorType>::prolongate(
   VectorType &       dst,
   const VectorType & src) const
 {
-  this->transfer[to_level].prolongate(dst, src);
+  dst = 0;
+  prolongate_and_add(to_level, dst, src);
+}
+
+
+
+template <int dim, typename VectorType>
+void
+MGTransferGlobalCoarsening<dim, VectorType>::prolongate_and_add(
+  const unsigned int to_level,
+  VectorType &       dst,
+  const VectorType & src) const
+{
+  this->transfer[to_level].prolongate_and_add(dst, src);
 }
 
 
@@ -520,17 +808,15 @@ MGTransferGlobalCoarsening<dim, VectorType>::copy_to_mg(
 {
   (void)dof_handler;
 
-  Assert(
-    initialize_dof_vector,
-    ExcMessage(
-      "To be able to use this function, a function to initialize an internal "
-      "DoF vector has to be provided in the constructor of "
-      "MGTransferGlobalCoarsening."));
-
   for (unsigned int level = dst.min_level(); level <= dst.max_level(); ++level)
-    initialize_dof_vector(level, dst[level]);
+    {
+      initialize_dof_vector(level, dst[level]);
 
-  dst[dst.max_level()].copy_locally_owned_data_from(src);
+      if (level == dst.max_level())
+        dst[level].copy_locally_owned_data_from(src);
+      else
+        dst[level] = 0.0;
+    }
 }
 
 
@@ -551,22 +837,12 @@ MGTransferGlobalCoarsening<dim, VectorType>::copy_from_mg(
 
 
 template <int dim, typename VectorType>
-template <class InVector, int spacedim>
+template <class InVector>
 void
 MGTransferGlobalCoarsening<dim, VectorType>::interpolate_to_mg(
-  const DoFHandler<dim, spacedim> &dof_handler,
-  MGLevelObject<VectorType> &      dst,
-  const InVector &                 src) const
+  MGLevelObject<VectorType> &dst,
+  const InVector &           src) const
 {
-  (void)dof_handler;
-
-  Assert(
-    initialize_dof_vector,
-    ExcMessage(
-      "To be able to use this function, a function to initialize an internal "
-      "DoF vector has to be provided in the constructor of "
-      "MGTransferGlobalCoarsening."));
-
   const unsigned int min_level = transfer.min_level();
   const unsigned int max_level = transfer.max_level();
 
@@ -580,6 +856,56 @@ MGTransferGlobalCoarsening<dim, VectorType>::interpolate_to_mg(
 
   for (unsigned int l = max_level; l > min_level; --l)
     this->transfer[l].interpolate(dst[l - 1], dst[l]);
+}
+
+
+
+template <int dim, typename VectorType>
+template <class InVector, int spacedim>
+void
+MGTransferGlobalCoarsening<dim, VectorType>::interpolate_to_mg(
+  const DoFHandler<dim, spacedim> &dof_handler,
+  MGLevelObject<VectorType> &      dst,
+  const InVector &                 src) const
+{
+  (void)dof_handler;
+
+  this->interpolate_to_mg(dst, src);
+}
+
+
+
+template <int dim, typename VectorType>
+std::size_t
+MGTransferGlobalCoarsening<dim, VectorType>::memory_consumption() const
+{
+  std::size_t size = 0;
+
+  const unsigned int min_level = transfer.min_level();
+  const unsigned int max_level = transfer.max_level();
+
+  for (unsigned int l = min_level + 1; l <= max_level; ++l)
+    size += this->transfer[l].memory_consumption();
+
+  return size;
+}
+
+
+
+template <int dim, typename VectorType>
+inline unsigned int
+MGTransferGlobalCoarsening<dim, VectorType>::min_level() const
+{
+  return transfer.min_level();
+}
+
+
+
+template <int dim, typename VectorType>
+inline unsigned int
+MGTransferGlobalCoarsening<dim, VectorType>::max_level() const
+{
+  return transfer.max_level();
 }
 
 #endif

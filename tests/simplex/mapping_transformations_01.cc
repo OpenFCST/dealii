@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -35,7 +35,8 @@
 
 using namespace dealii;
 
-void make_grid(Triangulation<2> &triangulation)
+void
+make_grid(Triangulation<2> &triangulation)
 {
   Triangulation<2> triangulation_temp;
 

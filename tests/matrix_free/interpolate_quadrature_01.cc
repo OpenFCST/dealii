@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -120,12 +120,11 @@ test(const unsigned int n_refinements = 1)
                                                    VectorizedArrayType>::
                 template interpolate_quadrature<true, false>(
                   1,
+                  EvaluationFlags::values,
                   matrix_free.get_shape_info(),
                   phi.begin_values(),
                   temp.data(),
-                  false,
                   face);
-
 
               for (unsigned int q = 0; q < phi_m.n_q_points; ++q)
                 {

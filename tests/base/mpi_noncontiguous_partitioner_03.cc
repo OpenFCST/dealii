@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2020 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -33,18 +33,18 @@ test(const MPI_Comm                       comm,
   AlignedVector<double> src(index_set_has.size(), 0);
   AlignedVector<double> dst(index_set_want.size(), 0);
 
-  for (unsigned int i = 0; i < index_set_has.size(); i++)
+  for (unsigned int i = 0; i < index_set_has.size(); ++i)
     src[i] = Utilities::MPI::this_mpi_process(comm) * 100 + i;
 
   vector.export_to_ghosted_array(ArrayView<const double>(src.data(),
                                                          src.size()),
                                  ArrayView<double>(dst.data(), dst.size()));
 
-  for (size_t i = 0; i < src.size(); i++)
-    deallog << static_cast<int>(src[i]) << " ";
+  for (size_t i = 0; i < src.size(); ++i)
+    deallog << static_cast<int>(src[i]) << ' ';
   deallog << std::endl;
-  for (size_t i = 0; i < dst.size(); i++)
-    deallog << static_cast<int>(dst[i]) << " ";
+  for (size_t i = 0; i < dst.size(); ++i)
+    deallog << static_cast<int>(dst[i]) << ' ';
   deallog << std::endl;
 }
 

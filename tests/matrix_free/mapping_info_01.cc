@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -23,7 +23,7 @@
 #include <deal.II/base/quadrature_lib.h>
 
 #include <deal.II/fe/fe_dgq.h>
-#include <deal.II/fe/mapping_q_generic.h>
+#include <deal.II/fe/mapping_q.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria.h>
@@ -47,7 +47,7 @@ test(const unsigned int degree)
   AffineConstraints<double> constraints;
   constraints.close();
 
-  MappingQGeneric<dim> mapping(degree);
+  MappingQ<dim> mapping(degree);
 
   MatrixFree<dim, double>                          mf_data;
   const QGauss<1>                                  quad(degree);

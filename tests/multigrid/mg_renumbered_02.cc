@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2020 by the deal.II authors
+// Copyright (C) 2013 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -195,10 +195,10 @@ private:
   void
   refine_local();
 
-  Triangulation<dim>         triangulation;
-  const MappingQGeneric<dim> mapping;
-  FESystem<dim>              fe;
-  DoFHandler<dim>            mg_dof_handler_renumbered;
+  Triangulation<dim>  triangulation;
+  const MappingQ<dim> mapping;
+  FESystem<dim>       fe;
+  DoFHandler<dim>     mg_dof_handler_renumbered;
 
   const unsigned int                             degree;
   std::vector<std::set<types::global_dof_index>> boundary_indices_renumbered;

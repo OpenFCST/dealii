@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -45,8 +45,6 @@
 #include <deal.II/lac/trilinos_sparsity_pattern.h>
 #include <deal.II/lac/vector.h>
 
-#include <deal.II/numerics/vector_tools.h>
-
 #include <algorithm>
 #include <numeric>
 
@@ -75,29 +73,28 @@ namespace DoFTools
     Assert(sparsity.n_cols() == n_dofs,
            ExcDimensionMismatch(sparsity.n_cols(), n_dofs));
 
-    // If we have a distributed::Triangulation only allow locally_owned
+    // If we have a distributed Triangulation only allow locally_owned
     // subdomain. Not setting a subdomain is also okay, because we skip
     // ghost cells in the loop below.
-    Assert((dof.get_triangulation().locally_owned_subdomain() ==
-            numbers::invalid_subdomain_id) ||
-             (subdomain_id == numbers::invalid_subdomain_id) ||
-             (subdomain_id ==
-              dof.get_triangulation().locally_owned_subdomain()),
-           ExcMessage(
-             "For parallel::distributed::Triangulation objects and "
-             "associated DoF handler objects, asking for any subdomain other "
-             "than the locally owned one does not make sense."));
+    if (const auto *triangulation = dynamic_cast<
+          const parallel::DistributedTriangulationBase<dim, spacedim> *>(
+          &dof.get_triangulation()))
+      {
+        Assert((subdomain_id == numbers::invalid_subdomain_id) ||
+                 (subdomain_id == triangulation->locally_owned_subdomain()),
+               ExcMessage(
+                 "For distributed Triangulation objects and associated "
+                 "DoFHandler objects, asking for any subdomain other than the "
+                 "locally owned one does not make sense."));
+      }
 
     std::vector<types::global_dof_index> dofs_on_this_cell;
     dofs_on_this_cell.reserve(dof.get_fe_collection().max_dofs_per_cell());
-    typename DoFHandler<dim, spacedim>::active_cell_iterator
-      cell = dof.begin_active(),
-      endc = dof.end();
 
     // In case we work with a distributed sparsity pattern of Trilinos
     // type, we only have to do the work if the current cell is owned by
     // the calling processor. Otherwise, just continue.
-    for (; cell != endc; ++cell)
+    for (const auto &cell : dof.active_cell_iterators())
       if (((subdomain_id == numbers::invalid_subdomain_id) ||
            (subdomain_id == cell->subdomain_id())) &&
           cell->is_locally_owned())
@@ -143,18 +140,20 @@ namespace DoFTools
            ExcDimensionMismatch(couplings.n_cols(),
                                 dof.get_fe(0).n_components()));
 
-    // If we have a distributed::Triangulation only allow locally_owned
+    // If we have a distributed Triangulation only allow locally_owned
     // subdomain. Not setting a subdomain is also okay, because we skip
     // ghost cells in the loop below.
-    Assert((dof.get_triangulation().locally_owned_subdomain() ==
-            numbers::invalid_subdomain_id) ||
-             (subdomain_id == numbers::invalid_subdomain_id) ||
-             (subdomain_id ==
-              dof.get_triangulation().locally_owned_subdomain()),
-           ExcMessage(
-             "For parallel::distributed::Triangulation objects and "
-             "associated DoF handler objects, asking for any subdomain other "
-             "than the locally owned one does not make sense."));
+    if (const auto *triangulation = dynamic_cast<
+          const parallel::DistributedTriangulationBase<dim, spacedim> *>(
+          &dof.get_triangulation()))
+      {
+        Assert((subdomain_id == numbers::invalid_subdomain_id) ||
+                 (subdomain_id == triangulation->locally_owned_subdomain()),
+               ExcMessage(
+                 "For distributed Triangulation objects and associated "
+                 "DoFHandler objects, asking for any subdomain other than the "
+                 "locally owned one does not make sense."));
+      }
 
     const hp::FECollection<dim, spacedim> &fe_collection =
       dof.get_fe_collection();
@@ -179,14 +178,11 @@ namespace DoFTools
 
     std::vector<types::global_dof_index> dofs_on_this_cell(
       fe_collection.max_dofs_per_cell());
-    typename DoFHandler<dim, spacedim>::active_cell_iterator
-      cell = dof.begin_active(),
-      endc = dof.end();
 
     // In case we work with a distributed sparsity pattern of Trilinos
     // type, we only have to do the work if the current cell is owned by
     // the calling processor. Otherwise, just continue.
-    for (; cell != endc; ++cell)
+    for (const auto &cell : dof.active_cell_iterators())
       if (((subdomain_id == numbers::invalid_subdomain_id) ||
            (subdomain_id == cell->subdomain_id())) &&
           cell->is_locally_owned())
@@ -303,7 +299,7 @@ namespace DoFTools
               child_cells =
                 GridTools::get_active_child_cells<DoFHandler<dim, spacedim>>(
                   cell_row);
-            for (unsigned int i = 0; i < child_cells.size(); i++)
+            for (unsigned int i = 0; i < child_cells.size(); ++i)
               {
                 const typename DoFHandler<dim, spacedim>::cell_iterator
                                    cell_row_child = child_cells[i];
@@ -330,7 +326,7 @@ namespace DoFTools
               child_cells =
                 GridTools::get_active_child_cells<DoFHandler<dim, spacedim>>(
                   cell_col);
-            for (unsigned int i = 0; i < child_cells.size(); i++)
+            for (unsigned int i = 0; i < child_cells.size(); ++i)
               {
                 const typename DoFHandler<dim, spacedim>::active_cell_iterator
                                    cell_col_child = child_cells[i];
@@ -400,10 +396,7 @@ namespace DoFTools
     // @p{cell->has_boundary_lines}), since we do not support boundaries of
     // dimension dim-2, and so every boundary line is also part of a
     // boundary face.
-    typename DoFHandler<dim, spacedim>::active_cell_iterator
-      cell = dof.begin_active(),
-      endc = dof.end();
-    for (; cell != endc; ++cell)
+    for (const auto &cell : dof.active_cell_iterators())
       for (const unsigned int f : cell->face_indices())
         if (cell->at_boundary(f))
           {
@@ -497,10 +490,7 @@ namespace DoFTools
 
     std::vector<types::global_dof_index> dofs_on_this_face;
     dofs_on_this_face.reserve(dof.get_fe_collection().max_dofs_per_face());
-    typename DoFHandler<dim, spacedim>::active_cell_iterator
-      cell = dof.begin_active(),
-      endc = dof.end();
-    for (; cell != endc; ++cell)
+    for (const auto &cell : dof.active_cell_iterators())
       for (const unsigned int f : cell->face_indices())
         if (boundary_ids.find(cell->face(f)->boundary_id()) !=
             boundary_ids.end())
@@ -541,26 +531,25 @@ namespace DoFTools
     AssertDimension(sparsity.n_rows(), n_dofs);
     AssertDimension(sparsity.n_cols(), n_dofs);
 
-    // If we have a distributed::Triangulation only allow locally_owned
+    // If we have a distributed Triangulation only allow locally_owned
     // subdomain. Not setting a subdomain is also okay, because we skip
     // ghost cells in the loop below.
-    Assert((dof.get_triangulation().locally_owned_subdomain() ==
-            numbers::invalid_subdomain_id) ||
-             (subdomain_id == numbers::invalid_subdomain_id) ||
-             (subdomain_id ==
-              dof.get_triangulation().locally_owned_subdomain()),
-           ExcMessage(
-             "For parallel::distributed::Triangulation objects and "
-             "associated DoF handler objects, asking for any subdomain other "
-             "than the locally owned one does not make sense."));
+    if (const auto *triangulation = dynamic_cast<
+          const parallel::DistributedTriangulationBase<dim, spacedim> *>(
+          &dof.get_triangulation()))
+      {
+        Assert((subdomain_id == numbers::invalid_subdomain_id) ||
+                 (subdomain_id == triangulation->locally_owned_subdomain()),
+               ExcMessage(
+                 "For distributed Triangulation objects and associated "
+                 "DoFHandler objects, asking for any subdomain other than the "
+                 "locally owned one does not make sense."));
+      }
 
     std::vector<types::global_dof_index> dofs_on_this_cell;
     std::vector<types::global_dof_index> dofs_on_other_cell;
     dofs_on_this_cell.reserve(dof.get_fe_collection().max_dofs_per_cell());
     dofs_on_other_cell.reserve(dof.get_fe_collection().max_dofs_per_cell());
-    typename DoFHandler<dim, spacedim>::active_cell_iterator
-      cell = dof.begin_active(),
-      endc = dof.end();
 
     // TODO: in an old implementation, we used user flags before to tag
     // faces that were already touched. this way, we could reduce the work
@@ -570,7 +559,7 @@ namespace DoFTools
     // In case we work with a distributed sparsity pattern of Trilinos
     // type, we only have to do the work if the current cell is owned by
     // the calling processor. Otherwise, just continue.
-    for (; cell != endc; ++cell)
+    for (const auto &cell : dof.active_cell_iterators())
       if (((subdomain_id == numbers::invalid_subdomain_id) ||
            (subdomain_id == cell->subdomain_id())) &&
           cell->is_locally_owned())
@@ -814,10 +803,7 @@ namespace DoFTools
                 if (int_dof_mask(i, j) != none)
                   bool_int_dof_mask(i, j) = true;
 
-            typename DoFHandler<dim, spacedim>::active_cell_iterator
-              cell = dof.begin_active(),
-              endc = dof.end();
-            for (; cell != endc; ++cell)
+            for (const auto &cell : dof.active_cell_iterators())
               if (((subdomain_id == numbers::invalid_subdomain_id) ||
                    (subdomain_id == cell->subdomain_id())) &&
                   cell->is_locally_owned())
@@ -1150,10 +1136,7 @@ namespace DoFTools
               }
 
 
-            typename dealii::DoFHandler<dim, spacedim>::active_cell_iterator
-              cell = dof.begin_active(),
-              endc = dof.end();
-            for (; cell != endc; ++cell)
+            for (const auto &cell : dof.active_cell_iterators())
               if (((subdomain_id == numbers::invalid_subdomain_id) ||
                    (subdomain_id == cell->subdomain_id())) &&
                   cell->is_locally_owned())
@@ -1428,18 +1411,20 @@ namespace DoFTools
     Assert(flux_mask.n_cols() == n_comp,
            ExcDimensionMismatch(flux_mask.n_cols(), n_comp));
 
-    // If we have a distributed::Triangulation only allow locally_owned
+    // If we have a distributed Triangulation only allow locally_owned
     // subdomain. Not setting a subdomain is also okay, because we skip
     // ghost cells in the loop below.
-    Assert((dof.get_triangulation().locally_owned_subdomain() ==
-            numbers::invalid_subdomain_id) ||
-             (subdomain_id == numbers::invalid_subdomain_id) ||
-             (subdomain_id ==
-              dof.get_triangulation().locally_owned_subdomain()),
-           ExcMessage(
-             "For parallel::distributed::Triangulation objects and "
-             "associated DoF handler objects, asking for any subdomain other "
-             "than the locally owned one does not make sense."));
+    if (const auto *triangulation = dynamic_cast<
+          const parallel::DistributedTriangulationBase<dim, spacedim> *>(
+          &dof.get_triangulation()))
+      {
+        Assert((subdomain_id == numbers::invalid_subdomain_id) ||
+                 (subdomain_id == triangulation->locally_owned_subdomain()),
+               ExcMessage(
+                 "For distributed Triangulation objects and associated "
+                 "DoFHandler objects, asking for any subdomain other than the "
+                 "locally owned one does not make sense."));
+      }
 
     Assert(
       face_has_flux_coupling,

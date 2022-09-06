@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2019 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -23,8 +23,10 @@
 DEAL_II_NAMESPACE_OPEN
 
 
-/*!@addtogroup fe */
-/*@{*/
+/**
+ * @addtogroup fe
+ * @{
+ */
 
 /**
  * Definition of a finite element space with zero degrees of freedom and that,
@@ -327,6 +329,15 @@ public:
     const unsigned int                  face_no = 0) const override;
 
   /**
+   * Return a list of constant modes of the element.
+   *
+   * Since the current finite element has no degrees of freedom, the returned
+   * list is necessarily empty.
+   */
+  virtual std::pair<Table<2, bool>, std::vector<unsigned int>>
+  get_constant_modes() const override;
+
+  /**
    * @return true if the FE dominates any other.
    */
   bool
@@ -343,7 +354,7 @@ private:
 };
 
 
-/*@}*/
+/** @} */
 
 DEAL_II_NAMESPACE_CLOSE
 

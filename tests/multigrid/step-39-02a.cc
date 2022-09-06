@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2020 by the deal.II authors
+// Copyright (C) 2013 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -413,11 +413,11 @@ namespace Step39
     void
     output_results(const unsigned int cycle) const;
 
-    Triangulation<dim>         triangulation;
-    const MappingQGeneric<dim> mapping;
-    const FiniteElement<dim> & fe;
-    DoFHandler<dim>            dof_handler;
-    MGConstrainedDoFs          mg_constraints;
+    Triangulation<dim>        triangulation;
+    const MappingQ<dim>       mapping;
+    const FiniteElement<dim> &fe;
+    DoFHandler<dim>           dof_handler;
+    MGConstrainedDoFs         mg_constraints;
 
     SparsityPattern      sparsity;
     SparseMatrix<double> matrix;

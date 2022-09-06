@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,7 +18,7 @@
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/work_stream.h>
 
-#include <deal.II/distributed/tria.h>
+#include <deal.II/distributed/tria_base.h>
 
 #include <deal.II/dofs/dof_accessor.h>
 #include <deal.II/dofs/dof_handler.h>
@@ -26,7 +26,7 @@
 #include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_update_flags.h>
 #include <deal.II/fe/fe_values.h>
-#include <deal.II/fe/mapping_q1.h>
+#include <deal.II/fe/mapping.h>
 
 #include <deal.II/grid/tria_iterator.h>
 
@@ -55,7 +55,6 @@
 DEAL_II_NAMESPACE_OPEN
 
 
-
 template <int spacedim>
 template <typename InputVector>
 void
@@ -112,7 +111,8 @@ KellyErrorEstimator<1, spacedim>::estimate(
   const types::material_id  material_id,
   const Strategy            strategy)
 {
-  estimate(StaticMappingQ1<1, spacedim>::mapping,
+  const auto reference_cell = ReferenceCells::Line;
+  estimate(reference_cell.template get_default_linear_mapping<1, spacedim>(),
            dof_handler,
            quadrature,
            neumann_bc,
@@ -146,7 +146,8 @@ KellyErrorEstimator<1, spacedim>::estimate(
   const types::material_id                material_id,
   const Strategy                          strategy)
 {
-  estimate(StaticMappingQ1<1, spacedim>::mapping,
+  const auto reference_cell = ReferenceCells::Line;
+  estimate(reference_cell.template get_default_linear_mapping<1, spacedim>(),
            dof_handler,
            quadrature,
            neumann_bc,
@@ -199,6 +200,7 @@ KellyErrorEstimator<1, spacedim>::estimate(
 }
 
 
+
 template <int spacedim>
 template <typename InputVector>
 void
@@ -217,7 +219,8 @@ KellyErrorEstimator<1, spacedim>::estimate(
   const types::material_id  material_id,
   const Strategy            strategy)
 {
-  estimate(StaticMappingQ1<1, spacedim>::mapping,
+  const auto reference_cell = ReferenceCells::Line;
+  estimate(reference_cell.template get_default_linear_mapping<1, spacedim>(),
            dof_handler,
            quadrature,
            neumann_bc,
@@ -251,7 +254,8 @@ KellyErrorEstimator<1, spacedim>::estimate(
   const types::material_id                material_id,
   const Strategy                          strategy)
 {
-  estimate(StaticMappingQ1<1, spacedim>::mapping,
+  const auto reference_cell = ReferenceCells::Line;
+  estimate(reference_cell.template get_default_linear_mapping<1, spacedim>(),
            dof_handler,
            quadrature,
            neumann_bc,
@@ -271,33 +275,9 @@ template <int spacedim>
 template <typename InputVector>
 void
 KellyErrorEstimator<1, spacedim>::estimate(
-  const Mapping<1, spacedim> & /*mapping*/,
-  const DoFHandler<1, spacedim> & /*dof_handler*/,
+  const Mapping<1, spacedim> &   mapping,
+  const DoFHandler<1, spacedim> &dof_handler,
   const hp::QCollection<0> &,
-  const std::map<types::boundary_id,
-                 const Function<spacedim, typename InputVector::value_type> *>
-    & /*neumann_bc*/,
-  const std::vector<const InputVector *> & /*solutions*/,
-  std::vector<Vector<float> *> & /*errors*/,
-  const ComponentMask & /*component_mask_*/,
-  const Function<spacedim> * /*coefficient*/,
-  const unsigned int,
-  const types::subdomain_id /*subdomain_id*/,
-  const types::material_id /*material_id*/,
-  const Strategy /*strategy*/)
-{
-  Assert(false, ExcInternalError());
-}
-
-
-
-template <int spacedim>
-template <typename InputVector>
-void
-KellyErrorEstimator<1, spacedim>::estimate(
-  const Mapping<1, spacedim> &   mapping,
-  const DoFHandler<1, spacedim> &dof_handler,
-  const Quadrature<0> &,
   const std::map<types::boundary_id,
                  const Function<spacedim, typename InputVector::value_type> *>
     &                                     neumann_bc,
@@ -311,31 +291,24 @@ KellyErrorEstimator<1, spacedim>::estimate(
   const Strategy            strategy)
 {
   AssertThrow(strategy == cell_diameter_over_24, ExcNotImplemented());
-  using number = typename InputVector::value_type;
-#ifdef DEAL_II_WITH_P4EST
-  if (dynamic_cast<const parallel::distributed::Triangulation<1, spacedim> *>(
-        &dof_handler.get_triangulation()) != nullptr)
-    Assert((subdomain_id_ == numbers::invalid_subdomain_id) ||
-             (subdomain_id_ ==
-              dynamic_cast<
-                const parallel::distributed::Triangulation<1, spacedim> &>(
-                dof_handler.get_triangulation())
-                .locally_owned_subdomain()),
-           ExcMessage(
-             "For parallel distributed triangulations, the only "
-             "valid subdomain_id that can be passed here is the "
-             "one that corresponds to the locally owned subdomain id."));
-
-  const types::subdomain_id subdomain_id =
-    ((dynamic_cast<const parallel::distributed::Triangulation<1, spacedim> *>(
-        &dof_handler.get_triangulation()) != nullptr) ?
-       dynamic_cast<const parallel::distributed::Triangulation<1, spacedim> &>(
-         dof_handler.get_triangulation())
-         .locally_owned_subdomain() :
-       subdomain_id_);
-#else
-  const types::subdomain_id subdomain_id = subdomain_id_;
-#endif
+  using number                     = typename InputVector::value_type;
+  types::subdomain_id subdomain_id = numbers::invalid_subdomain_id;
+  if (const auto *triangulation = dynamic_cast<
+        const parallel::DistributedTriangulationBase<1, spacedim> *>(
+        &dof_handler.get_triangulation()))
+    {
+      Assert((subdomain_id_ == numbers::invalid_subdomain_id) ||
+               (subdomain_id_ == triangulation->locally_owned_subdomain()),
+             ExcMessage(
+               "For distributed Triangulation objects and associated "
+               "DoFHandler objects, asking for any subdomain other than the "
+               "locally owned one does not make sense."));
+      subdomain_id = triangulation->locally_owned_subdomain();
+    }
+  else
+    {
+      subdomain_id = subdomain_id_;
+    }
 
   const unsigned int n_components       = dof_handler.get_fe(0).n_components();
   const unsigned int n_solution_vectors = solutions.size();
@@ -403,9 +376,9 @@ KellyErrorEstimator<1, spacedim>::estimate(
   std::vector<std::vector<std::vector<Tensor<1, spacedim, number>>>>
     gradients_neighbor(gradients_here);
   std::vector<Vector<typename ProductType<number, double>::type>>
-  grad_dot_n_neighbor(n_solution_vectors,
-                      Vector<typename ProductType<number, double>::type>(
-                        n_components));
+    grad_dot_n_neighbor(n_solution_vectors,
+                        Vector<typename ProductType<number, double>::type>(
+                          n_components));
 
   // reserve some space for coefficient values at one point.  if there is no
   // coefficient, then we fill it by unity once and for all and don't set it
@@ -553,6 +526,43 @@ KellyErrorEstimator<1, spacedim>::estimate(
             std::sqrt((*errors[s])(cell->active_cell_index()));
       }
 }
+
+
+
+template <int spacedim>
+template <typename InputVector>
+void
+KellyErrorEstimator<1, spacedim>::estimate(
+  const Mapping<1, spacedim> &   mapping,
+  const DoFHandler<1, spacedim> &dof_handler,
+  const Quadrature<0> &          quadrature,
+  const std::map<types::boundary_id,
+                 const Function<spacedim, typename InputVector::value_type> *>
+    &                                     neumann_bc,
+  const std::vector<const InputVector *> &solutions,
+  std::vector<Vector<float> *> &          errors,
+  const ComponentMask &                   component_mask,
+  const Function<spacedim> *              coefficients,
+  const unsigned int                      n_threads,
+  const types::subdomain_id               subdomain_id,
+  const types::material_id                material_id,
+  const Strategy                          strategy)
+{
+  const hp::QCollection<0> quadrature_collection(quadrature);
+  estimate(mapping,
+           dof_handler,
+           quadrature_collection,
+           neumann_bc,
+           solutions,
+           errors,
+           component_mask,
+           coefficients,
+           n_threads,
+           subdomain_id,
+           material_id,
+           strategy);
+}
+
 
 
 // explicit instantiations

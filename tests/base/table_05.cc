@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2018 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -25,11 +25,14 @@ void
 test()
 {
   dealii::TableIndices<dim> new_size;
-  for (unsigned int d = 0; d < dim; d++)
+  for (unsigned int d = 0; d < dim; ++d)
     new_size[d] = 5;
 
   dealii::Table<dim, int> unrolled;
   unrolled.reinit(new_size);
+
+  unrolled.clear();
+  Assert(unrolled.empty() == true, ExcInternalError());
 
   deallog << "OK" << std::endl;
 }

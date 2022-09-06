@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2000 - 2020 by the deal.II authors
+ * Copyright (C) 2000 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -117,6 +117,10 @@ namespace Step9
     // this macro call declares and defines a class
     // <code>ExcDimensionMismatch</code> inheriting from ExceptionBase which
     // implements all necessary error output functions.
+    //
+    // @note This exception is similarly used inside the
+    // <code>AssertDimension</code> macro, which is a handy wrapper to the
+    // check the dimensions of two given objects.
   };
 
   // The following two functions implement the interface described above. The
@@ -131,7 +135,7 @@ namespace Step9
   template <int dim>
   Tensor<1, dim> AdvectionField<dim>::value(const Point<dim> &p) const
   {
-    Point<dim> value;
+    Tensor<1, dim> value;
     value[0] = 2;
     for (unsigned int i = 1; i < dim; ++i)
       value[i] = 1 + 0.8 * std::sin(8. * numbers::PI * p[0]);
@@ -840,8 +844,7 @@ namespace Step9
       // disk. Here we ask ZLib, a compression library, to compress the data
       // in a way that maximizes throughput.
       DataOutBase::VtkFlags vtk_flags;
-      vtk_flags.compression_level =
-        DataOutBase::VtkFlags::ZlibCompressionLevel::best_speed;
+      vtk_flags.compression_level = DataOutBase::CompressionLevel::best_speed;
       data_out.set_flags(vtk_flags);
 
       std::ofstream output("solution-" + std::to_string(cycle) + ".vtu");

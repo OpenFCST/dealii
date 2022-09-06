@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2018 by the deal.II authors
+// Copyright (C) 2008 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -74,7 +74,7 @@ template <int dim>
 void
 test()
 {
-  deallog << dim << "d" << std::endl;
+  deallog << dim << 'd' << std::endl;
 
   Triangulation<dim> tria;
   GridGenerator::hyper_cube(tria);

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2007 - 2020 by the deal.II authors
+// Copyright (C) 2007 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -118,7 +118,7 @@ test(const Triangulation<dim> &tr, const FiniteElement<dim> &fe)
 
   VectorFunction<dim> fe_function;
 
-  MappingQGeneric<dim> mapping(1);
+  MappingQ<dim> mapping(1);
 
   const QGauss<dim> quadrature(fe.degree + 2);
   FEValues<dim>     fe_values(mapping,

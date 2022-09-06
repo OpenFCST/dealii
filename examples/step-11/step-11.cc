@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2001 - 2020 by the deal.II authors
+ * Copyright (C) 2001 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -22,6 +22,7 @@
 // you are probably already used to by now:
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/function.h>
+#include <deal.II/base/numbers.h>
 #include <deal.II/base/logstream.h>
 #include <deal.II/base/table_handler.h>
 #include <deal.II/lac/vector.h>
@@ -110,7 +111,7 @@ namespace Step11
     , dof_handler(triangulation)
     , mapping(mapping_degree)
   {
-    std::cout << "Using mapping with degree " << mapping_degree << ":"
+    std::cout << "Using mapping with degree " << mapping_degree << ':'
               << std::endl
               << "============================" << std::endl;
   }
@@ -360,8 +361,7 @@ namespace Step11
     // Last task -- generate output:
     output_table.add_value("cells", triangulation.n_active_cells());
     output_table.add_value("|u|_1", norm);
-    output_table.add_value("error",
-                           std::fabs(norm - std::sqrt(3.14159265358 / 2)));
+    output_table.add_value("error", std::fabs(norm - std::sqrt(numbers::PI_2)));
   }
 
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -355,8 +355,8 @@ test(const unsigned int degree)
 
     Vector<double> difference(tria.n_active_cells());
 
-    deallog << "dim=" << dim << " ";
-    deallog << "degree=" << degree << " ";
+    deallog << "dim=" << dim << ' ';
+    deallog << "degree=" << degree << ' ';
 
     VectorTools::integrate_difference(mapping,
                                       dof_handler,
@@ -534,19 +534,21 @@ test(const unsigned int degree)
           for (unsigned int i = 0; i < n_dofs_face; ++i)
             for (unsigned int j = 0; j < n_dofs_face; ++j)
               copy_data_face.cell_matrix(i, j) +=
-                (-diffusion_coefficient *              // - nu
-                   fe_iv.jump(i, point) *              // [v_h]
-                   (fe_iv.average_gradient(j, point) * // ({grad u_h} .
-                    normals[point])                    //  n)
+                (-diffusion_coefficient *                 // - nu
+                   fe_iv.jump_in_shape_values(i, point) * // [v_h]
+                   (fe_iv.average_of_shape_gradients(j,
+                                                     point) * // ({grad u_h} .
+                    normals[point])                           //  n)
 
-                 - diffusion_coefficient *               // - nu
-                     (fe_iv.average_gradient(i, point) * // (grad v_h .
-                      normals[point]) *                  //  n)
-                     fe_iv.jump(j, point)                // [u_h]
+                 -
+                 diffusion_coefficient *                         // - nu
+                   (fe_iv.average_of_shape_gradients(i, point) * // (grad v_h .
+                    normals[point]) *                            //  n)
+                   fe_iv.jump_in_shape_values(j, point)          // [u_h]
 
-                 + diffusion_coefficient * penalty * // + nu sigma
-                     fe_iv.jump(i, point) *          // [v_h]
-                     fe_iv.jump(j, point)            // [u_h]
+                 + diffusion_coefficient * penalty *        // + nu sigma
+                     fe_iv.jump_in_shape_values(i, point) * // [v_h]
+                     fe_iv.jump_in_shape_values(j, point)   // [u_h]
 
                  ) *
                 JxW[point]; // dx

@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2020 by the deal.II authors
+ * Copyright (C) 2020 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -768,13 +768,13 @@ namespace Euler_DG
       const MatrixFree<dim, Number> &                   data,
       LinearAlgebra::distributed::Vector<Number> &      dst,
       const LinearAlgebra::distributed::Vector<Number> &src,
-      const std::pair<unsigned int, unsigned int> &     cell_range) const;
+      const std::pair<unsigned int, unsigned int> &     face_range) const;
 
     void local_apply_boundary_face(
       const MatrixFree<dim, Number> &                   data,
       LinearAlgebra::distributed::Vector<Number> &      dst,
       const LinearAlgebra::distributed::Vector<Number> &src,
-      const std::pair<unsigned int, unsigned int> &     cell_range) const;
+      const std::pair<unsigned int, unsigned int> &     face_range) const;
   };
 
 
@@ -1776,9 +1776,9 @@ namespace Euler_DG
     Triangulation<dim> triangulation;
 #endif
 
-    FESystem<dim>        fe;
-    MappingQGeneric<dim> mapping;
-    DoFHandler<dim>      dof_handler;
+    FESystem<dim>   fe;
+    MappingQ<dim>   mapping;
+    DoFHandler<dim> dof_handler;
 
     TimerOutput timer;
 
@@ -2194,10 +2194,10 @@ namespace Euler_DG
       pcout << "Running with "
             << Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD)
             << " MPI processes" << std::endl;
-      pcout << "Vectorization over " << n_vect_number << " "
+      pcout << "Vectorization over " << n_vect_number << ' '
             << (std::is_same<Number, double>::value ? "doubles" : "floats")
             << " = " << n_vect_bits << " bits ("
-            << Utilities::System::get_current_vectorization_level() << ")"
+            << Utilities::System::get_current_vectorization_level() << ')'
             << std::endl;
     }
 

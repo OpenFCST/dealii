@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2018 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -41,7 +41,7 @@ namespace FESeries
 
     double sum_1 = 0.0, sum_x = 0.0, sum_x2 = 0.0, sum_y = 0.0, sum_xy = 0.0;
 
-    for (unsigned int i = 0; i < x.size(); i++)
+    for (unsigned int i = 0; i < x.size(); ++i)
       {
         sum_1 += 1.0;
         sum_x += x[i];

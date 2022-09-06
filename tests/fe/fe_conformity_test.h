@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -24,7 +24,7 @@
 #include <deal.II/dofs/dof_tools.h>
 
 #include <deal.II/fe/fe.h>
-#include <deal.II/fe/fe_base.h>
+#include <deal.II/fe/fe_data.h>
 #include <deal.II/fe/fe_interface_values.h>
 #include <deal.II/fe/fe_tools.h>
 #include <deal.II/fe/fe_values.h>
@@ -206,12 +206,11 @@ namespace FEConforimityTest
   {
     triangulation.clear();
 
-    const bool rotate_left_square  = (((config_switch / 2) % 2) == 1);
-    const bool rotate_right_square = ((config_switch % 2) == 1);
+    // alias for better readability
+    const unsigned int n_rotate_central_square = config_switch;
 
     GridGenerator::non_standard_orientation_mesh(triangulation,
-                                                 rotate_left_square,
-                                                 rotate_right_square);
+                                                 n_rotate_central_square);
 
     //    GridTools::distort_random(/* factor */ 0.15,
     //                              triangulation_coarse,

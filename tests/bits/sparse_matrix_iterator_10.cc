@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -41,7 +41,7 @@ test()
   SparseMatrix<double> A(sparsity);
 
   // and loop over the elements of it
-  for (SparseMatrix<double>::const_iterator k = A.begin(); k != A.end(); k++)
+  for (SparseMatrix<double>::const_iterator k = A.begin(); k != A.end(); ++k)
     deallog << k->row() << ' ' << k->column() << ' ' << k->value() << std::endl;
 }
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2018 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -39,7 +39,8 @@
 
 #include "../tests.h"
 
-bool inside(Triangulation<3> &tria, Point<3> &p)
+bool
+inside(Triangulation<3> &tria, Point<3> &p)
 {
   for (Triangulation<3>::cell_iterator cell = tria.begin(0);
        cell != tria.end(0);
@@ -74,8 +75,8 @@ check2()
   deallog << inside(tria, p2) << std::endl;
 
   hp::MappingCollection<3> mappings;
-  mappings.push_back(MappingQGeneric<3>(1));
-  mappings.push_back(MappingQGeneric<3>(1));
+  mappings.push_back(MappingQ<3>(1));
+  mappings.push_back(MappingQ<3>(1));
 
   hp::FECollection<3> fes;
   fes.push_back(FE_Q<3>(1));

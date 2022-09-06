@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2020 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -45,26 +45,6 @@ namespace PETScWrappers
       : communicator(communicator)
     {
       Vector::create_vector(n, locally_owned_size);
-    }
-
-
-
-    Vector::Vector(const MPI_Comm &  communicator,
-                   const VectorBase &v,
-                   const size_type   locally_owned_size)
-      : VectorBase(v)
-      , communicator(communicator)
-    {
-      // In the past (before it was deprecated) this constructor did a
-      // byte-for-byte copy of v. This choice resulted in two problems:
-      // 1. The created vector will have the same size as v, not local size.
-      // 2. Since both the created vector and v maintain ownership of the same
-      // PETSc Vec, both will try to destroy it: this does not make sense.
-      //
-      // For the sake of backwards compatibility, preserve the behavior of the
-      // copy, but correct the ownership bug. Note that in both this (and the
-      // original) implementation locally_owned_size is ultimately unused.
-      (void)locally_owned_size;
     }
 
 
@@ -254,6 +234,15 @@ namespace PETScWrappers
       create_vector(local.size(), local.n_elements());
     }
 
+    void
+    Vector::reinit(
+      const std::shared_ptr<const Utilities::MPI::Partitioner> &partitioner)
+    {
+      this->reinit(partitioner->locally_owned_range(),
+                   partitioner->ghost_indices(),
+                   partitioner->get_mpi_communicator());
+    }
+
 
     void
     Vector::create_vector(const size_type n, const size_type locally_owned_size)
@@ -328,18 +317,6 @@ namespace PETScWrappers
                           static_cast<PetscInt>(ghost_indices.n_elements()));
       }
 #  endif
-
-
-      // in PETSc versions up to 3.5, VecCreateGhost zeroed out the locally
-      // owned vector elements but forgot about the ghost elements. we need to
-      // do this ourselves
-      //
-      // see https://code.google.com/p/dealii/issues/detail?id=233
-#  if DEAL_II_PETSC_VERSION_LT(3, 6, 0)
-      PETScWrappers::MPI::Vector zero;
-      zero.reinit(communicator, this->size(), locally_owned_size);
-      *this = zero;
-#  endif
     }
 
 
@@ -365,7 +342,7 @@ namespace PETScWrappers
                   const bool         scientific,
                   const bool         across) const
     {
-      AssertThrow(out, ExcIO());
+      AssertThrow(out.fail() == false, ExcIO());
 
       // get a representation of the vector and
       // loop over all the elements
@@ -431,7 +408,7 @@ namespace PETScWrappers
       ierr = VecRestoreArray(vector, &val);
       AssertThrow(ierr == 0, ExcPETScError(ierr));
 
-      AssertThrow(out, ExcIO());
+      AssertThrow(out.fail() == false, ExcIO());
     }
 
   } // namespace MPI

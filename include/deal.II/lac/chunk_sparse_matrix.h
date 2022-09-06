@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -26,6 +26,7 @@
 #  include <deal.II/lac/exceptions.h>
 #  include <deal.II/lac/identity_matrix.h>
 
+#  include <iterator>
 #  include <memory>
 
 
@@ -39,8 +40,9 @@ template <typename number>
 class FullMatrix;
 #  endif
 
-/*! @addtogroup Matrix1
- *@{
+/**
+ * @addtogroup Matrix1
+ * @{
  */
 
 /**
@@ -308,6 +310,12 @@ namespace ChunkSparseMatrixIterators
     using value_type = const Accessor<number, Constness> &;
 
     /**
+     * A type that denotes what data types is used to express the difference
+     * between two iterators.
+     */
+    using difference_type = types::global_dof_index;
+
+    /**
      * Constructor. Create an iterator into the matrix @p matrix for the given
      * row and the index within it.
      */
@@ -339,12 +347,14 @@ namespace ChunkSparseMatrixIterators
     /**
      * Dereferencing operator.
      */
-    const Accessor<number, Constness> &operator*() const;
+    const Accessor<number, Constness> &
+    operator*() const;
 
     /**
      * Dereferencing operator.
      */
-    const Accessor<number, Constness> *operator->() const;
+    const Accessor<number, Constness> *
+    operator->() const;
 
     /**
      * Comparison. True, if both iterators point to the same matrix position.
@@ -398,6 +408,24 @@ namespace ChunkSparseMatrixIterators
   };
 
 } // namespace ChunkSparseMatrixIterators
+
+DEAL_II_NAMESPACE_CLOSE
+
+namespace std
+{
+  template <typename number, bool Constness>
+  struct iterator_traits<
+    dealii::ChunkSparseMatrixIterators::Iterator<number, Constness>>
+  {
+    using iterator_category = forward_iterator_tag;
+    using value_type        = typename dealii::ChunkSparseMatrixIterators::
+      Iterator<number, Constness>::value_type;
+    using difference_type = typename dealii::ChunkSparseMatrixIterators::
+      Iterator<number, Constness>::difference_type;
+  };
+} // namespace std
+
+DEAL_II_NAMESPACE_OPEN
 
 
 
@@ -475,7 +503,7 @@ public:
   /**
    * @name Constructors and initialization.
    */
-  //@{
+  /** @{ */
   /**
    * Constructor; initializes the matrix to be empty, without any structure,
    * i.e.  the matrix is not usable at all. This constructor is therefore only
@@ -584,11 +612,11 @@ public:
    */
   virtual void
   clear();
-  //@}
+  /** @} */
   /**
    * @name Information on the matrix
    */
-  //@{
+  /** @{ */
   /**
    * Return whether the object is empty. It is empty if either both dimensions
    * are zero or no ChunkSparsityPattern is associated.
@@ -646,11 +674,11 @@ public:
   std::size_t
   memory_consumption() const;
 
-  //@}
+  /** @} */
   /**
    * @name Modifying entries
    */
-  //@{
+  /** @{ */
   /**
    * Set the element (<i>i,j</i>) to <tt>value</tt>. Throws an error if the
    * entry does not exist or if <tt>value</tt> is not a finite number. Still,
@@ -777,11 +805,11 @@ public:
   void
   add(const number factor, const ChunkSparseMatrix<somenumber> &matrix);
 
-  //@}
+  /** @} */
   /**
    * @name Entry Access
    */
-  //@{
+  /** @{ */
 
   /**
    * Return the value of the entry (<i>i,j</i>).  This may be an expensive
@@ -842,11 +870,11 @@ public:
                    size_type *     column_indices,
                    number *        values) const;
 
-  //@}
+  /** @} */
   /**
    * @name Matrix vector multiplications
    */
-  //@{
+  /** @{ */
   /**
    * Matrix-vector multiplication: let <i>dst = M*src</i> with <i>M</i> being
    * this matrix.
@@ -960,11 +988,11 @@ public:
            const Vector<somenumber> &x,
            const Vector<somenumber> &b) const;
 
-  //@}
+  /** @} */
   /**
    * @name Matrix norms
    */
-  //@{
+  /** @{ */
 
   /**
    * Return the l1-norm of the matrix, that is $|M|_1=max_{all columns
@@ -992,11 +1020,11 @@ public:
    */
   real_type
   frobenius_norm() const;
-  //@}
+  /** @} */
   /**
    * @name Preconditioning methods
    */
-  //@{
+  /** @{ */
 
   /**
    * Apply the Jacobi preconditioner, which multiplies every element of the
@@ -1124,11 +1152,11 @@ public:
   SSOR_step(Vector<somenumber> &      v,
             const Vector<somenumber> &b,
             const number              om = 1.) const;
-  //@}
+  /** @} */
   /**
    * @name Iterators
    */
-  //@{
+  /** @{ */
 
   /**
    * Iterator starting at first entry of the matrix. This is the version for
@@ -1243,11 +1271,11 @@ public:
    */
   iterator
   end(const unsigned int r);
-  //@}
+  /** @} */
   /**
    * @name Input/Output
    */
-  //@{
+  /** @{ */
 
   /**
    * Print the matrix to the given stream, using the format <tt>(line,col)
@@ -1323,7 +1351,7 @@ public:
    */
   void
   block_read(std::istream &in);
-  //@}
+  /** @} */
   /**
    * @addtogroup Exceptions
    * @{
@@ -1370,7 +1398,7 @@ public:
                    "You are attempting an operation on two matrices that "
                    "are the same object, but the operation requires that the "
                    "two objects are in fact different.");
-  //@}
+  /** @} */
 private:
   /**
    * Pointer to the sparsity pattern used for this matrix. In order to
@@ -1413,7 +1441,7 @@ private:
   friend class ChunkSparseMatrixIterators::Accessor;
 };
 
-/*@}*/
+/** @} */
 
 #  ifndef DOXYGEN
 /*---------------------- Inline functions -----------------------------------*/
@@ -1424,7 +1452,7 @@ template <typename number>
 inline typename ChunkSparseMatrix<number>::size_type
 ChunkSparseMatrix<number>::m() const
 {
-  Assert(cols != nullptr, ExcNotInitialized());
+  Assert(cols != nullptr, ExcNeedsSparsityPattern());
   return cols->rows;
 }
 
@@ -1433,7 +1461,7 @@ template <typename number>
 inline typename ChunkSparseMatrix<number>::size_type
 ChunkSparseMatrix<number>::n() const
 {
-  Assert(cols != nullptr, ExcNotInitialized());
+  Assert(cols != nullptr, ExcNeedsSparsityPattern());
   return cols->cols;
 }
 
@@ -1443,7 +1471,7 @@ template <typename number>
 inline const ChunkSparsityPattern &
 ChunkSparseMatrix<number>::get_sparsity_pattern() const
 {
-  Assert(cols != nullptr, ExcNotInitialized());
+  Assert(cols != nullptr, ExcNeedsSparsityPattern());
   return *cols;
 }
 
@@ -1476,7 +1504,7 @@ ChunkSparseMatrix<number>::set(const size_type i,
 {
   AssertIsFinite(value);
 
-  Assert(cols != nullptr, ExcNotInitialized());
+  Assert(cols != nullptr, ExcNeedsSparsityPattern());
   // it is allowed to set elements of the matrix that are not part of the
   // sparsity pattern, if the value to which we set it is zero
   const size_type index = compute_location(i, j);
@@ -1497,7 +1525,7 @@ ChunkSparseMatrix<number>::add(const size_type i,
 {
   AssertIsFinite(value);
 
-  Assert(cols != nullptr, ExcNotInitialized());
+  Assert(cols != nullptr, ExcNeedsSparsityPattern());
 
   if (std::abs(value) != 0.)
     {
@@ -1532,7 +1560,7 @@ template <typename number>
 inline ChunkSparseMatrix<number> &
 ChunkSparseMatrix<number>::operator*=(const number factor)
 {
-  Assert(cols != nullptr, ExcNotInitialized());
+  Assert(cols != nullptr, ExcNeedsSparsityPattern());
   Assert(val != nullptr, ExcNotInitialized());
 
   const size_type chunk_size = cols->get_chunk_size();
@@ -1557,7 +1585,7 @@ template <typename number>
 inline ChunkSparseMatrix<number> &
 ChunkSparseMatrix<number>::operator/=(const number factor)
 {
-  Assert(cols != nullptr, ExcNotInitialized());
+  Assert(cols != nullptr, ExcNeedsSparsityPattern());
   Assert(val != nullptr, ExcNotInitialized());
   Assert(std::abs(factor) != 0, ExcDivideByZero());
 
@@ -1587,7 +1615,7 @@ inline number
 ChunkSparseMatrix<number>::operator()(const size_type i,
                                       const size_type j) const
 {
-  Assert(cols != nullptr, ExcNotInitialized());
+  Assert(cols != nullptr, ExcNeedsSparsityPattern());
   AssertThrow(compute_location(i, j) != SparsityPattern::invalid_entry,
               ExcInvalidIndex(i, j));
   return val[compute_location(i, j)];
@@ -1599,7 +1627,7 @@ template <typename number>
 inline number
 ChunkSparseMatrix<number>::el(const size_type i, const size_type j) const
 {
-  Assert(cols != nullptr, ExcNotInitialized());
+  Assert(cols != nullptr, ExcNeedsSparsityPattern());
   const size_type index = compute_location(i, j);
 
   if (index != ChunkSparsityPattern::invalid_entry)
@@ -1614,7 +1642,7 @@ template <typename number>
 inline number
 ChunkSparseMatrix<number>::diag_element(const size_type i) const
 {
-  Assert(cols != nullptr, ExcNotInitialized());
+  Assert(cols != nullptr, ExcNeedsSparsityPattern());
   Assert(m() == n(), ExcNotQuadratic());
   AssertIndexRange(i, m());
 
@@ -1874,16 +1902,16 @@ namespace ChunkSparseMatrixIterators
 
 
   template <typename number, bool Constness>
-  inline const Accessor<number, Constness> &Iterator<number, Constness>::
-                                            operator*() const
+  inline const Accessor<number, Constness> &
+  Iterator<number, Constness>::operator*() const
   {
     return accessor;
   }
 
 
   template <typename number, bool Constness>
-  inline const Accessor<number, Constness> *Iterator<number, Constness>::
-                                            operator->() const
+  inline const Accessor<number, Constness> *
+  Iterator<number, Constness>::operator->() const
   {
     return &accessor;
   }

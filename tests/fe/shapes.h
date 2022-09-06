@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -377,10 +377,11 @@ plot_face_shape_functions(Mapping<dim> &      mapping,
 
 
 template <>
-void plot_face_shape_functions(Mapping<1> &,
-                               FiniteElement<1> &,
-                               const char *,
-                               UpdateFlags)
+void
+plot_face_shape_functions(Mapping<1> &,
+                          FiniteElement<1> &,
+                          const char *,
+                          UpdateFlags)
 {}
 
 

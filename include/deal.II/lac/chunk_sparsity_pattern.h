@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -36,8 +36,9 @@ template <typename>
 class ChunkSparseMatrix;
 #endif
 
-/*! @addtogroup Sparsity
- *@{
+/**
+ * @addtogroup Sparsity
+ * @{
  */
 
 
@@ -192,12 +193,14 @@ namespace ChunkSparsityPatternIterators
     /**
      * Dereferencing operator.
      */
-    const Accessor &operator*() const;
+    const Accessor &
+    operator*() const;
 
     /**
      * Dereferencing operator.
      */
-    const Accessor *operator->() const;
+    const Accessor *
+    operator->() const;
 
     /**
      * Comparison. True, if both iterators point to the same matrix position.
@@ -766,7 +769,7 @@ public:
                  size_type,
                  size_type,
                  << "The given index " << arg1 << " should be less than "
-                 << arg2 << ".");
+                 << arg2 << '.');
   /**
    * Exception
    */
@@ -824,7 +827,7 @@ public:
                  size_type,
                  << "The array has size " << arg1 << " but should have size "
                  << arg2);
-  //@}
+  /** @} */
 private:
   /**
    * Number of rows that this sparsity structure shall represent.
@@ -856,7 +859,7 @@ private:
 };
 
 
-/*@}*/
+/** @} */
 /*---------------------- Inline functions -----------------------------------*/
 
 #ifndef DOXYGEN
@@ -1062,14 +1065,16 @@ namespace ChunkSparsityPatternIterators
 
 
 
-  inline const Accessor &Iterator::operator*() const
+  inline const Accessor &
+  Iterator::operator*() const
   {
     return accessor;
   }
 
 
 
-  inline const Accessor *Iterator::operator->() const
+  inline const Accessor *
+  Iterator::operator->() const
   {
     return &accessor;
   }

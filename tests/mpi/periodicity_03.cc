@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2008 - 2020 by the deal.II authors
+ * Copyright (C) 2008 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -287,11 +287,11 @@ namespace Step22
       GridTools::collect_periodic_faces(
         dof_handler, 4, 0, 1, periodicity_vector, offset, rot_matrix);
 
-      DoFTools::make_periodicity_constraints<DoFHandler<dim>>(
-        periodicity_vector,
-        constraints,
-        fe.component_mask(velocities),
-        first_vector_components);
+      DoFTools::make_periodicity_constraints<dim, dim>(periodicity_vector,
+                                                       constraints,
+                                                       fe.component_mask(
+                                                         velocities),
+                                                       first_vector_components);
 
       VectorTools::interpolate_boundary_values(dof_handler,
                                                1,
@@ -509,20 +509,17 @@ namespace Step22
                                       const int        proc,
                                       Vector<double> & value) const
   {
-    try
-      {
-        const typename DoFHandler<dim>::active_cell_iterator cell =
-          GridTools::find_active_cell_around_point(dof_handler, point);
+    const typename DoFHandler<dim>::active_cell_iterator cell =
+      GridTools::find_active_cell_around_point(dof_handler, point);
 
+    if (cell.state() == IteratorState::valid)
+      {
         if (cell->is_locally_owned())
           VectorTools::point_value(dof_handler, solution, point, value);
       }
-    catch (GridTools::ExcPointNotFound<dim> &p)
-      {
-        pcout << "Point: " << point << " is not inside a non-artificial cell!"
-              << std::endl;
-      }
-
+    else
+      pcout << "Point: " << point << " is not inside a non-artificial cell!"
+            << std::endl;
 
     std::vector<double> tmp(value.size());
     for (unsigned int i = 0; i < value.size(); ++i)
@@ -787,7 +784,7 @@ namespace Step22
 
     std::ostringstream filename;
     filename
-      << "solution-" << Utilities::int_to_string(refinement_cycle, 2) << "."
+      << "solution-" << Utilities::int_to_string(refinement_cycle, 2) << '.'
       << Utilities::int_to_string(triangulation.locally_owned_subdomain(), 2)
       << ".vtu";
 

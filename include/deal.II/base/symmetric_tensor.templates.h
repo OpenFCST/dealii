@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2020 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -45,6 +45,9 @@ template <typename Number>
 std::array<Number, 2>
 eigenvalues(const SymmetricTensor<2, 2, Number> &T)
 {
+  // Make things work with AD types
+  using std::sqrt;
+
   const Number upp_tri_sq = T[0][1] * T[0][1];
   if (upp_tri_sq == internal::NumberType<Number>::value(0.0))
     {
@@ -64,7 +67,7 @@ eigenvalues(const SymmetricTensor<2, 2, Number> &T)
         descrim > internal::NumberType<Number>::value(0.0),
         ExcMessage(
           "The roots of the characteristic polynomial are complex valued."));
-      const Number sqrt_desc = std::sqrt(descrim);
+      const Number sqrt_desc = sqrt(descrim);
 
       const std::array<Number, 2> eig_vals = {
         {internal::NumberType<Number>::value(0.5 * (tr_T + sqrt_desc)),
@@ -81,6 +84,11 @@ template <typename Number>
 std::array<Number, 3>
 eigenvalues(const SymmetricTensor<2, 3, Number> &T)
 {
+  // Make things work with AD types
+  using std::acos;
+  using std::cos;
+  using std::sqrt;
+
   const Number upp_tri_sq =
     T[0][1] * T[0][1] + T[0][2] * T[0][2] + T[1][2] * T[1][2];
   if (upp_tri_sq == internal::NumberType<Number>::value(0.0))
@@ -107,7 +115,7 @@ eigenvalues(const SymmetricTensor<2, 3, Number> &T)
       const Number tmp1 = (T[0][0] - q) * (T[0][0] - q) +
                           (T[1][1] - q) * (T[1][1] - q) +
                           (T[2][2] - q) * (T[2][2] - q) + 2.0 * upp_tri_sq;
-      const Number                        p = std::sqrt(tmp1 / 6.0);
+      const Number                        p = sqrt(tmp1 / 6.0);
       const SymmetricTensor<2, 3, Number> B =
         Number(1.0 / p) * (T - q * unit_symmetric_tensor<3, Number>());
       const Number tmp_2 = determinant(B) / 2.0;
@@ -123,15 +131,15 @@ eigenvalues(const SymmetricTensor<2, 3, Number> &T)
            internal::NumberType<Number>::value(numbers::PI / 3.0) :
            (tmp_2 >= 1.0 ?
               internal::NumberType<Number>::value(0.0) :
-              internal::NumberType<Number>::value(std::acos(tmp_2) / 3.0)));
+              internal::NumberType<Number>::value(acos(tmp_2) / 3.0)));
 
       // Due to the trigonometric solution, the computed eigenvalues
       // should be predictably in the order eig1 >= eig2 >= eig3...
       std::array<Number, 3> eig_vals = {
-        {static_cast<Number>(q + 2.0 * p * std::cos(phi)),
+        {static_cast<Number>(q + 2.0 * p * cos(phi)),
          static_cast<Number>(0.0),
-         static_cast<Number>(q + 2.0 * p *
-                                   std::cos(phi + (2.0 / 3.0 * numbers::PI)))}};
+         static_cast<Number>(q +
+                             2.0 * p * cos(phi + (2.0 / 3.0 * numbers::PI)))}};
       // Use the identity tr(T) = eig1 + eig2 + eig3
       eig_vals[1] = tr_T - eig_vals[0] - eig_vals[2];
 
@@ -157,6 +165,9 @@ namespace internal
                    std::array<Number, dim> &                      d,
                    std::array<Number, dim - 1> &                  e)
     {
+      // Make things work with AD types
+      using std::sqrt;
+
       // Create some intermediate storage
       Number h, g, omega_inv, K, f;
 
@@ -168,18 +179,18 @@ namespace internal
       // Make the first row and column to be of the
       // desired form
       h = 0.0;
-      for (int i = 1; i < dim; i++)
+      for (int i = 1; i < dim; ++i)
         h += A[0][i] * A[0][i];
 
       g = 0.0;
       if (A[0][1] > 0.0)
-        g = -std::sqrt(h);
+        g = -sqrt(h);
       else
-        g = std::sqrt(h);
+        g = sqrt(h);
       e[0] = g;
 
       std::array<Number, dim> u;
-      for (int i = 1; i < dim; i++)
+      for (int i = 1; i < dim; ++i)
         {
           u[i] = A[0][i];
           if (i == 1)
@@ -192,44 +203,44 @@ namespace internal
         {
           omega_inv = 1.0 / omega;
           K         = 0.0;
-          for (int i = 1; i < dim; i++)
+          for (int i = 1; i < dim; ++i)
             {
               f = 0.0;
-              for (int j = 1; j < dim; j++)
+              for (int j = 1; j < dim; ++j)
                 f += A[i][j] * u[j];
               q[i] = omega_inv * f;
               K += u[i] * f;
             }
           K *= 0.5 * omega_inv * omega_inv;
 
-          for (int i = 1; i < dim; i++)
+          for (int i = 1; i < dim; ++i)
             q[i] = q[i] - K * u[i];
 
           d[0] = A[0][0];
-          for (int i = 1; i < dim; i++)
+          for (int i = 1; i < dim; ++i)
             d[i] = A[i][i] - 2.0 * q[i] * u[i];
 
           // Store inverse Householder transformation
           // in Q
-          for (int j = 1; j < dim; j++)
+          for (int j = 1; j < dim; ++j)
             {
               f = omega_inv * u[j];
-              for (int i = 1; i < dim; i++)
+              for (int i = 1; i < dim; ++i)
                 Q[i][j] = Q[i][j] - f * u[i];
             }
 
           // For dim = 3: Calculate updated A[1][2] and
           // store it in e[1]
-          for (int i = 1; i < dim - 1; i++)
+          for (int i = 1; i < dim - 1; ++i)
             e[i] = A[i][i + 1] - q[i] * u[i + 1] - u[i] * q[i + 1];
         }
       else
         {
-          for (int i = 0; i < dim; i++)
+          for (unsigned int i = 0; i < dim; ++i)
             d[i] = A[i][i];
 
           // For dim = 3:
-          for (int i = 1; i < dim - 1; i++)
+          for (int i = 1; i < dim - 1; ++i)
             e[i] = A[i][i + 1];
         }
     }
@@ -240,6 +251,10 @@ namespace internal
     std::array<std::pair<Number, Tensor<1, dim, Number>>, dim>
     ql_implicit_shifts(const dealii::SymmetricTensor<2, dim, Number> &A)
     {
+      // Make things work with AD types
+      using std::fabs;
+      using std::sqrt;
+
       static_assert(
         numbers::NumberTraits<Number>::is_complex == false,
         "This implementation of the QL implicit shift algorithm does "
@@ -269,17 +284,17 @@ namespace internal
       Number g, r, p, f, b, s, c, t;
 
       // Loop over all off-diagonal elements
-      for (int l = 0; l < dim - 1; l++)
+      for (int l = 0; l < dim - 1; ++l)
         {
           for (unsigned int it = 0; it <= max_n_it; ++it)
             {
               // Check for convergence and exit iteration loop
               // if the off-diagonal element e[l] is zero
               int m = l;
-              for (; m <= dim - 2; m++)
+              for (; m <= dim - 2; ++m)
                 {
-                  g = std::abs(w[m]) + std::abs(w[m + 1]);
-                  if (std::abs(e[m]) + g == g)
+                  g = fabs(w[m]) + fabs(w[m + 1]);
+                  if (fabs(e[m]) + g == g)
                     break;
                 }
               if (m == l)
@@ -298,7 +313,7 @@ namespace internal
 
               // Calculate the shift..
               g = (w[l + 1] - w[l]) / (e[l] + e[l]);
-              r = std::sqrt(g * g + 1.0);
+              r = sqrt(g * g + 1.0);
               // .. and then compute g = d_m - k_s for the
               // plane rotation (Press2007a eq 11.4.22)
               if (g > 0.0)
@@ -317,17 +332,17 @@ namespace internal
                   b = c * e[i];
 
                   // Branch to recover from underflow
-                  if (std::abs(f) > std::abs(g))
+                  if (fabs(f) > fabs(g))
                     {
                       c        = g / f;
-                      r        = std::sqrt(c * c + 1.0);
+                      r        = sqrt(c * c + 1.0);
                       e[i + 1] = f * r;
                       c *= (s = 1.0 / r);
                     }
                   else
                     {
                       s        = f / g;
-                      r        = std::sqrt(s * s + 1.0);
+                      r        = sqrt(s * s + 1.0);
                       e[i + 1] = g * r;
                       s *= (c = 1.0 / r);
                     }
@@ -339,7 +354,7 @@ namespace internal
                   g        = c * r - b;
 
                   // Form the eigenvectors
-                  for (int k = 0; k < dim; k++)
+                  for (unsigned int k = 0; k < dim; ++k)
                     {
                       t           = Q[k][i + 1];
                       Q[k][i + 1] = s * Q[k][i] + c * t;
@@ -376,11 +391,15 @@ namespace internal
 
     template <int dim, typename Number>
     std::array<std::pair<Number, Tensor<1, dim, Number>>, dim>
-      jacobi(dealii::SymmetricTensor<2, dim, Number> A)
+    jacobi(dealii::SymmetricTensor<2, dim, Number> A)
     {
       static_assert(numbers::NumberTraits<Number>::is_complex == false,
                     "This implementation of the Jacobi algorithm does "
                     "not support complex numbers");
+
+      // Make things work with AD types
+      using std::fabs;
+      using std::sqrt;
 
       // Sums of diagonal resp. off-diagonal elements
       Number sd, so;
@@ -399,7 +418,7 @@ namespace internal
       // The diagonal elements of the tridiagonal matrix;
       // this will ultimately store the eigenvalues
       std::array<Number, dim> w;
-      for (int i = 0; i < dim; i++)
+      for (unsigned int i = 0; i < dim; ++i)
         w[i] = A[i][i];
 
       // Calculate (tr(A))^{2}
@@ -408,13 +427,13 @@ namespace internal
 
       // Number of iterations
       const unsigned int max_n_it = 50;
-      for (unsigned int it = 0; it <= max_n_it; it++)
+      for (unsigned int it = 0; it <= max_n_it; ++it)
         {
           // Test for convergence
           so = 0.0;
-          for (int p = 0; p < dim; p++)
-            for (int q = p + 1; q < dim; q++)
-              so += std::abs(A[p][q]);
+          for (unsigned int p = 0; p < dim; ++p)
+            for (int q = p + 1; q < dim; ++q)
+              so += fabs(A[p][q]);
           if (so == 0.0)
             break;
 
@@ -438,20 +457,20 @@ namespace internal
             thresh = 0.0;
 
           // Perform sweep
-          for (int p = 0; p < dim; p++)
-            for (int q = p + 1; q < dim; q++)
+          for (unsigned int p = 0; p < dim; ++p)
+            for (unsigned int q = p + 1; q < dim; ++q)
               {
-                g = 100.0 * std::abs(A[p][q]);
+                g = 100.0 * fabs(A[p][q]);
 
                 // After a given number of iterations the
                 // rotation is skipped if the off-diagonal
                 // element is small
-                if (it > n_it_skip && std::abs(w[p]) + g == std::abs(w[p]) &&
-                    std::abs(w[q]) + g == std::abs(w[q]))
+                if (it > n_it_skip && fabs(w[p]) + g == fabs(w[p]) &&
+                    fabs(w[q]) + g == fabs(w[q]))
                   {
                     A[p][q] = 0.0;
                   }
-                else if (std::abs(A[p][q]) > thresh)
+                else if (fabs(A[p][q]) > thresh)
                   {
                     // Calculate Jacobi transformation
                     h = w[q] - w[p];
@@ -459,7 +478,7 @@ namespace internal
                     // Compute surrogate for angle theta resulting from
                     // angle transformation and subsequent smallest solution
                     // of quadratic equation
-                    if (std::abs(h) + g == std::abs(h))
+                    if (fabs(h) + g == fabs(h))
                       {
                         // Prevent overflow for large theta^2. This computation
                         // is the algebraic equivalent of t = 1/(2*theta).
@@ -469,15 +488,15 @@ namespace internal
                       {
                         theta = 0.5 * h / A[p][q];
                         if (theta < 0.0)
-                          t = -1.0 / (std::sqrt(1.0 + theta * theta) - theta);
+                          t = -1.0 / (sqrt(1.0 + theta * theta) - theta);
                         else
-                          t = 1.0 / (std::sqrt(1.0 + theta * theta) + theta);
+                          t = 1.0 / (sqrt(1.0 + theta * theta) + theta);
                       }
 
                     // Compute trigonometric functions for rotation
                     // in such a way as to prevent overflow for
                     // large theta.
-                    c = 1.0 / std::sqrt(1.0 + t * t);
+                    c = 1.0 / sqrt(1.0 + t * t);
                     s = t * c;
                     z = t * A[p][q];
 
@@ -486,19 +505,19 @@ namespace internal
                     w[p] -= z;
                     w[q] += z;
                     // ... by executing the various rotations in sequence
-                    for (int r = 0; r < p; r++)
+                    for (unsigned int r = 0; r < p; ++r)
                       {
                         t       = A[r][p];
                         A[r][p] = c * t - s * A[r][q];
                         A[r][q] = s * t + c * A[r][q];
                       }
-                    for (int r = p + 1; r < q; r++)
+                    for (unsigned int r = p + 1; r < q; ++r)
                       {
                         t       = A[p][r];
                         A[p][r] = c * t - s * A[r][q];
                         A[r][q] = s * t + c * A[r][q];
                       }
-                    for (int r = q + 1; r < dim; r++)
+                    for (unsigned int r = q + 1; r < dim; ++r)
                       {
                         t       = A[p][r];
                         A[p][r] = c * t - s * A[q][r];
@@ -506,7 +525,7 @@ namespace internal
                       }
 
                     // Update the eigenvectors
-                    for (int r = 0; r < dim; r++)
+                    for (unsigned int r = 0; r < dim; ++r)
                       {
                         t       = Q[r][p];
                         Q[r][p] = c * t - s * Q[r][q];
@@ -546,6 +565,9 @@ namespace internal
                     "This implementation of the 2d Hybrid algorithm does "
                     "not support complex numbers");
 
+      // Make things work with AD types
+      using std::fabs;
+
       const unsigned int dim = 2;
 
       // Calculate eigenvalues
@@ -554,10 +576,10 @@ namespace internal
       std::array<std::pair<Number, Tensor<1, dim, Number>>, dim> eig_vals_vecs;
 
       Number t, u; // Intermediate storage
-      t = std::abs(w[0]);
+      t = fabs(w[0]);
       for (unsigned int i = 1; i < dim; ++i)
         {
-          u = std::abs(w[i]);
+          u = fabs(w[i]);
           if (u > t)
             t = u;
         }
@@ -623,6 +645,10 @@ namespace internal
                     "This implementation of the 3d Hybrid algorithm does "
                     "not support complex numbers");
 
+      // Make things work with AD types
+      using std::fabs;
+      using std::sqrt;
+
       const unsigned int dim = 3;
       Number norm; // Squared norm or inverse norm of current eigenvector
       Number t, u; // Intermediate storage
@@ -630,10 +656,10 @@ namespace internal
       // Calculate eigenvalues
       const std::array<Number, dim> w = eigenvalues(A);
 
-      t = std::abs(w[0]);
+      t = fabs(w[0]);
       for (unsigned int i = 1; i < dim; ++i)
         {
-          u = std::abs(w[i]);
+          u = fabs(w[i]);
           if (u > t)
             t = u;
         }
@@ -673,8 +699,8 @@ namespace internal
         }
       else // This is the standard branch
         {
-          norm = std::sqrt(1.0 / norm);
-          for (unsigned j = 0; j < dim; j++)
+          norm = sqrt(1.0 / norm);
+          for (unsigned j = 0; j < dim; ++j)
             Q[j][0] = Q[j][0] * norm;
         }
 
@@ -690,8 +716,8 @@ namespace internal
         }
       else
         {
-          norm = std::sqrt(1.0 / norm);
-          for (unsigned int j = 0; j < dim; j++)
+          norm = sqrt(1.0 / norm);
+          for (unsigned int j = 0; j < dim; ++j)
             Q[j][1] = Q[j][1] * norm;
         }
 
@@ -759,15 +785,15 @@ namespace internal
         {
           case (0):
             R = dealii::Physics::Transformations::Rotations::rotation_matrix_3d(
-              {1, 0, 0}, rotation_angle);
+              Tensor<1, 3>({1., 0., 0.}), rotation_angle);
             break;
           case (1):
             R = dealii::Physics::Transformations::Rotations::rotation_matrix_3d(
-              {0, 1, 0}, rotation_angle);
+              Tensor<1, 3>({0., 1., 0.}), rotation_angle);
             break;
           case (2):
             R = dealii::Physics::Transformations::Rotations::rotation_matrix_3d(
-              {0, 0, 1}, rotation_angle);
+              Tensor<1, 3>({0., 0., 1.}), rotation_angle);
             break;
           default:
             AssertThrow(false, ExcNotImplemented());

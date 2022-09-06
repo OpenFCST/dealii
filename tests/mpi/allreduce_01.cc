@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2021 by the deal.II authors
+// Copyright (C) 2021 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -33,8 +33,23 @@ check(const std::function<std::vector<T>(const std::vector<T> &,
     fu);
 
   for (const auto r : result)
-    deallog << r << " ";
+    deallog << r << ' ';
   deallog << std::endl;
+
+  for (unsigned int rank = 0;
+       rank < Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD);
+       ++rank)
+    {
+      const auto result = Utilities::MPI::reduce(
+        std::vector<T>{Utilities::MPI::this_mpi_process(MPI_COMM_WORLD)},
+        MPI_COMM_WORLD,
+        fu,
+        rank);
+
+      for (const auto r : result)
+        deallog << r << ' ';
+      deallog << std::endl;
+    }
 }
 
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2005 - 2018 by the deal.II authors
+// Copyright (C) 2005 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -42,7 +42,7 @@ test(std::ostream &out)
   // makes a bunch of vertices unused
   std::set<typename Triangulation<dim>::active_cell_iterator> cells_to_remove;
   for (typename Triangulation<dim>::active_cell_iterator cell =
-         ++triangulation.begin_active();
+         std::next(triangulation.begin_active());
        cell != triangulation.end();
        ++cell)
     cells_to_remove.insert(cell);

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2020 by the deal.II Authors
+// Copyright (C) 2015 - 2021 by the deal.II Authors
 //
 // This file is part of the deal.II library.
 //
@@ -116,7 +116,8 @@ test_with_both_dof_handlers(const Triangulation<dim> &triangulation)
 
 
 //  Create the 3-cell-triangulation described at the top.
-void create_3_cell_triangulation(Triangulation<1> &triangulation)
+void
+create_3_cell_triangulation(Triangulation<1> &triangulation)
 {
   const unsigned int n_elements = 3;
   const double       left       = -1;

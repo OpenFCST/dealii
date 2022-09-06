@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2013 - 2020 by the deal.II authors
+// Copyright (C) 2013 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -93,7 +93,8 @@ public:
 
         // compare values with the ones the FEValues
         // gives us. Those are seen as reference
-        for (unsigned int j = 0; j < data.n_components_filled(cell); ++j)
+        for (unsigned int j = 0; j < data.n_active_entries_per_cell_batch(cell);
+             ++j)
           {
             // FE 0
             fe_val0.reinit(data.get_cell_iterator(cell, j, 0));
@@ -101,7 +102,7 @@ public:
             fe_val0.get_function_gradients(src[0], reference_grads0);
             fe_val0.get_function_hessians(src[0], reference_hess0);
 
-            for (int q = 0; q < (int)fe_eval0.n_q_points; q++)
+            for (int q = 0; q < (int)fe_eval0.n_q_points; ++q)
               {
                 errors[0] +=
                   std::fabs(fe_eval0.get_value(q)[j] - reference_values0[q]);
@@ -122,7 +123,7 @@ public:
             fe_val1.get_function_gradients(src[1], reference_grads1);
             fe_val1.get_function_hessians(src[1], reference_hess1);
 
-            for (int q = 0; q < (int)fe_eval1.n_q_points; q++)
+            for (int q = 0; q < (int)fe_eval1.n_q_points; ++q)
               {
                 errors[3] +=
                   std::fabs(fe_eval1.get_value(q)[j] - reference_values1[q]);
@@ -275,7 +276,8 @@ test()
     std::vector<Quadrature<1>> quad;
     for (unsigned int no = 0; no < 2; ++no)
       quad.push_back(QGauss<1>(fe_degree + 1 + no));
-    mf_data.reinit(dof,
+    mf_data.reinit(MappingQ1<dim>{},
+                   dof,
                    constraints,
                    quad,
                    typename MatrixFree<dim, number>::AdditionalData(

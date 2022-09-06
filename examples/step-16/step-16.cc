@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2003 - 2020 by the deal.II authors
+ * Copyright (C) 2003 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -44,6 +44,7 @@
 
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_values.h>
+#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/numerics/vector_tools.h>
 #include <deal.II/numerics/data_out.h>
@@ -432,10 +433,8 @@ namespace Step16
     std::vector<AffineConstraints<double>> boundary_constraints(n_levels);
     for (unsigned int level = 0; level < n_levels; ++level)
       {
-        IndexSet dofset;
-        DoFTools::extract_locally_relevant_level_dofs(dof_handler,
-                                                      level,
-                                                      dofset);
+        const IndexSet dofset =
+          DoFTools::extract_locally_relevant_level_dofs(dof_handler, level);
         boundary_constraints[level].reinit(dofset);
         boundary_constraints[level].add_lines(
           mg_constrained_dofs.get_refinement_edge_indices(level));
@@ -586,7 +585,7 @@ namespace Step16
 
     solver.solve(system_matrix, solution, system_rhs, preconditioner);
     std::cout << "   Number of CG iterations: " << solver_control.last_step()
-              << "\n"
+              << '\n'
               << std::endl;
     constraints.distribute(solution);
   }

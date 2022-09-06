@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2014 - 2019 by the deal.II authors
+// Copyright (C) 2014 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -27,6 +27,10 @@ DEAL_II_NAMESPACE_OPEN
 
 namespace TimeStepping
 {
+  DeclExceptionMsg(ExcNoMethodSelected,
+                   "No method selected. You need to call initialize or pass a "
+                   "runge_kutta_method to the constructor.");
+
   // ----------------------------------------------------------------------
   // RungeKutta
   // ----------------------------------------------------------------------
@@ -198,6 +202,8 @@ namespace TimeStepping
     double                                                             delta_t,
     VectorType &                                                       y)
   {
+    Assert(status.method != runge_kutta_method::invalid, ExcNoMethodSelected());
+
     std::vector<VectorType> f_stages(this->n_stages, y);
     // Compute the different stages needed.
     compute_stages(f, t, delta_t, y, f_stages);
@@ -390,6 +396,8 @@ namespace TimeStepping
     VectorType &                                                       vec_ri,
     VectorType &                                                       vec_ki)
   {
+    Assert(status.method != runge_kutta_method::invalid, ExcNoMethodSelected());
+
     compute_one_stage(f,
                       t,
                       this->b[0] * delta_t,
@@ -479,7 +487,6 @@ namespace TimeStepping
     const unsigned int       max_it,
     const double             tolerance)
     : RungeKutta<VectorType>()
-    , skip_linear_combi(false)
     , max_it(max_it)
     , tolerance(tolerance)
   {
@@ -567,18 +574,16 @@ namespace TimeStepping
     double                                               delta_t,
     VectorType &                                         y)
   {
+    Assert(status.method != runge_kutta_method::invalid, ExcNoMethodSelected());
+
     VectorType              old_y(y);
     std::vector<VectorType> f_stages(this->n_stages, y);
     // Compute the different stages needed.
     compute_stages(f, id_minus_tau_J_inverse, t, delta_t, y, f_stages);
 
-    // If necessary, compute the linear combinations of the stages.
-    if (skip_linear_combi == false)
-      {
-        y = old_y;
-        for (unsigned int i = 0; i < this->n_stages; ++i)
-          y.sadd(1., delta_t * this->b[i], f_stages[i]);
-      }
+    y = old_y;
+    for (unsigned int i = 0; i < this->n_stages; ++i)
+      y.sadd(1., delta_t * this->b[i], f_stages[i]);
 
     return (t + delta_t);
   }
@@ -1001,6 +1006,8 @@ namespace TimeStepping
     double                                                             delta_t,
     VectorType &                                                       y)
   {
+    Assert(status.method != runge_kutta_method::invalid, ExcNoMethodSelected());
+
     bool                    done       = false;
     unsigned int            count      = 0;
     double                  error_norm = 0.;

@@ -33,10 +33,12 @@ main(int argc, char **argv)
   Utilities::MPI::MPI_InitFinalize mpi_initialization(argc, argv, 1);
   MPILogInitAll                    log_all;
 
+  MPI_Comm communicator = MPI_COMM_WORLD;
+
   const unsigned int current_process =
-    Utilities::MPI::this_mpi_process(MPI_COMM_WORLD);
+    Utilities::MPI::this_mpi_process(communicator);
   const unsigned int n_processes =
-    Utilities::MPI::n_mpi_processes(MPI_COMM_WORLD);
+    Utilities::MPI::n_mpi_processes(communicator);
 
   // give the zeroth process 1 dof, the first 2, etc
   const types::global_dof_index n_local_dofs = 1 + current_process;
@@ -52,7 +54,7 @@ main(int argc, char **argv)
   AssertDimension(local_dofs.n_elements(), n_local_dofs);
 
 
-  PETScWrappers::MPI::Vector vec(local_dofs, MPI_COMM_WORLD);
+  PETScWrappers::MPI::Vector vec(local_dofs, communicator);
   for (const types::global_dof_index local_dof : local_dofs)
     {
       vec[local_dof] = 2 * local_dof - current_process;
@@ -60,11 +62,23 @@ main(int argc, char **argv)
   vec.compress(VectorOperation::insert);
   const std::size_t n_dofs = vec.size();
 
-  N_Vector sundials_vector =
-    N_VNew_Parallel(MPI_COMM_WORLD, n_local_dofs, n_dofs);
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+  SUNContext context;
+  int        status = SUNContext_Create(&communicator, &context);
+  AssertThrow(status == 0, ExcInternalError());
+#endif
+
+  N_Vector sundials_vector = N_VNew_Parallel(communicator,
+                                             n_local_dofs,
+                                             n_dofs
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+                                             ,
+                                             context
+#endif
+  );
   SUNDIALS::internal::copy(sundials_vector, vec);
 
-  PETScWrappers::MPI::Vector vec2(local_dofs, MPI_COMM_WORLD);
+  PETScWrappers::MPI::Vector vec2(local_dofs, communicator);
   SUNDIALS::internal::copy(vec2, sundials_vector);
 
   AssertThrow(vec2 == vec,
@@ -74,4 +88,10 @@ main(int argc, char **argv)
 
   deallog << "n_local_dofs: " << n_local_dofs << std::endl;
   deallog << "OK" << std::endl;
+
+  N_VDestroy_Parallel(sundials_vector);
+#if DEAL_II_SUNDIALS_VERSION_GTE(6, 0, 0)
+  status = SUNContext_Free(&context);
+  AssertThrow(status == 0, ExcInternalError());
+#endif
 }

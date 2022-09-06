@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2018 - 2019 by the deal.II authors
+// Copyright (C) 2018 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -97,7 +97,7 @@ namespace Gmsh
                            " file."));
 
     std::ifstream grid_file(msh_file_name);
-    Assert(grid_file, ExcIO());
+    Assert(grid_file.fail() == false, ExcIO());
 
     GridIn<2, spacedim> gridin;
     gridin.attach_triangulation(tria);

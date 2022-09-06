@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2018 - 2020 by the deal.II authors
+ * Copyright (C) 2018 - 2022 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -36,6 +36,7 @@
 
 #include <deal.II/fe/fe_dgq.h>
 #include <deal.II/fe/fe_tools.h>
+#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/tria.h>
 #include <deal.II/grid/grid_generator.h>
@@ -949,18 +950,15 @@ namespace Step59
 
   template <int dim, int fe_degree>
   LaplaceProblem<dim, fe_degree>::LaplaceProblem()
-    :
 #ifdef DEAL_II_WITH_P4EST
-    triangulation(
-      MPI_COMM_WORLD,
-      Triangulation<dim>::limit_level_difference_at_vertices,
-      parallel::distributed::Triangulation<dim>::construct_multigrid_hierarchy)
-    ,
+    : triangulation(MPI_COMM_WORLD,
+                    Triangulation<dim>::limit_level_difference_at_vertices,
+                    parallel::distributed::Triangulation<
+                      dim>::construct_multigrid_hierarchy)
 #else
-    triangulation(Triangulation<dim>::limit_level_difference_at_vertices)
-    ,
+    : triangulation(Triangulation<dim>::limit_level_difference_at_vertices)
 #endif
-    fe(fe_degree)
+    , fe(fe_degree)
     , dof_handler(triangulation)
     , setup_time(0.)
     , pcout(std::cout, Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)

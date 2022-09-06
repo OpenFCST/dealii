@@ -1,6 +1,6 @@
 ## ---------------------------------------------------------------------
 ##
-## Copyright (C) 2013 - 2018 by the deal.II authors
+## Copyright (C) 2013 - 2022 by the deal.II authors
 ##
 ## This file is part of the deal.II library.
 ##
@@ -13,7 +13,7 @@
 ##
 ## ---------------------------------------------------------------------
 
-CMAKE_MINIMUM_REQUIRED(VERSION 3.1.0)
+CMAKE_MINIMUM_REQUIRED(VERSION 3.3.0)
 INCLUDE(../setup_testsubproject.cmake)
 PROJECT(testsuite CXX)
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2020 by the deal.II authors
+// Copyright (C) 2004 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -153,12 +153,12 @@ check()
   fe.push_back(FE_Q<dim>(QIterated<1>(QTrapezoid<1>(), 5)));
 
   hp::MappingCollection<dim> mapping_1;
-  mapping_1.push_back(MappingQGeneric<dim>(1));
-  mapping_1.push_back(MappingQGeneric<dim>(1));
-  mapping_1.push_back(MappingQGeneric<dim>(1));
+  mapping_1.push_back(MappingQ<dim>(1));
+  mapping_1.push_back(MappingQ<dim>(1));
+  mapping_1.push_back(MappingQ<dim>(1));
 
   hp::MappingCollection<dim> mapping_2;
-  mapping_2.push_back(MappingQGeneric<dim>(1));
+  mapping_2.push_back(MappingQ<dim>(1));
 
   DoFHandler<dim> dof_handler(tria);
 

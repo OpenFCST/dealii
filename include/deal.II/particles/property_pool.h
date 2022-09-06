@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2019 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -40,7 +40,7 @@ namespace types
    *
    * The data type always indicates an unsigned integer type.
    */
-  using particle_index = uint64_t;
+  using particle_index = std::uint64_t;
 
 #  ifdef DEAL_II_WITH_MPI
   /**
@@ -137,7 +137,7 @@ namespace Particles
 
     /**
      * Return a new handle that allows a particle to store information such as
-     * properties and locations. This also allocated memory in this PropertyPool
+     * properties and locations. This also allocates memory in this PropertyPool
      * variable.
      */
     Handle
@@ -210,6 +210,30 @@ namespace Particles
      */
     unsigned int
     n_properties_per_slot() const;
+
+    /**
+     * Return the total number of slots in the pool, including both registered
+     * and unregistered ones.
+     */
+    unsigned int
+    n_slots() const;
+
+    /**
+     * Return how many slots are currently registered in the pool.
+     */
+    unsigned int
+    n_registered_slots() const;
+
+    /**
+     * This function makes sure that all internally stored memory blocks
+     * are sorted in the same order as one would loop over the @p handles_to_sort
+     * container. This makes sure memory access is contiguous with actual
+     * memory location. Because the ordering is given in the input argument
+     * the complexity of this function is $O(N)$ where $N$ is the number of
+     * elements in the input argument.
+     */
+    void
+    sort_memory_slots(const std::vector<Handle> &handles_to_sort);
 
   private:
     /**
@@ -420,6 +444,15 @@ namespace Particles
                       "before trying to access the properties."));
 
     return ArrayView<double>(properties.data() + data_index, n_properties);
+  }
+
+
+
+  template <int dim, int spacedim>
+  inline unsigned int
+  PropertyPool<dim, spacedim>::n_slots() const
+  {
+    return locations.size();
   }
 
 

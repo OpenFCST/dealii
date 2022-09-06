@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -29,7 +29,7 @@
 #include <deal.II/dofs/dof_renumbering.h>
 #include <deal.II/dofs/dof_tools.h>
 
-#include <deal.II/fe/fe_dgp_monomial.h>
+#include <deal.II/fe/fe_dgp.h>
 #include <deal.II/fe/fe_q.h>
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_tools.h>
@@ -795,9 +795,9 @@ namespace Step44
     , degree(parameters.poly_degree)
     , fe(FE_Q<dim>(parameters.poly_degree),
          dim, // displacement
-         FE_DGPMonomial<dim>(parameters.poly_degree - 1),
+         FE_DGP<dim>(parameters.poly_degree - 1),
          1, // pressure
-         FE_DGPMonomial<dim>(parameters.poly_degree - 1),
+         FE_DGP<dim>(parameters.poly_degree - 1),
          1)
     , // dilatation
     dof_handler_ref(triangulation)
@@ -1387,12 +1387,12 @@ namespace Step44
                                    &ls_minimization_function_ptrb,
                                    &use_ptrb]() {
           const auto res_0 = (use_ptrb ? ls_minimization_function_ptrb(0.0) :
-                                         ls_minimization_function(0.0));
+                                               ls_minimization_function(0.0));
           Assert(res_0.second < 0.0,
                  ExcMessage("Gradient should be negative. Current value: " +
                             std::to_string(res_0.second)));
           const auto res_1 = (use_ptrb ? ls_minimization_function_ptrb(1.0) :
-                                         ls_minimization_function(1.0));
+                                               ls_minimization_function(1.0));
 
           // Wriggers discussion after 5.14
           if (res_0.second * res_1.second > 0.0)
@@ -1417,7 +1417,7 @@ namespace Step44
                                          a_max,
                                          max_evals,
                                          debug_linesearch) :
-                                       LineMinimization::line_search<double>(
+                                             LineMinimization::line_search<double>(
                                          ls_minimization_function,
                                          res_0.first,
                                          res_0.second,

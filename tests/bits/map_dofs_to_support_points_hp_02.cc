@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2018 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -73,7 +73,7 @@ test()
                                        hp_map);
 
   // output the elements
-  for (unsigned int i = 0; i < hp_map.size(); i++)
+  for (unsigned int i = 0; i < hp_map.size(); ++i)
     {
       deallog << " Location of " << i << " th DoF: " << hp_map[i] << " | ";
     }

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2020 by the deal.II authors
+// Copyright (C) 2001 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -322,7 +322,7 @@ public:
     ExcUMFPACKError,
     std::string,
     int,
-    << "UMFPACK routine " << arg1 << " returned error status " << arg2 << "."
+    << "UMFPACK routine " << arg1 << " returned error status " << arg2 << '.'
     << "\n\n"
     << ("A complete list of error codes can be found in the file "
         "<bundled/umfpack/UMFPACK/Include/umfpack.h>."

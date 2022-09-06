@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2011 - 2020 by the deal.II authors
+// Copyright (C) 2011 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -21,18 +21,10 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/exceptions.h>
-#include <deal.II/base/partitioner.h>
 #include <deal.II/base/vectorization.h>
 
-#include <deal.II/dofs/dof_handler.h>
-
-#include <deal.II/lac/affine_constraints.h>
-#include <deal.II/lac/dynamic_sparsity_pattern.h>
-
 #include <deal.II/matrix_free/face_info.h>
-#include <deal.II/matrix_free/mapping_info.h>
 #include <deal.II/matrix_free/shape_info.h>
-#include <deal.II/matrix_free/task_info.h>
 #include <deal.II/matrix_free/vector_data_exchange.h>
 
 #include <array>
@@ -41,10 +33,55 @@
 
 DEAL_II_NAMESPACE_OPEN
 
+#ifndef DOXYGEN
+
+// forward declarations
+
 namespace internal
 {
   namespace MatrixFreeFunctions
   {
+    template <int dim>
+    class HangingNodes;
+
+    template <typename, typename>
+    struct FPArrayComparator;
+
+    struct TaskInfo;
+  } // namespace MatrixFreeFunctions
+} // namespace internal
+
+template <typename>
+class AffineConstraints;
+
+class DynamicSparsityPattern;
+
+template <typename>
+class TriaIterator;
+
+template <int, int, bool>
+class DoFCellAccessor;
+
+namespace Utilities
+{
+  namespace MPI
+  {
+    class Partitioner;
+  }
+} // namespace Utilities
+
+#endif
+
+namespace internal
+{
+  namespace MatrixFreeFunctions
+  {
+    /**
+     * Type of the 8-bit representation of the refinement configuration that
+     * is in hanging_nodes_internal.h.
+     */
+    using compressed_constraint_kind = std::uint8_t;
+
     /**
      * A struct that takes entries describing a constraint and puts them into
      * a sorted list where duplicates are filtered out
@@ -74,7 +111,7 @@ namespace internal
       std::pair<std::vector<Number>, types::global_dof_index> next_constraint;
       std::map<std::vector<Number>,
                types::global_dof_index,
-               FPArrayComparator<Number>>
+               FPArrayComparator<Number, VectorizedArray<Number>>>
         constraints;
     };
 
@@ -123,6 +160,28 @@ namespace internal
       DoFInfo(const DoFInfo &) = default;
 
       /**
+       * Move constructor.
+       */
+      DoFInfo(DoFInfo &&) noexcept = default;
+
+      /**
+       * Destructor.
+       */
+      ~DoFInfo() = default;
+
+      /**
+       * Copy assignment operator.
+       */
+      DoFInfo &
+      operator=(const DoFInfo &) = default;
+
+      /**
+       * Move assignment operator.
+       */
+      DoFInfo &
+      operator=(DoFInfo &&) noexcept = default;
+
+      /**
        * Clear all data fields in this class.
        */
       void
@@ -138,8 +197,8 @@ namespace internal
                            const unsigned int fe_degree) const;
 
       /**
-       * Populate the vector @p locall_indices with locally owned degrees of freedom
-       * stored on the cell block @p cell.
+       * Populate the vector @p local_indices with locally owned degrees of freedom
+       * stored on the cell batch @p cell_batch.
        * If @p with_constraints is `true`, then the returned vector will contain indices
        * required to resolve constraints.
        *
@@ -157,27 +216,42 @@ namespace internal
        * `std::vector::erase()`.
        */
       void
-      get_dof_indices_on_cell_batch(std::vector<unsigned int> &locall_indices,
-                                    const unsigned int         cell,
+      get_dof_indices_on_cell_batch(std::vector<unsigned int> &local_indices,
+                                    const unsigned int         cell_batch,
                                     const bool with_constraints = true) const;
 
       /**
-       * This internal method takes the local indices on a cell and fills them
-       * into this class. It resolves the constraints and distributes the
-       * results. Ghost indices, i.e., indices that are located on another
-       * processor, get a temporary number by this function, and will later be
-       * assigned the correct index after all the ghost indices have been
-       * collected by the call to @p assign_ghosts.
+       * This internal method takes the local indices on a cell (two versions:
+       * hanging-node constraints resolved if possible and plain, i.e., not
+       * resolved) and fills them into this class. It resolves the constraints
+       * and distributes the results. Ghost indices, i.e., indices that are
+       * located on another processor, get a temporary number by this function,
+       * and will later be assigned the correct index after all the ghost
+       * indices have been collected by the call to @p assign_ghosts.
        */
       template <typename number>
       void
       read_dof_indices(
+        const std::vector<types::global_dof_index> &local_indices_resolved,
         const std::vector<types::global_dof_index> &local_indices,
-        const std::vector<unsigned int> &           lexicographic_inv,
+        const bool                                  cell_has_hanging_nodes,
         const dealii::AffineConstraints<number> &   constraints,
         const unsigned int                          cell_number,
         ConstraintValues<double> &                  constraint_values,
         bool &                                      cell_at_boundary);
+
+      /**
+       * For a given cell, determine if it has hanging node constraints. If yes,
+       * adjust the dof indices, store the mask, and return true as indication.
+       */
+      template <int dim>
+      bool
+      process_hanging_node_constraints(
+        const HangingNodes<dim> &                     hanging_nodes,
+        const std::vector<std::vector<unsigned int>> &lexicographic_mapping,
+        const unsigned int                            cell_number,
+        const TriaIterator<DoFCellAccessor<dim, dim, false>> &cell,
+        std::vector<types::global_dof_index> &                dof_indices);
 
       /**
        * This method assigns the correct indices to ghost indices from the
@@ -474,6 +548,18 @@ namespace internal
        * in the variable @p row_starts.
        */
       std::vector<unsigned int> dof_indices;
+
+      /**
+       * Supported components of all entries of the hp::FECollection object of
+       * the given DoFHandler.
+       */
+      std::vector<std::vector<bool>> hanging_node_constraint_masks_comp;
+
+      /**
+       * Masks indicating for each cell and component if the optimized
+       * hanging-node constraint is applicable and if yes which type.
+       */
+      std::vector<compressed_constraint_kind> hanging_node_constraint_masks;
 
       /**
        * This variable describes the position of constraints in terms of the

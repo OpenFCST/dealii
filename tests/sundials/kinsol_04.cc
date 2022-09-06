@@ -1,6 +1,6 @@
 //-----------------------------------------------------------
 //
-//    Copyright (C) 2017 - 2020 by the deal.II authors
+//    Copyright (C) 2017 - 2022 by the deal.II authors
 //
 //    This file is part of the deal.II library.
 //
@@ -57,12 +57,9 @@
 // iteration and, unsurprisingly, converges much quicker.
 
 int
-main(int argc, char **argv)
+main()
 {
   initlog();
-
-  Utilities::MPI::MPI_InitFinalize mpi_initialization(
-    argc, argv, numbers::invalid_unsigned_int);
 
   using VectorType = Vector<double>;
 
@@ -70,7 +67,7 @@ main(int argc, char **argv)
   ParameterHandler                             prm;
   data.add_parameters(prm);
 
-  std::ifstream ifile(SOURCE_DIR "/kinsol_01.prm");
+  std::ifstream ifile(SOURCE_DIR "/kinsol_linesearch.prm");
   prm.parse_input(ifile);
 
   // Size of the problem
@@ -81,7 +78,7 @@ main(int argc, char **argv)
   kinsol.reinit_vector = [N](VectorType &v) { v.reinit(N); };
 
   kinsol.residual = [](const VectorType &u, VectorType &F) -> int {
-    deallog << "Evaluating the solution at u=(" << u[0] << ',' << u[1] << ")"
+    deallog << "Evaluating the solution at u=(" << u[0] << ',' << u[1] << ')'
             << std::endl;
 
     F(0) = std::cos(u[0] + u[1]) - 1 + 2 * u[0];
@@ -105,7 +102,7 @@ main(int argc, char **argv)
 
   kinsol.setup_jacobian = [&J_inverse](const VectorType &u,
                                        const VectorType &F) -> int {
-    deallog << "Setting up Jacobian system at u=(" << u[0] << ',' << u[1] << ")"
+    deallog << "Setting up Jacobian system at u=(" << u[0] << ',' << u[1] << ')'
             << std::endl;
 
     FullMatrix<double> J(2, 2);
@@ -125,7 +122,7 @@ main(int argc, char **argv)
                                               const VectorType &rhs,
                                               VectorType &      dst) -> int {
     deallog << "Solving Jacobian system with rhs=(" << rhs[0] << ',' << rhs[1]
-            << ")" << std::endl;
+            << ')' << std::endl;
 
     J_inverse.vmult(dst, rhs);
 

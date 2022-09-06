@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2006 - 2018 by the deal.II authors
+// Copyright (C) 2006 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -31,7 +31,7 @@ namespace internal
     /**
      * This class contains information belonging to the faces of a
      * triangulation. These classes are similar to the TriaLevel classes. As
-     * cells are organised in a hierarchical structure of levels, each
+     * cells are organized in a hierarchical structure of levels, each
      * triangulation consists of several such TriaLevels. However the faces of
      * a triangulation, lower dimensional objects like lines in 2D or lines
      * and quads in 3D, do not have to be based on such a hierarchical
@@ -110,12 +110,7 @@ namespace internal
     TriaFaces::serialize(Archive &ar, const unsigned int)
     {
       ar &dim;
-
-      if (dim == 2)
-        ar &lines;
-
-      if (dim == 3)
-        ar &quads &lines &quads_line_orientations &quad_reference_cell;
+      ar &quads &lines &quads_line_orientations &quad_reference_cell;
     }
   } // namespace TriangulationImplementation
 } // namespace internal

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2015 - 2019 by the deal.II authors
+// Copyright (C) 2015 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -17,19 +17,19 @@
 
 #ifdef DEAL_II_WITH_TRILINOS
 
-#  ifdef DEAL_II_WITH_MPI
+#  include <deal.II/base/index_set.h>
+#  include <deal.II/base/mpi.h>
+#  include <deal.II/base/trilinos_utilities.h>
 
-#    include <deal.II/base/index_set.h>
+#  include <deal.II/lac/read_write_vector.h>
 
-#    include <deal.II/lac/read_write_vector.h>
+#  include <boost/io/ios_state.hpp>
 
-#    include <boost/io/ios_state.hpp>
+#  include <Epetra_Import.h>
+#  include <Epetra_Map.h>
+#  include <Epetra_MpiComm.h>
 
-#    include <Epetra_Import.h>
-#    include <Epetra_Map.h>
-#    include <Epetra_MpiComm.h>
-
-#    include <memory>
+#  include <memory>
 
 
 DEAL_II_NAMESPACE_OPEN
@@ -243,7 +243,7 @@ namespace LinearAlgebra
           Assert(this->size() == down_V.size(),
                  ExcDimensionMismatch(this->size(), down_V.size()));
 
-#    if DEAL_II_TRILINOS_VERSION_GTE(11, 11, 0)
+#  if DEAL_II_TRILINOS_VERSION_GTE(11, 11, 0)
           Epetra_Import data_exchange(vector->Map(),
                                       down_V.trilinos_vector().Map());
           const int     ierr = vector->Import(down_V.trilinos_vector(),
@@ -251,7 +251,7 @@ namespace LinearAlgebra
                                           Epetra_AddLocalAlso);
           Assert(ierr == 0, ExcTrilinosError(ierr));
           (void)ierr;
-#    else
+#  else
           // In versions older than 11.11 the Import function is broken for
           // adding Hence, we provide a workaround in this case
 
@@ -266,7 +266,7 @@ namespace LinearAlgebra
           ierr = vector->Update(1.0, dummy, 1.0);
           Assert(ierr == 0, ExcTrilinosError(ierr));
           (void)ierr;
-#    endif
+#  endif
         }
 
       return *this;
@@ -284,7 +284,8 @@ namespace LinearAlgebra
 
 
 
-    double Vector::operator*(const VectorSpaceVector<double> &V) const
+    double
+    Vector::operator*(const VectorSpaceVector<double> &V) const
     {
       // Check that casting will work.
       Assert(dynamic_cast<const Vector *>(&V) != nullptr,
@@ -532,11 +533,11 @@ namespace LinearAlgebra
     Vector::size_type
     Vector::size() const
     {
-#    ifndef DEAL_II_WITH_64BIT_INDICES
+#  ifndef DEAL_II_WITH_64BIT_INDICES
       return vector->GlobalLength();
-#    else
+#  else
       return vector->GlobalLength64();
-#    endif
+#  endif
     }
 
 
@@ -568,23 +569,23 @@ namespace LinearAlgebra
       // easy case: local range is contiguous
       if (vector->Map().LinearMap())
         {
-#    ifndef DEAL_II_WITH_64BIT_INDICES
+#  ifndef DEAL_II_WITH_64BIT_INDICES
           is.add_range(vector->Map().MinMyGID(), vector->Map().MaxMyGID() + 1);
-#    else
+#  else
           is.add_range(vector->Map().MinMyGID64(),
                        vector->Map().MaxMyGID64() + 1);
-#    endif
+#  endif
         }
       else if (vector->Map().NumMyElements() > 0)
         {
           const size_type n_indices = vector->Map().NumMyElements();
-#    ifndef DEAL_II_WITH_64BIT_INDICES
+#  ifndef DEAL_II_WITH_64BIT_INDICES
           unsigned int *vector_indices =
             reinterpret_cast<unsigned int *>(vector->Map().MyGlobalElements());
-#    else
+#  else
           size_type *vector_indices =
             reinterpret_cast<size_type *>(vector->Map().MyGlobalElements64());
-#    endif
+#  endif
           is.add_indices(vector_indices, vector_indices + n_indices);
         }
       is.compress();
@@ -616,7 +617,7 @@ namespace LinearAlgebra
                   const bool         scientific,
                   const bool         across) const
     {
-      AssertThrow(out, ExcIO());
+      AssertThrow(out.fail() == false, ExcIO());
       boost::io::ios_flags_saver restore_flags(out);
 
       // Get a representation of the vector and loop over all
@@ -643,7 +644,7 @@ namespace LinearAlgebra
 
       // restore the representation
       // of the vector
-      AssertThrow(out, ExcIO());
+      AssertThrow(out.fail() == false, ExcIO());
     }
 
 
@@ -672,7 +673,5 @@ namespace LinearAlgebra
 } // namespace LinearAlgebra
 
 DEAL_II_NAMESPACE_CLOSE
-
-#  endif
 
 #endif

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,6 +18,8 @@
 // like chunk_sparse_matrix_iterator_11 but for const_iterator
 
 #include <deal.II/lac/chunk_sparse_matrix.h>
+
+#include <iterator>
 
 #include "../tests.h"
 
@@ -38,7 +40,8 @@ test(const unsigned int chunk_size)
   // attach a sparse matrix to it
   ChunkSparseMatrix<double> A(sparsity);
 
-  ChunkSparseMatrix<double>::const_iterator k = A.begin(), j = ++A.begin();
+  ChunkSparseMatrix<double>::const_iterator k = A.begin(),
+                                            j = std::next(A.begin());
 
   AssertThrow(k < j, ExcInternalError());
   AssertThrow(j > k, ExcInternalError());

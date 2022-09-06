@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -141,8 +141,9 @@ VectorFunction<dim>::vector_value(const Point<dim> &p,
     values(i) = value(p, i);
 }
 
-void create_tria(Triangulation<2> &triangulation,
-                 const Point<2> *  vertices_parallelograms)
+void
+create_tria(Triangulation<2> &triangulation,
+            const Point<2> *  vertices_parallelograms)
 {
   const std::vector<Point<2>> vertices(&vertices_parallelograms[0],
                                        &vertices_parallelograms[n_vertices]);
@@ -182,7 +183,7 @@ test(const FiniteElement<dim> &fe,
   const QGauss<dim>                quadrature(fe.degree + 1);
   const unsigned int               n_q_points = quadrature.size();
   MappingQ<dim>                    mapping(1);
-  // MappingQGeneric<dim> mapping(1);
+  // MappingQ<dim> mapping(1);
   std::vector<double>                                         div_v(n_q_points);
   std::vector<typename FEValuesViews::Vector<dim>::curl_type> curl_v(
     n_q_points);

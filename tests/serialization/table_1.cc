@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2010 - 2018 by the deal.II authors
+// Copyright (C) 2010 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -33,7 +33,7 @@ test()
   unsigned int  index3 = 2;
   Table<1, int> t3(index3);
 
-  for (unsigned int i = 0; i < index1; i++)
+  for (unsigned int i = 0; i < index1; ++i)
     {
       t1[i] = i + 1;
       t2[i] = i + 1 + index1;

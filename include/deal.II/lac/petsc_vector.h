@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2019 by the deal.II authors
+// Copyright (C) 2004 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -22,6 +22,7 @@
 #  ifdef DEAL_II_WITH_PETSC
 
 #    include <deal.II/base/index_set.h>
+#    include <deal.II/base/partitioner.h>
 #    include <deal.II/base/subscriptor.h>
 
 #    include <deal.II/lac/exceptions.h>
@@ -33,8 +34,9 @@
 DEAL_II_NAMESPACE_OPEN
 
 
-/*! @addtogroup PETScWrappers
- *@{
+/**
+ * @addtogroup PETScWrappers
+ * @{
  */
 namespace PETScWrappers
 {
@@ -201,24 +203,6 @@ namespace PETScWrappers
                       const dealii::Vector<Number> &v,
                       const size_type               locally_owned_size);
 
-
-      /**
-       * Copy-constructor the values from a PETSc wrapper vector class.
-       *
-       * @arg local_size denotes the size of the chunk that shall be stored on
-       * the present process.
-       *
-       * @arg communicator denotes the MPI communicator over which the
-       * different parts of the vector shall communicate
-       *
-       * @deprecated The use of objects that are explicitly of type VectorBase
-       * is deprecated: use PETScWrappers::MPI::Vector instead.
-       */
-      DEAL_II_DEPRECATED
-      explicit Vector(const MPI_Comm &  communicator,
-                      const VectorBase &v,
-                      const size_type   local_size);
-
       /**
        * Construct a new parallel ghosted PETSc vector from IndexSets.
        *
@@ -355,6 +339,14 @@ namespace PETScWrappers
        */
       void
       reinit(const IndexSet &local, const MPI_Comm &communicator);
+
+      /**
+       * Initialize the vector given to the parallel partitioning described in
+       * @p partitioner.
+       */
+      void
+      reinit(
+        const std::shared_ptr<const Utilities::MPI::Partitioner> &partitioner);
 
       /**
        * Return a reference to the MPI communicator object in use with this
@@ -553,7 +545,7 @@ namespace internal
   } // namespace LinearOperatorImplementation
 } /* namespace internal */
 
-/**@}*/
+/** @} */
 
 
 /**

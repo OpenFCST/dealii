@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -18,6 +18,9 @@
 
 
 #include <deal.II/base/graph_coloring.h>
+
+#include <deal.II/lac/dynamic_sparsity_pattern.h>
+#include <deal.II/lac/sparsity_pattern.h>
 
 #include "../tests.h"
 
@@ -77,8 +80,8 @@ main(int argc, char **argv)
   // color
   deallog << "Coloring" << std::endl;
   deallog << "Number of colors used: " << num_colors << std::endl;
-  for (unsigned int i = 0; i < num_indices; i++)
+  for (unsigned int i = 0; i < num_indices; ++i)
     {
-      deallog << i << " " << color_indices[i] << std::endl;
+      deallog << i << ' ' << color_indices[i] << std::endl;
     }
 }

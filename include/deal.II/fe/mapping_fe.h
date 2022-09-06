@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -34,9 +34,10 @@
 DEAL_II_NAMESPACE_OPEN
 
 
-/*!@addtogroup mapping */
-/*@{*/
-
+/**
+ * @addtogroup mapping
+ * @{
+ */
 
 /**
  * This class consistently uses a user-provided finite element on all cells of a
@@ -46,13 +47,13 @@ DEAL_II_NAMESPACE_OPEN
  * discretization, one obtains an iso-parametric mapping.
  *
  * If one initializes this class with an FE_Q(degree) object, then this class is
- * equivalent to MappingQGeneric(degree). Please note that no optimizations
+ * equivalent to MappingQ(degree). Please note that no optimizations
  * exploiting tensor-product structures of finite elements have been added here.
  *
  * @note Currently, only implemented for elements with tensor_degree==1 and
  *   n_components==1.
  *
- * @ingroup simplex
+ * @relates simplex
  */
 template <int dim, int spacedim = dim>
 class MappingFE : public Mapping<dim, spacedim>
@@ -477,7 +478,7 @@ private:
 
 
 
-/*@}*/
+/** @} */
 
 /*----------------------------------------------------------------------*/
 

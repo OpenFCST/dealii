@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2019 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -78,7 +78,7 @@ namespace internal
 
 
 
-#if defined(DEAL_II_WITH_TRILINOS) && defined(DEAL_II_WITH_MPI)
+#ifdef DEAL_II_WITH_TRILINOS
   template <>
   inline void
   ElementAccess<LinearAlgebra::EpetraWrappers::Vector>::add(

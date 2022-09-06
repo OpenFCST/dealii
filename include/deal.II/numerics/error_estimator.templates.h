@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -24,7 +24,7 @@
 #include <deal.II/base/quadrature_lib.h>
 #include <deal.II/base/work_stream.h>
 
-#include <deal.II/distributed/tria.h>
+#include <deal.II/distributed/tria_base.h>
 
 #include <deal.II/dofs/dof_accessor.h>
 #include <deal.II/dofs/dof_handler.h>
@@ -32,7 +32,6 @@
 #include <deal.II/fe/fe.h>
 #include <deal.II/fe/fe_update_flags.h>
 #include <deal.II/fe/fe_values.h>
-#include <deal.II/fe/mapping_q1.h>
 
 #include <deal.II/grid/tria_iterator.h>
 
@@ -514,7 +513,7 @@ namespace internal
         default:
           {
             Assert(false, ExcNotImplemented());
-            return -std::numeric_limits<double>::max();
+            return std::numeric_limits<double>::lowest();
           }
       }
   }
@@ -558,7 +557,7 @@ namespace internal
         default:
           {
             Assert(false, ExcNotImplemented());
-            return -std::numeric_limits<double>::max();
+            return std::numeric_limits<double>::lowest();
           }
       }
   }
@@ -604,7 +603,7 @@ namespace internal
         default:
           {
             Assert(false, ExcNotImplemented());
-            return -std::numeric_limits<double>::max();
+            return std::numeric_limits<double>::lowest();
           }
       }
   }
@@ -639,7 +638,7 @@ namespace internal
         default:
           {
             Assert(false, ExcNotImplemented());
-            return -std::numeric_limits<double>::max();
+            return std::numeric_limits<double>::lowest();
           }
       }
   }
@@ -735,7 +734,7 @@ namespace internal
     local_face_integrals[face] =
       integrate_over_face(parallel_data, face, fe_face_values_cell);
 
-    for (unsigned int i = 0; i < local_face_integrals[face].size(); i++)
+    for (unsigned int i = 0; i < local_face_integrals[face].size(); ++i)
       local_face_integrals[face][i] *= factor;
   }
 
@@ -1160,30 +1159,23 @@ KellyErrorEstimator<dim, spacedim>::estimate(
   const types::material_id  material_id,
   const Strategy            strategy)
 {
-#ifdef DEAL_II_WITH_P4EST
-  if (dynamic_cast<const parallel::distributed::Triangulation<dim, spacedim> *>(
-        &dof_handler.get_triangulation()) != nullptr)
-    Assert((subdomain_id_ == numbers::invalid_subdomain_id) ||
-             (subdomain_id_ ==
-              dynamic_cast<
-                const parallel::distributed::Triangulation<dim, spacedim> &>(
-                dof_handler.get_triangulation())
-                .locally_owned_subdomain()),
-           ExcMessage(
-             "For parallel distributed triangulations, the only "
-             "valid subdomain_id that can be passed here is the "
-             "one that corresponds to the locally owned subdomain id."));
-
-  const types::subdomain_id subdomain_id =
-    ((dynamic_cast<const parallel::distributed::Triangulation<dim, spacedim> *>(
-        &dof_handler.get_triangulation()) != nullptr) ?
-       dynamic_cast<const parallel::distributed::Triangulation<dim, spacedim>
-                      &>(dof_handler.get_triangulation())
-         .locally_owned_subdomain() :
-       subdomain_id_);
-#else
-  const types::subdomain_id subdomain_id = subdomain_id_;
-#endif
+  types::subdomain_id subdomain_id = numbers::invalid_subdomain_id;
+  if (const auto *triangulation = dynamic_cast<
+        const parallel::DistributedTriangulationBase<dim, spacedim> *>(
+        &dof_handler.get_triangulation()))
+    {
+      Assert((subdomain_id_ == numbers::invalid_subdomain_id) ||
+               (subdomain_id_ == triangulation->locally_owned_subdomain()),
+             ExcMessage(
+               "For distributed Triangulation objects and associated "
+               "DoFHandler objects, asking for any subdomain other than the "
+               "locally owned one does not make sense."));
+      subdomain_id = triangulation->locally_owned_subdomain();
+    }
+  else
+    {
+      subdomain_id = subdomain_id_;
+    }
 
   const unsigned int n_components = dof_handler.get_fe(0).n_components();
   (void)n_components;

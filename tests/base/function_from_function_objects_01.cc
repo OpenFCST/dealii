@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -56,7 +56,7 @@ main()
 
   Vector<double> v(2);
   fun2.vector_value(p, v);
-  deallog << v(0) << " " << v(1) << std::endl;
+  deallog << v(0) << ' ' << v(1) << std::endl;
 
   deallog << fun3.gradient(p) << std::endl;
 

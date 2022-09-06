@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -97,7 +97,7 @@ private:
   std::vector<types::global_dof_index> dofs_per_block;
 
   Triangulation<dim>
-                  triangulation; // a triangulation object of the "dim"-dimensional domain;
+    triangulation; // a triangulation object of the "dim"-dimensional domain;
   DoFHandler<dim> dof_handler; // is associated with triangulation;
 
   FESystem<dim>         elasticity_fe;
@@ -297,7 +297,7 @@ ElasticProblem<dim>::make_grid()
   triangulationL.begin_active()->set_material_id(0);
   triangulationR.begin_active()->set_material_id(id_of_lagrange_mult);
 
-  for (unsigned int i = 0; i < n_faces_per_cell; i++)
+  for (unsigned int i = 0; i < n_faces_per_cell; ++i)
     {
       triangulationL.begin_active()->face(i)->set_boundary_id(i);
       triangulationR.begin_active()->face(i)->set_boundary_id(n_faces_per_cell +
@@ -318,7 +318,7 @@ ElasticProblem<dim>::setup_system()
 {
   std::vector<unsigned int> block_component(
     n_components, u_block); // init to represent u everywhere
-  for (unsigned int i = 0; i < dim; i++)
+  for (unsigned int i = 0; i < dim; ++i)
     block_component[i + dim] = lambda_block;
 
   //(1) set active FE indices based in material id...

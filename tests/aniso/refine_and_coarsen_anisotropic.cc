@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2002 - 2018 by the deal.II authors
+// Copyright (C) 2002 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -105,7 +105,7 @@ test_isotropic(int type, std::ostream &logfile)
             GridOutFlags::EpsFlagsBase::width, 300, .01, false, 5, false);
           grid_out.set_flags(eps2);
           std::ostringstream filename;
-          filename << "grid_" << type << "_" << cycle << ".eps";
+          filename << "grid_" << type << '_' << cycle << ".eps";
           std::ofstream outfile(filename.str().c_str());
           grid_out.write_eps(tria, outfile);
         }

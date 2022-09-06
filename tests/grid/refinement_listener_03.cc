@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2006 - 2018 by the deal.II authors
+// Copyright (C) 2006 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -77,7 +77,7 @@ template <int dim>
 void
 test()
 {
-  deallog << dim << "D" << std::endl;
+  deallog << dim << 'D' << std::endl;
 
   Triangulation<dim> tria_1, tria_2;
 

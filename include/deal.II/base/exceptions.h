@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -61,7 +61,7 @@ public:
   /**
    * Destructor.
    */
-  virtual ~ExceptionBase() noexcept override;
+  virtual ~ExceptionBase() noexcept override = default;
 
   /**
    * Copy operator. This operator is deleted since exception objects
@@ -142,20 +142,14 @@ protected:
   const char *exc;
 
   /**
-   * A backtrace to the position where the problem happened, if the system
-   * supports this.
-   */
-  mutable char **stacktrace;
-
-  /**
-   * The number of stacktrace frames that are stored in the previous variable.
+   * The number of stacktrace frames that are stored in the following variable.
    * Zero if the system does not support stack traces.
    */
   int n_stacktrace_frames;
 
 #ifdef DEAL_II_HAVE_GLIBC_STACKTRACE
   /**
-   * array of pointers that contains the raw stack trace
+   * Array of pointers that contains the raw stack trace.
    */
   void *raw_stacktrace[25];
 #endif
@@ -632,8 +626,8 @@ namespace StandardExceptions
 {
   /**
    * @addtogroup Exceptions
+   * @{
    */
-  //@{
 
   /**
    * Exception denoting a division by zero.
@@ -890,7 +884,7 @@ namespace StandardExceptions
                  int,
                  int,
                  << "You are trying to execute functionality that is "
-                 << "impossible in dimensions <" << arg1 << "," << arg2
+                 << "impossible in dimensions <" << arg1 << ',' << arg2
                  << "> or simply does not make any sense.");
 
 
@@ -923,25 +917,25 @@ namespace StandardExceptions
   DeclException2(ExcDimensionMismatch,
                  std::size_t,
                  std::size_t,
-                 << "Dimension " << arg1 << " not equal to " << arg2 << ".");
+                 << "Dimension " << arg1 << " not equal to " << arg2 << '.');
 
   /**
    * The first dimension should be either equal to the second or the third,
    * but it is neither.
    */
   DeclException3(ExcDimensionMismatch2,
-                 int,
-                 int,
-                 int,
+                 std::size_t,
+                 std::size_t,
+                 std::size_t,
                  << "Dimension " << arg1 << " neither equal to " << arg2
-                 << " nor to " << arg3 << ".");
+                 << " nor to " << arg3 << '.');
 
   /**
    * This exception indicates that an index is not within the expected range.
    * For example, it may be that you are trying to access an element of a
    * vector which does not exist.
    *
-   * The constructor takes three <tt>int</tt> arguments, namely
+   * The constructor takes three <tt>std::size_t</tt> arguments, namely
    * <ol>
    * <li> the violating index
    * <li> the lower bound
@@ -950,10 +944,10 @@ namespace StandardExceptions
    */
   DeclException3(
     ExcIndexRange,
-    int,
-    int,
-    int,
-    << "Index " << arg1 << " is not in the half-open range [" << arg2 << ","
+    std::size_t,
+    std::size_t,
+    std::size_t,
+    << "Index " << arg1 << " is not in the half-open range [" << arg2 << ','
     << arg3 << ")."
     << (arg2 == arg3 ?
           " In the current case, this half-open range is in fact empty, "
@@ -983,7 +977,7 @@ namespace StandardExceptions
     T,
     T,
     T,
-    << "Index " << arg1 << " is not in the half-open range [" << arg2 << ","
+    << "Index " << arg1 << " is not in the half-open range [" << arg2 << ','
     << arg3 << ")."
     << (arg2 == arg3 ?
           " In the current case, this half-open range is in fact empty, "
@@ -999,7 +993,7 @@ namespace StandardExceptions
                  int,
                  int,
                  << "Number " << arg1 << " must be larger than or equal "
-                 << arg2 << ".");
+                 << arg2 << '.');
 
   /**
    * A generic exception definition for the ExcLowerRange above.
@@ -1009,7 +1003,7 @@ namespace StandardExceptions
                  T,
                  T,
                  << "Number " << arg1 << " must be larger than or equal "
-                 << arg2 << ".");
+                 << arg2 << '.');
 
   /**
    * This exception indicates that the first argument should be an integer
@@ -1075,6 +1069,16 @@ namespace StandardExceptions
                    "information.");
 
   /**
+   * Exception indicating that one of the cells in the input to
+   * Triangulation::create_triangulation() or a related function cannot be used.
+   */
+  DeclException1(ExcGridHasInvalidCell,
+                 int,
+                 << "Something went wrong when making cell " << arg1
+                 << ". Read the docs and the source code "
+                 << "for more information.");
+
+  /**
    * Some of our numerical classes allow for setting all entries to zero using
    * the assignment operator <tt>=</tt>.
    *
@@ -1111,14 +1115,6 @@ namespace StandardExceptions
     "if deal.II was configured to use MPI.");
 
   /**
-   * This function requires simplex support.
-   */
-  DeclExceptionMsg(
-    ExcNeedsSimplexSupport,
-    "You are attempting to use functionality that is only available "
-    "if deal.II was configured with DEAL_II_WITH_SIMPLEX_SUPPORT enabled.");
-
-  /**
    * This function requires support for the FunctionParser library.
    */
   DeclExceptionMsg(
@@ -1153,7 +1149,7 @@ namespace StandardExceptions
                  std::string,
                  << "There was an error in a cuSPARSE function: " << arg1);
 #endif
-  //@}
+  /** @} */
 
   /**
    * This function requires support for the Exodus II library.
@@ -1162,7 +1158,7 @@ namespace StandardExceptions
     ExcNeedsExodusII,
     "You are attempting to use functionality that is only available if deal.II "
     "was configured to use Trilinos' SEACAS library (which provides ExodusII), "
-    "but cmake did not find find a valid SEACAS library.");
+    "but cmake did not find a valid SEACAS library.");
 
 #ifdef DEAL_II_WITH_MPI
   /**
@@ -1300,10 +1296,22 @@ namespace deal_II_exceptions
    * still call abort(), e.g. when an exception is caught during exception
    * handling.
    *
+   * @see enable_abort_on_exception
    * @see Exceptions
    */
   void
   disable_abort_on_exception();
+
+  /**
+   * Calling this function switches on the use of <tt>std::abort()</tt> when
+   * an exception is created using the Assert() macro, instead of throwing it.
+   * This restores the standard behavior.
+   *
+   * @see disable_abort_on_exception
+   * @see Exceptions
+   */
+  void
+  enable_abort_on_exception();
 
   /**
    * The functions in this namespace are in connection with the Assert and
@@ -1324,7 +1332,7 @@ namespace deal_II_exceptions
     /**
      * An enum describing how to treat an exception in issue_error_noreturn.
      */
-    enum ExceptionHandling
+    enum class ExceptionHandling
     {
       /**
        * Abort the program by calling <code>std::abort</code> unless
@@ -1342,7 +1350,7 @@ namespace deal_II_exceptions
      * This routine does the main work for the exception generation mechanism
      * used in the <tt>Assert</tt> and <tt>AssertThrow</tt> macros: as the
      * name implies, this function either ends by throwing an exception (if
-     * @p handling is throw_on_exception, or @p handling is try_abort_exception
+     * @p handling is ExceptionHandling::throw_on_exception, or @p handling is try_abort_exception
      * and deal_II_exceptions::disable_abort_on_exception is false) or with a
      * call to <tt>abort</tt> (if @p handling is try_abort_exception and
      * deal_II_exceptions::disable_abort_on_exception is true).
@@ -1363,13 +1371,14 @@ namespace deal_II_exceptions
                          const char *      function,
                          const char *      cond,
                          const char *      exc_name,
-                         ExceptionType     e) {
+                         ExceptionType     e)
+    {
       // Fill the fields of the exception object
       e.set_fields(file, line, function, cond, exc_name);
 
       switch (handling)
         {
-          case abort_or_throw_on_exception:
+          case ExceptionHandling::abort_or_throw_on_exception:
             {
               if (dealii::deal_II_exceptions::internals::
                     allow_abort_on_exception)
@@ -1380,7 +1389,7 @@ namespace deal_II_exceptions
                   throw e;
                 }
             }
-          case throw_on_exception:
+          case ExceptionHandling::throw_on_exception:
             throw e;
           // this function should never return (and AssertNothrow can);
           // something must have gone wrong in the error handling code for us
@@ -1393,7 +1402,8 @@ namespace deal_II_exceptions
     /**
      * Internal function that does the work of issue_error_nothrow.
      */
-    void do_issue_error_nothrow(const ExceptionBase &e) noexcept;
+    void
+    do_issue_error_nothrow(const ExceptionBase &e) noexcept;
 
     /**
      * Exception generation mechanism in case we must not throw.
@@ -1474,7 +1484,7 @@ namespace deal_II_exceptions
       {                                                                  \
         if (__builtin_expect(!(cond), false))                            \
           ::dealii::deal_II_exceptions::internals::issue_error_noreturn( \
-            ::dealii::deal_II_exceptions::internals::                    \
+            ::dealii::deal_II_exceptions::internals::ExceptionHandling:: \
               abort_or_throw_on_exception,                               \
             __FILE__,                                                    \
             __LINE__,                                                    \
@@ -1488,7 +1498,7 @@ namespace deal_II_exceptions
       {                                                                  \
         if (!(cond))                                                     \
           ::dealii::deal_II_exceptions::internals::issue_error_noreturn( \
-            ::dealii::deal_II_exceptions::internals::                    \
+            ::dealii::deal_II_exceptions::internals::ExceptionHandling:: \
               abort_or_throw_on_exception,                               \
             __FILE__,                                                    \
             __LINE__,                                                    \
@@ -1584,7 +1594,8 @@ namespace deal_II_exceptions
     {                                                                  \
       if (__builtin_expect(!(cond), false))                            \
         ::dealii::deal_II_exceptions::internals::issue_error_noreturn( \
-          ::dealii::deal_II_exceptions::internals::throw_on_exception, \
+          ::dealii::deal_II_exceptions::internals::ExceptionHandling:: \
+            throw_on_exception,                                        \
           __FILE__,                                                    \
           __LINE__,                                                    \
           __PRETTY_FUNCTION__,                                         \
@@ -1597,7 +1608,8 @@ namespace deal_II_exceptions
     {                                                                  \
       if (!(cond))                                                     \
         ::dealii::deal_II_exceptions::internals::issue_error_noreturn( \
-          ::dealii::deal_II_exceptions::internals::throw_on_exception, \
+          ::dealii::deal_II_exceptions::internals::ExceptionHandling:: \
+            throw_on_exception,                                        \
           __FILE__,                                                    \
           __LINE__,                                                    \
           __PRETTY_FUNCTION__,                                         \
@@ -1606,6 +1618,41 @@ namespace deal_II_exceptions
           exc);                                                        \
     }
 #endif /*ifdef DEAL_II_HAVE_BUILTIN_EXPECT*/
+
+
+namespace deal_II_exceptions
+{
+  namespace internals
+  {
+    /**
+     * A function that compares two values for equality, after converting to a
+     * common type to avoid compiler warnings when comparing objects of
+     * different types (e.g., unsigned and signed variables).
+     */
+    template <typename T, typename U>
+    inline constexpr bool
+    compare_for_equality(const T &t, const U &u)
+    {
+      using common_type = typename std::common_type<T, U>::type;
+      return static_cast<common_type>(t) == static_cast<common_type>(u);
+    }
+
+
+    /**
+     * A function that compares two values with `operator<`, after converting to
+     * a common type to avoid compiler warnings when comparing objects of
+     * different types (e.g., unsigned and signed variables).
+     */
+    template <typename T, typename U>
+    inline constexpr bool
+    compare_less_than(const T &t, const U &u)
+    {
+      using common_type = typename std::common_type<T, U>::type;
+      return (static_cast<common_type>(t) < static_cast<common_type>(u));
+    }
+  } // namespace internals
+} // namespace deal_II_exceptions
+
 
 /**
  * Special assertion for dimension mismatch.
@@ -1627,13 +1674,9 @@ namespace deal_II_exceptions
  *
  * @ingroup Exceptions
  */
-#define AssertDimension(dim1, dim2)                                            \
-  Assert(static_cast<typename ::dealii::internal::argument_type<void(          \
-             typename std::common_type<decltype(dim1),                         \
-                                       decltype(dim2)>::type)>::type>(dim1) == \
-           static_cast<typename ::dealii::internal::argument_type<void(        \
-             typename std::common_type<decltype(dim1),                         \
-                                       decltype(dim2)>::type)>::type>(dim2),   \
+#define AssertDimension(dim1, dim2)                                           \
+  Assert(::dealii::deal_II_exceptions::internals::compare_for_equality(dim1,  \
+                                                                       dim2), \
          dealii::ExcDimensionMismatch((dim1), (dim2)))
 
 
@@ -1669,6 +1712,7 @@ namespace internal
   // https://stackoverflow.com/questions/13842468/comma-in-c-c-macro
   template <typename T>
   struct argument_type;
+
   template <typename T, typename U>
   struct argument_type<T(U)>
   {
@@ -1697,12 +1741,7 @@ namespace internal
  */
 #define AssertIndexRange(index, range)                                         \
   Assert(                                                                      \
-    static_cast<typename ::dealii::internal::argument_type<void(               \
-        typename std::common_type<decltype(index), decltype(range)>::type)>::  \
-                  type>(index) <                                               \
-      static_cast<typename ::dealii::internal::argument_type<void(             \
-        typename std::common_type<decltype(index), decltype(range)>::type)>::  \
-                    type>(range),                                              \
+    ::dealii::deal_II_exceptions::internals::compare_less_than(index, range),  \
     dealii::ExcIndexRangeType<typename ::dealii::internal::argument_type<void( \
       typename std::common_type<decltype(index), decltype(range)>::type)>::    \
                                 type>((index), 0, (range)))
@@ -1729,6 +1768,13 @@ namespace internal
 #define AssertIsFinite(number)               \
   Assert(dealii::numbers::is_finite(number), \
          dealii::ExcNumberNotFinite(std::complex<double>(number)))
+
+/**
+ * Assert that a geometric object is not used. This assertion is used when
+ * constructing triangulations and should normally not be used inside user
+ * codes.
+ */
+#define AssertIsNotUsed(obj) Assert((obj)->used() == false, ExcInternalError())
 
 #ifdef DEAL_II_WITH_MPI
 /**

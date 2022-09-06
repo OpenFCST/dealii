@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -45,7 +45,7 @@ print_dof_numbers(const DoFHandler<dim> &dof)
         cell->get_dof_indices(dof_indices);
         deallog << "cell " << cell->id() << ": ";
         for (types::global_dof_index i : dof_indices)
-          deallog << i << " ";
+          deallog << i << ' ';
         deallog << std::endl;
       }
   for (unsigned int l = 0; l < dof.get_triangulation().n_global_levels(); ++l)
@@ -57,7 +57,7 @@ print_dof_numbers(const DoFHandler<dim> &dof)
             cell->get_mg_dof_indices(dof_indices);
             deallog << "cell " << cell->id() << ": ";
             for (types::global_dof_index i : dof_indices)
-              deallog << i << " ";
+              deallog << i << ' ';
             deallog << std::endl;
           }
     }

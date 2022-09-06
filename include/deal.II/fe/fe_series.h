@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -42,8 +42,10 @@
 DEAL_II_NAMESPACE_OPEN
 
 
-/*!@addtogroup feall */
-/*@{*/
+/**
+ * @addtogroup fe
+ * @{
+ */
 
 
 /**
@@ -112,20 +114,6 @@ namespace FESeries
             const hp::FECollection<dim, spacedim> &fe_collection,
             const hp::QCollection<dim> &           q_collection,
             const unsigned int component = numbers::invalid_unsigned_int);
-
-    /**
-     * A non-default constructor. The @p n_coefficients_per_direction defines the
-     * number of modes in each direction, @p fe_collection is the hp::FECollection
-     * for which expansion will be used and @p q_collection is the hp::QCollection
-     * used to integrate the expansion for each FiniteElement
-     * in @p fe_collection.
-     *
-     * @deprecated Use a different constructor instead.
-     */
-    DEAL_II_DEPRECATED
-    Fourier(const unsigned int                     n_coefficients_per_direction,
-            const hp::FECollection<dim, spacedim> &fe_collection,
-            const hp::QCollection<dim> &           q_collection);
 
     /**
      * Calculate @p fourier_coefficients of the cell vector field given by
@@ -298,19 +286,6 @@ namespace FESeries
              const unsigned int component = numbers::invalid_unsigned_int);
 
     /**
-     * A non-default constructor. The @p size_in_each_direction defines the number
-     * of coefficients in each direction, @p fe_collection is the hp::FECollection
-     * for which expansion will be used and @p q_collection is the hp::QCollection
-     * used to integrate the expansion for each FiniteElement in @p fe_collection.
-     *
-     * @deprecated Use a different constructor instead.
-     */
-    DEAL_II_DEPRECATED
-    Legendre(const unsigned int n_coefficients_per_direction,
-             const hp::FECollection<dim, spacedim> &fe_collection,
-             const hp::QCollection<dim> &           q_collection);
-
-    /**
      * Calculate @p legendre_coefficients of the cell vector field given by
      * @p local_dof_values corresponding to FiniteElement with
      * @p cell_active_fe_index .
@@ -439,7 +414,7 @@ namespace FESeries
 
 } // namespace FESeries
 
-/*@}*/
+/** @} */
 
 
 
@@ -482,7 +457,7 @@ namespace internal
         std::pair<bool, unsigned int>(const TableIndices<1> &)> &predicate,
       std::map<unsigned int, std::vector<CoefficientType>> &     pred_to_values)
     {
-      for (unsigned int i = 0; i < coefficients.size(0); i++)
+      for (unsigned int i = 0; i < coefficients.size(0); ++i)
         {
           const TableIndices<1> ind(i);
           fill_map_index(coefficients, ind, predicate, pred_to_values);
@@ -499,8 +474,8 @@ namespace internal
         std::pair<bool, unsigned int>(const TableIndices<2> &)> &predicate,
       std::map<unsigned int, std::vector<CoefficientType>> &     pred_to_values)
     {
-      for (unsigned int i = 0; i < coefficients.size(0); i++)
-        for (unsigned int j = 0; j < coefficients.size(1); j++)
+      for (unsigned int i = 0; i < coefficients.size(0); ++i)
+        for (unsigned int j = 0; j < coefficients.size(1); ++j)
           {
             const TableIndices<2> ind(i, j);
             fill_map_index(coefficients, ind, predicate, pred_to_values);
@@ -517,9 +492,9 @@ namespace internal
         std::pair<bool, unsigned int>(const TableIndices<3> &)> &predicate,
       std::map<unsigned int, std::vector<CoefficientType>> &     pred_to_values)
     {
-      for (unsigned int i = 0; i < coefficients.size(0); i++)
-        for (unsigned int j = 0; j < coefficients.size(1); j++)
-          for (unsigned int k = 0; k < coefficients.size(2); k++)
+      for (unsigned int i = 0; i < coefficients.size(0); ++i)
+        for (unsigned int j = 0; j < coefficients.size(1); ++j)
+          for (unsigned int k = 0; k < coefficients.size(2); ++k)
             {
               const TableIndices<3> ind(i, j, k);
               fill_map_index(coefficients, ind, predicate, pred_to_values);

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -66,7 +66,7 @@ namespace hp
    * @ingroup hp
    */
   template <int dim, int q_dim, class FEValuesType>
-  class FEValuesBase
+  class FEValuesBase : public Subscriptor
   {
   public:
     /**
@@ -95,7 +95,7 @@ namespace hp
     /**
      * Constructor. This constructor is equivalent to the other one except
      * that it makes the object use a $Q_1$ mapping (i.e., an object of type
-     * MappingQGeneric(1)) implicitly.
+     * MappingQ(1)) implicitly.
      */
     FEValuesBase(
       const FECollection<dim, FEValuesType::space_dimension> &fe_collection,
@@ -316,9 +316,9 @@ namespace hp
     : public hp::FEValuesBase<dim, dim, dealii::FEValues<dim, spacedim>>
   {
   public:
-    static const unsigned int dimension = dim;
+    static constexpr unsigned int dimension = dim;
 
-    static const unsigned int space_dimension = spacedim;
+    static constexpr unsigned int space_dimension = spacedim;
 
     /**
      * Constructor. Initialize this object with the given parameters.
@@ -332,7 +332,7 @@ namespace hp
     /**
      * Constructor. This constructor is equivalent to the other one except
      * that it makes the object use a $Q_1$ mapping (i.e., an object of type
-     * MappingQGeneric(1)) implicitly.
+     * MappingQ(1)) implicitly.
      */
     FEValues(const FECollection<dim, spacedim> &fe_collection,
              const QCollection<dim> &           q_collection,
@@ -466,7 +466,7 @@ namespace hp
     /**
      * Constructor. This constructor is equivalent to the other one except
      * that it makes the object use a $Q_1$ mapping (i.e., an object of type
-     * MappingQGeneric(1)) implicitly.
+     * MappingQ(1)) implicitly.
      */
     FEFaceValues(const hp::FECollection<dim, spacedim> &fe_collection,
                  const hp::QCollection<dim - 1> &       q_collection,
@@ -610,7 +610,7 @@ namespace hp
     /**
      * Constructor. This constructor is equivalent to the other one except
      * that it makes the object use a $Q_1$ mapping (i.e., an object of type
-     * MappingQGeneric(1)) implicitly.
+     * MappingQ(1)) implicitly.
      */
     FESubfaceValues(const hp::FECollection<dim, spacedim> &fe_collection,
                     const hp::QCollection<dim - 1> &       q_collection,

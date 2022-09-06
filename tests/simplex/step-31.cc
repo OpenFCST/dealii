@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2021 by the deal.II authors
+// Copyright (C) 2021 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -359,7 +359,7 @@ namespace Step31
     if (timestep_number != 0)
       {
         double min_temperature = std::numeric_limits<double>::max(),
-               max_temperature = -std::numeric_limits<double>::max();
+               max_temperature = std::numeric_limits<double>::lowest();
         for (const auto &cell : temperature_dof_handler.active_cell_iterators())
           {
             fe_values.reinit(cell);
@@ -381,7 +381,7 @@ namespace Step31
     else
       {
         double min_temperature = std::numeric_limits<double>::max(),
-               max_temperature = -std::numeric_limits<double>::max();
+               max_temperature = std::numeric_limits<double>::lowest();
         for (const auto &cell : temperature_dof_handler.active_cell_iterators())
           {
             fe_values.reinit(cell);
@@ -459,8 +459,7 @@ namespace Step31
       stokes_constraints.clear();
       DoFTools::make_hanging_node_constraints(stokes_dof_handler,
                                               stokes_constraints);
-      std::set<types::boundary_id> no_normal_flux_boundaries;
-      no_normal_flux_boundaries.insert(0);
+      const std::set<types::boundary_id> no_normal_flux_boundaries = {0};
       VectorTools::compute_no_normal_flux_constraints(stokes_dof_handler,
                                                       0,
                                                       no_normal_flux_boundaries,
@@ -899,7 +898,7 @@ namespace Step31
       const LinearSolvers::BlockSchurPreconditioner<
         TrilinosWrappers::PreconditionAMG,
         TrilinosWrappers::PreconditionIC>
-                    preconditioner(stokes_matrix, mp_inverse, *Amg_preconditioner);
+        preconditioner(stokes_matrix, mp_inverse, *Amg_preconditioner);
       SolverControl solver_control(stokes_matrix.m(),
                                    1e-6 * stokes_rhs.l2_norm());
       SolverGMRES<TrilinosWrappers::MPI::BlockVector> gmres(

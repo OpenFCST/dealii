@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2020 by the deal.II authors
+// Copyright (C) 2019 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -492,7 +492,7 @@ ParsedConvergenceTable::difference(const DoFHandler<dim, spacedim> &dh,
   error_from_exact(
     dh,
     solution,
-    Functions::ConstantFunction<spacedim>(0, component_names.size()),
+    Functions::ConstantFunction<spacedim>(0.0, component_names.size()),
     weight);
 }
 
@@ -514,7 +514,7 @@ ParsedConvergenceTable::difference(const Mapping<dim, spacedim> &   mapping,
     mapping,
     dh,
     solution,
-    Functions::ConstantFunction<spacedim>(0, component_names.size()),
+    Functions::ConstantFunction<spacedim>(0.0, component_names.size()),
     weight);
 }
 

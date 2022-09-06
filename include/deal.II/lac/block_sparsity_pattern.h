@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2020 by the deal.II authors
+// Copyright (C) 2000 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -38,8 +38,9 @@ class BlockSparseMatrix;
 class BlockDynamicSparsityPattern;
 #endif
 
-/*! @addtogroup Sparsity
- *@{
+/**
+ * @addtogroup Sparsity
+ * @{
  */
 
 
@@ -340,7 +341,7 @@ public:
                  int,
                  << "The blocks [" << arg1 << ',' << arg2 << "] and [" << arg3
                  << ',' << arg4 << "] have differing column numbers.");
-  //@}
+  /** @} */
 
 protected:
   /**
@@ -555,7 +556,7 @@ public:
    * of each block is determined by the size() of the respective IndexSet.
    * Each block only stores the rows given by the values in the IndexSet,
    * which is useful for distributed memory parallel computations and usually
-   * corresponds to the locally owned DoFs.
+   * corresponds to the locally relevant DoFs.
    */
   BlockDynamicSparsityPattern(const std::vector<IndexSet> &partitioning);
 
@@ -607,7 +608,7 @@ public:
   using BlockSparsityPatternBase<DynamicSparsityPattern>::reinit;
 };
 
-/*@}*/
+/** @} */
 
 
 #ifdef DEAL_II_WITH_TRILINOS
@@ -615,8 +616,9 @@ public:
 
 namespace TrilinosWrappers
 {
-  /*! @addtogroup TrilinosWrappers
-   *@{
+  /**
+   * @addtogroup TrilinosWrappers
+   * @{
    */
 
   /**
@@ -741,7 +743,7 @@ namespace TrilinosWrappers
     using BlockSparsityPatternBase<SparsityPattern>::reinit;
   };
 
-  /*@}*/
+  /** @} */
 
 } /* namespace TrilinosWrappers */
 

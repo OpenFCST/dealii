@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2018 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -40,8 +40,7 @@ test()
   {
     Triangulation<3, 3> volume_tria;
     GridGenerator::cylinder(volume_tria);
-    std::set<types::boundary_id> boundary_ids;
-    boundary_ids.insert(0);
+    const std::set<types::boundary_id> boundary_ids = {0};
     GridGenerator::extract_boundary_mesh(volume_tria, tria, boundary_ids);
   }
   tria.set_all_manifold_ids(0);
@@ -52,7 +51,7 @@ test()
   out << "set view equal xyz" << std::endl
       << "splot '-' with lines, '-' with vectors " << std::endl;
   GridOut().write_gnuplot(tria, out);
-  out << "e" << std::endl;
+  out << 'e' << std::endl;
 
   Triangulation<2, 3>::active_cell_iterator it = tria.begin_active();
   for (; it != tria.end(); ++it)
@@ -62,9 +61,9 @@ test()
       Tensor<1, 3> t2 = manifold.get_tangent_vector(p, it->vertex(1));
       Tensor<1, 3> n  = cross_product_3d(t1, t2);
       n /= -n.norm();
-      out << it->center() << " " << n << std::endl;
+      out << it->center() << ' ' << n << std::endl;
     }
-  out << "e" << std::endl;
+  out << 'e' << std::endl;
 }
 
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2017 - 2018 by the deal.II authors
+// Copyright (C) 2017 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -49,8 +49,8 @@ test_real_to_unit_cell()
   cells[0].material_id = 0;
   triangulation.create_triangulation(points, cells, SubCellData());
 
-  Point<dim>           point(-0.29999999999999999, -0.29999999999999999);
-  MappingQGeneric<dim> mapping(1);
+  Point<dim>    point(-0.29999999999999999, -0.29999999999999999);
+  MappingQ<dim> mapping(1);
 
   try
     {

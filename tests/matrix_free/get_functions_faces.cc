@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2014 - 2020 by the deal.II authors
+// Copyright (C) 2014 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -70,7 +70,7 @@ private:
   {
     FEFaceEvaluation<dim, fe_degree, fe_degree + 1, 1, number> fe_eval(data,
                                                                        true);
-    for (unsigned int face = face_range.first; face < face_range.second; face++)
+    for (unsigned int face = face_range.first; face < face_range.second; ++face)
       {
         fe_eval.reinit(face);
         fe_eval.read_dof_values(src);
@@ -82,7 +82,7 @@ private:
         deallog << "Face " << face << ": ";
         for (unsigned int q = 0; q < fe_eval.n_q_points; ++q)
           {
-            deallog << fe_eval.get_value(q)[0] << " "
+            deallog << fe_eval.get_value(q)[0] << ' '
                     << fe_eval.get_normal_derivative(q)[0] << "   ";
           }
         deallog << std::endl;
@@ -143,7 +143,7 @@ test()
     data.mapping_update_flags_boundary_faces =
       (update_gradients | update_JxW_values);
 
-    mf_data.reinit(dof, constraints, quad, data);
+    mf_data.reinit(MappingQ1<dim>{}, dof, constraints, quad, data);
   }
   MatrixFreeTest<dim, fe_degree, double> mf(mf_data);
   Vector<double>                         in(dof.n_dofs());

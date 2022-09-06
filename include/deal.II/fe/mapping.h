@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2000 - 2019 by the deal.II authors
+// Copyright (C) 2000 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -28,6 +28,8 @@
 
 #include <deal.II/hp/q_collection.h>
 
+#include <deal.II/non_matching/immersed_surface_quadrature.h>
+
 #include <array>
 #include <cmath>
 #include <memory>
@@ -48,6 +50,11 @@ template <int dim, int spacedim>
 class FEFaceValues;
 template <int dim, int spacedim>
 class FESubfaceValues;
+namespace NonMatching
+{
+  template <int dim>
+  class FEImmersedSurfaceValues;
+}
 
 
 /**
@@ -127,7 +134,7 @@ enum MappingKind
   /**
    * The mappings for 2-forms and third order tensors.
    *
-   * These are mappings typpically applied to hessians transformed to the
+   * These are mappings typically applied to hessians transformed to the
    * reference cell.
    *
    * Mapping of the hessian of a covariant vector field (see
@@ -395,8 +402,8 @@ public:
    * triangulation).
    *
    * For example, implementations in derived classes return @p true for
-   * MappingQ, MappingQGeneric, MappingCartesian, but @p false for
-   * MappingQEulerian, MappingQ1Eulerian, and MappingFEField.
+   * MappingQ, MappingCartesian, but @p false for MappingQEulerian,
+   * MappingQ1Eulerian, and MappingFEField.
    */
   virtual bool
   preserves_vertex_locations() const = 0;
@@ -468,7 +475,7 @@ public:
    * points and calling the Mapping::transform_real_to_unit_cell() function
    * for each point individually, but it can be much faster for certain
    * mappings that implement a more specialized version such as
-   * MappingQGeneric. The only difference in behavior is that this function
+   * MappingQ. The only difference in behavior is that this function
    * will never throw an ExcTransformationFailed() exception. If the
    * transformation fails for `real_points[i]`, the returned `unit_points[i]`
    * contains std::numeric_limits<double>::infinity() as the first entry.
@@ -539,7 +546,7 @@ public:
                  << arg1 << "] is distorted. The cell geometry or the "
                  << "mapping are invalid, giving a non-positive volume "
                  << "fraction of " << arg2 << " in quadrature point " << arg3
-                 << ".");
+                 << '.');
 
   /**
    * @}
@@ -982,6 +989,20 @@ protected:
       &output_data) const = 0;
 
   /**
+   * The equivalent of Mapping::fill_fe_values(), but for the case that the
+   * quadrature is an ImmersedSurfaceQuadrature. See there for a comprehensive
+   * description of the input parameters. This function is called by
+   * FEImmersedSurfaceValues::reinit().
+   */
+  virtual void
+  fill_fe_immersed_surface_values(
+    const typename Triangulation<dim, spacedim>::cell_iterator &cell,
+    const NonMatching::ImmersedSurfaceQuadrature<dim> &         quadrature,
+    const typename Mapping<dim, spacedim>::InternalDataBase &   internal_data,
+    dealii::internal::FEValuesImplementation::MappingRelatedData<dim, spacedim>
+      &output_data) const;
+
+  /**
    * @}
    */
 
@@ -1282,6 +1303,7 @@ public:
   friend class FEValues<dim, spacedim>;
   friend class FEFaceValues<dim, spacedim>;
   friend class FESubfaceValues<dim, spacedim>;
+  friend class NonMatching::FEImmersedSurfaceValues<dim>;
 };
 
 

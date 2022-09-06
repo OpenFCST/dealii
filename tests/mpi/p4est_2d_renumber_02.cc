@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2009 - 2020 by the deal.II authors
+// Copyright (C) 2009 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -107,7 +107,7 @@ test()
                 local_dof_indices.resize(cell->get_fe().dofs_per_cell);
                 cell->get_dof_indices(local_dof_indices);
                 for (unsigned int i = 0; i < cell->get_fe().dofs_per_cell; ++i)
-                  deallog << local_dof_indices[i] << " ";
+                  deallog << local_dof_indices[i] << ' ';
                 deallog << std::endl;
               }
       }

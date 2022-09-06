@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2021 by the deal.II authors
+// Copyright (C) 2021 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -37,12 +37,12 @@ test(const FiniteElement<dim, spacedim> &fe, const Quadrature<dim> &quad)
   for (const auto &point : quad.get_points())
     {
       deallog << point << " : " << std::endl;
-      for (unsigned int i = 0; i < fe.n_dofs_per_cell(); i++)
-        deallog << fe.shape_value(i, point) << " ";
-      for (unsigned int i = 0; i < fe.n_dofs_per_cell(); i++)
-        deallog << fe.shape_grad(i, point) << " ";
-      for (unsigned int i = 0; i < fe.n_dofs_per_cell(); i++)
-        deallog << fe.shape_grad_grad(i, point) << " ";
+      for (unsigned int i = 0; i < fe.n_dofs_per_cell(); ++i)
+        deallog << fe.shape_value(i, point) << ' ';
+      for (unsigned int i = 0; i < fe.n_dofs_per_cell(); ++i)
+        deallog << fe.shape_grad(i, point) << ' ';
+      for (unsigned int i = 0; i < fe.n_dofs_per_cell(); ++i)
+        deallog << fe.shape_grad_grad(i, point) << ' ';
       deallog << std::endl;
     }
   deallog << std::endl;
@@ -58,7 +58,7 @@ test_unit_support_points()
 {
   deallog << "Test support points for dim = " << dim
           << " and spacedim = " << spacedim << std::endl;
-  for (unsigned int degree = 0; degree < 3; ++degree)
+  for (unsigned int degree = 1; degree < 3; ++degree)
     {
       deallog << "approximation degree = " << degree << std::endl;
       FE_SimplexP_Bubbles<dim, spacedim> fe(degree);

@@ -107,7 +107,7 @@ test()
 
   deallog << "Testing " << dof.get_fe().get_name() << std::endl;
 
-  MappingQGeneric<dim>                  mapping(fe_degree);
+  MappingQ<dim>                         mapping(fe_degree);
   CUDAWrappers::MatrixFree<dim, Number> mf_data;
   const QGauss<1>                       quad(fe_degree + 1);
   typename CUDAWrappers::MatrixFree<dim, Number>::AdditionalData
@@ -124,7 +124,7 @@ test()
                  fe_degree,
                  Number,
                  LinearAlgebra::distributed::Vector<Number, MemorySpace::CUDA>>
-                                                                mf(mf_data, coef_size);
+    mf(mf_data, coef_size);
   LinearAlgebra::distributed::Vector<Number, MemorySpace::CUDA> in_dev;
   LinearAlgebra::distributed::Vector<Number, MemorySpace::CUDA> out_dev;
   mf_data.initialize_dof_vector(in_dev);

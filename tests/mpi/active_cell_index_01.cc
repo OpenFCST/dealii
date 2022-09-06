@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2010 - 2018 by the deal.II authors
+// Copyright (C) 2010 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -61,7 +61,7 @@ check()
   check(tria);
 
   if (Utilities::MPI::this_mpi_process(MPI_COMM_WORLD) == 0)
-    deallog << "OK for " << dim << "d" << std::endl;
+    deallog << "OK for " << dim << 'd' << std::endl;
 }
 
 

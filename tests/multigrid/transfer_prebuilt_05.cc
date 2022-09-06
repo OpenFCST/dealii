@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2019 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -72,7 +72,7 @@ check()
   deallog << "SRC Vector" << std::endl;
   Vector<double> src_level_0(mgdof.n_dofs(0));
   for (unsigned int i = 0; i < mgdof.n_dofs(0); ++i)
-    deallog << src_level_0(i) << " ";
+    deallog << src_level_0(i) << ' ';
   deallog << std::endl << std::endl;
 
   {
@@ -80,7 +80,7 @@ check()
     transfer_pb.prolongate(1, dst_level_1, src_level_0);
     deallog << "DST Vector" << std::endl;
     for (unsigned int i = 0; i < mgdof.n_dofs(1); ++i)
-      deallog << dst_level_1(i) << " ";
+      deallog << dst_level_1(i) << ' ';
     deallog << std::endl;
   }
 }

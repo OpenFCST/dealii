@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2018 - 2020 by the deal.II authors
+ * Copyright (C) 2018 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -141,8 +141,7 @@ namespace Step61
   void Coefficient<dim>::value_list(const std::vector<Point<dim>> &points,
                                     std::vector<Tensor<2, dim>> &  values) const
   {
-    Assert(points.size() == values.size(),
-           ExcDimensionMismatch(points.size(), values.size()));
+    AssertDimension(points.size(), values.size());
     for (unsigned int p = 0; p < points.size(); ++p)
       values[p] = unit_symmetric_tensor<dim>();
   }
@@ -522,7 +521,7 @@ namespace Step61
 
             for (unsigned int q = 0; q < n_face_q_points; ++q)
               {
-                const Tensor<1, dim> normal = fe_face_values.normal_vector(q);
+                const Tensor<1, dim> &normal = fe_face_values.normal_vector(q);
 
                 for (unsigned int i = 0; i < dofs_per_cell_dgrt; ++i)
                   {
@@ -769,7 +768,7 @@ namespace Step61
 
             for (unsigned int q = 0; q < n_face_q_points; ++q)
               {
-                const Tensor<1, dim> normal = fe_face_values.normal_vector(q);
+                const Tensor<1, dim> &normal = fe_face_values.normal_vector(q);
 
                 for (unsigned int i = 0; i < dofs_per_cell_dgrt; ++i)
                   {
@@ -939,7 +938,7 @@ namespace Step61
                 const Tensor<1, dim> true_velocity =
                   exact_velocity.value(fe_face_values_dgrt.quadrature_point(q));
 
-                const Tensor<1, dim> normal =
+                const Tensor<1, dim> &normal =
                   fe_face_values_dgrt.normal_vector(q);
 
                 L2_err_flux_face_sqr_local +=

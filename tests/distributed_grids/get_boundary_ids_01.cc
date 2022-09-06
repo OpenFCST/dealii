@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -44,7 +44,7 @@ test()
         }
 
   for (const auto i : tria.get_boundary_ids())
-    deallog << i << " ";
+    deallog << i << ' ';
   deallog << std::endl;
 }
 

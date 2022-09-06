@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -47,7 +47,7 @@ test()
   GridGenerator::subdivided_hyper_cube(tria, 4);
 
   hp::FECollection<dim> fe{FE_Q<2>(degree), FE_Q<2>(degree)};
-  MappingQGeneric<dim>  mapping(1);
+  MappingQ<dim>         mapping(1);
   QGauss<dim>           quadrature(degree + 1);
 
   DoFHandler<dim> dof_handler(tria);
@@ -129,7 +129,7 @@ test()
       std::sort(i.begin(), i.end());
 
       for (const auto &j : i)
-        deallog << j << " ";
+        deallog << j << ' ';
       deallog << std::endl;
     }
 
@@ -138,7 +138,7 @@ test()
     {
       std::sort(i.begin(), i.end());
       for (const auto &j : i)
-        deallog << j.first << "@" << j.second << "   ";
+        deallog << j.first << '@' << j.second << "   ";
       deallog << std::endl;
     }
 
@@ -149,7 +149,7 @@ test()
         {
           std::sort(i.begin(), i.end());
           for (const auto &j : i)
-            deallog << j.first << "@" << j.second << "   ";
+            deallog << j.first << '@' << j.second << "   ";
           deallog << std::endl;
         }
     }

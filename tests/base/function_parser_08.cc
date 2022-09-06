@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2018 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -85,7 +85,7 @@ test2()
   Assert(c == result[1], ExcInternalError());
 
   // Output the evaluated function
-  deallog << "Function '" << expressions[0] << "," << expressions[1] << "'"
+  deallog << "Function '" << expressions[0] << ',' << expressions[1] << "'"
           << " @ " << point << " is " << result << std::endl;
 }
 

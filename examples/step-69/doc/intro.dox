@@ -21,7 +21,7 @@ research computations you might want to consider exploring a corresponding
 implementation of a second-order accurate scheme</a> that uses <i>convex
 limiting</i> techniques, and strong stability-preserving (SSP) time
 integration, see @cite GuermondEtAl2018
-(<a href="https://conservation-laws.43-1.org/">website</a>).
+(<a href="https://conservation-laws.org/">website</a>).
 
 @dealiiTutorialDOI{10.5281/zenodo.3698223,https://zenodo.org/badge/DOI/10.5281/zenodo.3698223.svg}
 
@@ -254,8 +254,8 @@ advance the solution. This leaves very little reason to use vector-valued
 finite element spaces both in theory and/or practice.
 
 We will use the usual Lagrange finite elements: let $\{\mathbf{x}_i\}_{i \in
-\mathcal{V}}$ denote the set of all support points (see @ref GlossSupport "this
-glossary entry"), where $\mathbf{x}_i \in \mathbb{R}^d$. Then each index $i \in
+\mathcal{V}}$ denote the set of all support points (see @ref GlossSupport "this glossary entry"),
+where $\mathbf{x}_i \in \mathbb{R}^d$. Then each index $i \in
 \mathcal{V}$ uniquely identifies a support point $\mathbf{x}_i$, as well as a
 scalar-valued shape function $\phi_i$. With this notation at hand we can define
 the (explicit time stepping) scheme as:

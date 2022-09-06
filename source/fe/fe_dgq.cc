@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2001 - 2020 by the deal.II authors
+// Copyright (C) 2001 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -330,6 +330,7 @@ FE_DGQ<dim, spacedim>::get_interpolation_matrix(
       if (std::fabs(interpolation_matrix(i, j)) < 1e-15)
         interpolation_matrix(i, j) = 0.;
 
+#ifdef DEBUG
   // make sure that the row sum of
   // each of the matrices is 1 at
   // this point. this must be so
@@ -344,6 +345,7 @@ FE_DGQ<dim, spacedim>::get_interpolation_matrix(
       Assert(std::fabs(sum - 1) < 5e-14 * std::max(this->degree, 1U) * dim,
              ExcInternalError());
     }
+#endif
 }
 
 
@@ -859,11 +861,11 @@ FE_DGQArbitraryNodes<dim, spacedim>::get_name() const
   Assert(polynomial_space != nullptr, ExcInternalError());
   std::vector<unsigned int> lexicographic =
     polynomial_space->get_numbering_inverse();
-  for (unsigned int j = 0; j <= this->degree; j++)
+  for (unsigned int j = 0; j <= this->degree; ++j)
     points[j] = this->unit_support_points[lexicographic[j]][0];
 
   // Check whether the support points are equidistant.
-  for (unsigned int j = 0; j <= this->degree; j++)
+  for (unsigned int j = 0; j <= this->degree; ++j)
     if (std::abs(points[j] - static_cast<double>(j) / this->degree) > 1e-15)
       {
         equidistant = false;
@@ -887,7 +889,7 @@ FE_DGQArbitraryNodes<dim, spacedim>::get_name() const
   // Check whether the support points come from QGaussLobatto.
   const QGaussLobatto<1> points_gl(this->degree + 1);
   bool                   gauss_lobatto = true;
-  for (unsigned int j = 0; j <= this->degree; j++)
+  for (unsigned int j = 0; j <= this->degree; ++j)
     if (points[j] != points_gl.point(j)(0))
       {
         gauss_lobatto = false;
@@ -904,7 +906,7 @@ FE_DGQArbitraryNodes<dim, spacedim>::get_name() const
   // Check whether the support points come from QGauss.
   const QGauss<1> points_g(this->degree + 1);
   bool            gauss = true;
-  for (unsigned int j = 0; j <= this->degree; j++)
+  for (unsigned int j = 0; j <= this->degree; ++j)
     if (points[j] != points_g.point(j)(0))
       {
         gauss = false;
@@ -921,7 +923,7 @@ FE_DGQArbitraryNodes<dim, spacedim>::get_name() const
   // Check whether the support points come from QGauss.
   const QGaussLog<1> points_glog(this->degree + 1);
   bool               gauss_log = true;
-  for (unsigned int j = 0; j <= this->degree; j++)
+  for (unsigned int j = 0; j <= this->degree; ++j)
     if (points[j] != points_glog.point(j)(0))
       {
         gauss_log = false;

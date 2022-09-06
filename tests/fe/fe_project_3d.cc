@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -190,8 +190,9 @@ VectorFunction<3>::gradient(const Point<3> &   p,
   return val;
 }
 
-void create_tria(Triangulation<3> &triangulation,
-                 const Point<3> *  vertices_parallelograms)
+void
+create_tria(Triangulation<3> &triangulation,
+            const Point<3> *  vertices_parallelograms)
 {
   const std::vector<Point<3>> vertices(&vertices_parallelograms[0],
                                        &vertices_parallelograms[n_vertices]);
@@ -247,7 +248,7 @@ test(const FiniteElement<dim> &fe,
   const unsigned int               n_q_points      = quadrature.size();
   const unsigned int               n_face_q_points = face_quadrature.size();
   // MappingQ<dim> mapping(2);
-  MappingQGeneric<dim>                                        mapping(1);
+  MappingQ<dim>                                               mapping(1);
   std::vector<double>                                         div_v(n_q_points);
   std::vector<typename FEValuesViews::Vector<dim>::curl_type> curl_v(
     n_q_points);

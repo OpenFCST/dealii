@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2010 - 2019 by the deal.II authors
+// Copyright (C) 2010 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -90,7 +90,7 @@ public:
       const bool   invert_diagonal = true,
       const bool   same_diagonal   = false,
       const typename PreconditionBlockBase<InverseNumberType>::Inversion
-                   inversion = PreconditionBlockBase<InverseNumberType>::gauss_jordan,
+        inversion = PreconditionBlockBase<InverseNumberType>::gauss_jordan,
       const double threshold         = 0.,
       VectorType * temp_ghost_vector = nullptr);
 

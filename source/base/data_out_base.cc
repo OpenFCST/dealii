@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -16,7 +16,7 @@
 
 // TODO: Do neighbors for dx and povray smooth triangles
 
-//////////////////////////////////////////////////////////////////////
+//--------------------------------------------------------------------
 // Remarks on the implementations
 //
 // Variable names: in most functions, variable names have been
@@ -29,11 +29,12 @@
 //
 // d1, d2, di Multiplicators for ii to find positions in the
 //    array of nodes.
-//////////////////////////////////////////////////////////////////////
+//--------------------------------------------------------------------
 
 #include <deal.II/base/data_out_base.h>
 #include <deal.II/base/memory_consumption.h>
 #include <deal.II/base/mpi.h>
+#include <deal.II/base/mpi_large_count.h>
 #include <deal.II/base/parameter_handler.h>
 #include <deal.II/base/thread_management.h>
 #include <deal.II/base/utilities.h>
@@ -42,6 +43,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdint>
 #include <cstring>
 #include <ctime>
 #include <fstream>
@@ -49,9 +51,6 @@
 #include <memory>
 #include <set>
 #include <sstream>
-
-// we use uint32_t and uint8_t below, which are declared here:
-#include <cstdint>
 #include <vector>
 
 #ifdef DEAL_II_WITH_ZLIB
@@ -62,8 +61,18 @@
 #  include <hdf5.h>
 #endif
 
-DEAL_II_NAMESPACE_OPEN
+DEAL_II_DISABLE_EXTRA_DIAGNOSTICS
+#include <boost/iostreams/copy.hpp>
+#include <boost/iostreams/device/back_inserter.hpp>
+#include <boost/iostreams/filtering_stream.hpp>
+#ifdef DEAL_II_WITH_ZLIB
+#  include <boost/iostreams/filter/zlib.hpp>
+#endif
+DEAL_II_ENABLE_EXTRA_DIAGNOSTICS
 
+
+
+DEAL_II_NAMESPACE_OPEN
 
 // we need the following exception from a global function, so can't declare it
 // in the usual way inside a class
@@ -81,28 +90,52 @@ namespace
 {
 #ifdef DEAL_II_WITH_ZLIB
   /**
-   * Convert between the enum specified inside VtkFlags and the preprocessor
-   * constant defined by zlib.
+   * Convert between the CompressionLevel enum (used inside VtkFlags
+   * for example) and the preprocessor constant defined by zlib.
    */
   int
-  get_zlib_compression_level(
-    const DataOutBase::VtkFlags::ZlibCompressionLevel level)
+  get_zlib_compression_level(const DataOutBase::CompressionLevel level)
   {
     switch (level)
       {
-        case (DataOutBase::VtkFlags::no_compression):
+        case (DataOutBase::CompressionLevel::no_compression):
           return Z_NO_COMPRESSION;
-        case (DataOutBase::VtkFlags::best_speed):
+        case (DataOutBase::CompressionLevel::best_speed):
           return Z_BEST_SPEED;
-        case (DataOutBase::VtkFlags::best_compression):
+        case (DataOutBase::CompressionLevel::best_compression):
           return Z_BEST_COMPRESSION;
-        case (DataOutBase::VtkFlags::default_compression):
+        case (DataOutBase::CompressionLevel::default_compression):
           return Z_DEFAULT_COMPRESSION;
         default:
           Assert(false, ExcNotImplemented());
           return Z_NO_COMPRESSION;
       }
   }
+
+#  ifdef DEAL_II_WITH_MPI
+  /**
+   * Convert between the CompressionLevel enum and the preprocessor
+   * constant defined by boost::iostreams::zlib.
+   */
+  int
+  get_boost_zlib_compression_level(const DataOutBase::CompressionLevel level)
+  {
+    switch (level)
+      {
+        case (DataOutBase::CompressionLevel::no_compression):
+          return boost::iostreams::zlib::no_compression;
+        case (DataOutBase::CompressionLevel::best_speed):
+          return boost::iostreams::zlib::best_speed;
+        case (DataOutBase::CompressionLevel::best_compression):
+          return boost::iostreams::zlib::best_compression;
+        case (DataOutBase::CompressionLevel::default_compression):
+          return boost::iostreams::zlib::default_compression;
+        default:
+          Assert(false, ExcNotImplemented());
+          return boost::iostreams::zlib::no_compression;
+      }
+  }
+#  endif
 
   /**
    * Do a zlib compression followed by a base64 encoding of the given data. The
@@ -116,15 +149,30 @@ namespace
   {
     if (data.size() != 0)
       {
+        const std::size_t uncompressed_size = (data.size() * sizeof(T));
+
+        // While zlib's compress2 uses unsigned long (which is 64bits
+        // on Linux), the vtu compression header stores the block size
+        // as an std::uint32_t (see below). While we could implement
+        // writing several smaller blocks, we haven't done that. Let's
+        // trigger an error for the user instead:
+        AssertThrow(uncompressed_size <=
+                      std::numeric_limits<std::uint32_t>::max(),
+                    ExcNotImplemented());
+
         // allocate a buffer for compressing data and do so
-        auto compressed_data_length = compressBound(data.size() * sizeof(T));
+        auto compressed_data_length = compressBound(uncompressed_size);
+        AssertThrow(compressed_data_length <=
+                      std::numeric_limits<std::uint32_t>::max(),
+                    ExcNotImplemented());
+
         std::vector<unsigned char> compressed_data(compressed_data_length);
 
         int err =
           compress2(&compressed_data[0],
                     &compressed_data_length,
                     reinterpret_cast<const Bytef *>(data.data()),
-                    data.size() * sizeof(T),
+                    uncompressed_size,
                     get_zlib_compression_level(flags.compression_level));
         (void)err;
         Assert(err == Z_OK, ExcInternalError());
@@ -133,23 +181,44 @@ namespace
         compressed_data.resize(compressed_data_length);
 
         // now encode the compression header
-        const uint32_t compression_header[4] = {
-          1,                                              /* number of blocks */
-          static_cast<uint32_t>(data.size() * sizeof(T)), /* size of block */
-          static_cast<uint32_t>(data.size() *
-                                sizeof(T)), /* size of last block */
-          static_cast<uint32_t>(
+        const std::uint32_t compression_header[4] = {
+          1,                                             /* number of blocks */
+          static_cast<std::uint32_t>(uncompressed_size), /* size of block */
+          static_cast<std::uint32_t>(
+            uncompressed_size), /* size of last block */
+          static_cast<std::uint32_t>(
             compressed_data_length)}; /* list of compressed sizes of blocks */
 
         const auto header_start =
           reinterpret_cast<const unsigned char *>(&compression_header[0]);
 
         output_stream << Utilities::encode_base64(
-                           {header_start, header_start + 4 * sizeof(uint32_t)})
+                           {header_start,
+                            header_start + 4 * sizeof(std::uint32_t)})
                       << Utilities::encode_base64(compressed_data);
       }
   }
 #endif
+
+
+  /**
+   * The header in binary format that the parallel intermediate files
+   * start with.
+   *
+   * @note We are using std::uint64_t for all variables for simplicity below,
+   * so that we don't have to worry about packing/data member alignment
+   * by the compiler.
+   */
+  struct ParallelIntermediateHeader
+  {
+    std::uint64_t magic;
+    std::uint64_t version;
+    std::uint64_t compression;
+    std::uint64_t dimension;
+    std::uint64_t space_dimension;
+    std::uint64_t n_ranks;
+    std::uint64_t n_patches;
+  };
 } // namespace
 
 
@@ -496,18 +565,22 @@ namespace DataOutBase
 
 
   void
-  DataOutFilter::write_cell_single(const unsigned int index,
-                                   const unsigned int start,
-                                   const unsigned int n_points)
+  DataOutFilter::write_cell_single(const unsigned int   index,
+                                   const unsigned int   start,
+                                   const unsigned int   n_points,
+                                   const ReferenceCell &reference_cell)
   {
     ++num_cells;
 
     const unsigned int base_entry = index * n_points;
 
+    static const std::array<unsigned int, 5> table = {{0, 1, 3, 2, 4}};
+
     for (unsigned int i = 0; i < n_points; ++i)
-      {
-        internal_add_cell(base_entry + i, start + i);
-      }
+      internal_add_cell(base_entry + i,
+                        start + (reference_cell == ReferenceCells::Pyramid ?
+                                   table[i] :
+                                   i));
   }
 
 
@@ -695,20 +768,35 @@ namespace
   //----------------------------------------------------------------------//
   // Auxiliary functions
   //----------------------------------------------------------------------//
-  // For a given patch, compute the node interpolating the corner nodes linearly
-  // at the point (xstep, ystep, zstep)*1./n_subdivisions. If the points are
+
+  // For a given patch that corresponds to a hypercube cell, compute the
+  // location of a node interpolating the corner nodes linearly
+  // at the point lattice_location/n_subdivisions where lattice_location
+  // is a dim-dimensional integer vector. If the points are
   // saved in the patch.data member, return the saved point instead.
   template <int dim, int spacedim>
   inline Point<spacedim>
-  compute_hypercube_node(const DataOutBase::Patch<dim, spacedim> &patch,
-                         const unsigned int                       xstep,
-                         const unsigned int                       ystep,
-                         const unsigned int                       zstep,
-                         const unsigned int n_subdivisions)
+  get_equispaced_location(
+    const DataOutBase::Patch<dim, spacedim> &  patch,
+    const std::initializer_list<unsigned int> &lattice_location,
+    const unsigned int                         n_subdivisions)
   {
-    Point<spacedim> node;
+    // This function only makes sense when called on hypercube cells
+    Assert(patch.reference_cell == ReferenceCells::get_hypercube<dim>(),
+           ExcInternalError());
+
+    Assert(lattice_location.size() == dim, ExcInternalError());
+
+    const unsigned int xstep = (dim > 0 ? *(lattice_location.begin() + 0) : 0);
+    const unsigned int ystep = (dim > 1 ? *(lattice_location.begin() + 1) : 0);
+    const unsigned int zstep = (dim > 2 ? *(lattice_location.begin() + 2) : 0);
+
+    // If the patch stores the locations of nodes (rather than of only the
+    // vertices), then obtain the location by direct lookup.
     if (patch.points_are_available)
       {
+        Assert(n_subdivisions == patch.n_subdivisions, ExcNotImplemented());
+
         unsigned int point_no = 0;
         switch (dim)
           {
@@ -731,20 +819,24 @@ namespace
             default:
               Assert(false, ExcNotImplemented());
           }
+        Point<spacedim> node;
         for (unsigned int d = 0; d < spacedim; ++d)
           node[d] = patch.data(patch.data.size(0) - spacedim + d, point_no);
+        return node;
       }
     else
+      // The patch does not store node locations, so we have to interpolate
+      // between its vertices:
       {
         if (dim == 0)
-          node = patch.vertices[0];
+          return patch.vertices[0];
         else
           {
             // perform a dim-linear interpolation
-            const double stepsize = 1. / n_subdivisions,
-                         xfrac    = xstep * stepsize;
+            const double stepsize = 1. / n_subdivisions;
+            const double xfrac    = xstep * stepsize;
 
-            node =
+            Point<spacedim> node =
               (patch.vertices[1] * xfrac) + (patch.vertices[0] * (1 - xfrac));
             if (dim > 1)
               {
@@ -766,9 +858,9 @@ namespace
                             zfrac;
                   }
               }
+            return node;
           }
       }
-    return node;
   }
 
   // For a given patch, compute the nodes for arbitrary (non-hypercube) cells.
@@ -776,30 +868,46 @@ namespace
   // instead.
   template <int dim, int spacedim>
   inline Point<spacedim>
-  compute_arbitrary_node(const DataOutBase::Patch<dim, spacedim> &patch,
-                         const unsigned int                       point_no)
+  get_node_location(const DataOutBase::Patch<dim, spacedim> &patch,
+                    const unsigned int                       node_index)
   {
-    Point<spacedim> node;
+    // Due to a historical accident, we are using a different indexing
+    // for pyramids in this file than we do where we create patches.
+    // So translate if necessary.
+    unsigned int point_no_actual = node_index;
+    if (patch.reference_cell == ReferenceCells::Pyramid)
+      {
+        AssertDimension(patch.n_subdivisions, 1);
 
+        static const std::array<unsigned int, 5> table = {{0, 1, 3, 2, 4}};
+        point_no_actual                                = table[node_index];
+      }
+
+    // If the patch stores the locations of nodes (rather than of only the
+    // vertices), then obtain the location by direct lookup.
     if (patch.points_are_available)
       {
+        Point<spacedim> node;
         for (unsigned int d = 0; d < spacedim; ++d)
-          node[d] = patch.data(patch.data.size(0) - spacedim + d, point_no);
+          node[d] =
+            patch.data(patch.data.size(0) - spacedim + d, point_no_actual);
         return node;
       }
     else
+      // The patch does not store node locations, so we have to interpolate
+      // between its vertices. This isn't currently implemented for anything
+      // other than one subdivision, but would go here.
+      //
+      // For n_subdivisions==1, the locations are simply those of vertices, so
+      // get the information from there.
       {
         AssertDimension(patch.n_subdivisions, 1);
-        Assert(
-          patch.reference_cell != ReferenceCells::Pyramid,
-          ExcMessage(
-            "Pyramids need different ordering of the vertices, which is not implemented yet here."));
 
-        node = patch.vertices[point_no];
+        return patch.vertices[point_no_actual];
       }
-
-    return node;
   }
+
+
 
   /**
    * Given (i,j,k) coordinates within the Lagrange quadrilateral, return an
@@ -821,7 +929,7 @@ namespace
 
     if (nbdy == 2) // Vertex DOF
       { // ijk is a corner node. Return the proper index (somewhere in [0,3]):
-        return (i ? (j ? 2 : 1) : (j ? 3 : 0));
+        return (i != 0u ? (j != 0u ? 2 : 1) : (j != 0u ? 3 : 0));
       }
 
     int offset = 4;
@@ -829,13 +937,15 @@ namespace
       {
         if (!ibdy)
           { // On i axis
-            return (i - 1) + (j ? order[0] - 1 + order[1] - 1 : 0) + offset;
+            return (i - 1) + (j != 0u ? order[0] - 1 + order[1] - 1 : 0) +
+                   offset;
           }
 
         if (!jbdy)
           { // On j axis
             return (j - 1) +
-                   (i ? order[0] - 1 : 2 * (order[0] - 1) + order[1] - 1) +
+                   (i != 0u ? order[0] - 1 :
+                              2 * (order[0] - 1) + order[1] - 1) +
                    offset;
           }
       }
@@ -844,6 +954,8 @@ namespace
     // nbdy == 0: Face DOF
     return offset + (i - 1) + (order[0] - 1) * ((j - 1));
   }
+
+
 
   /**
    * Given (i,j,k) coordinates within the Lagrange hexahedron, return an
@@ -866,7 +978,8 @@ namespace
 
     if (nbdy == 3) // Vertex DOF
       { // ijk is a corner node. Return the proper index (somewhere in [0,7]):
-        return (i ? (j ? 2 : 1) : (j ? 3 : 0)) + (k ? 4 : 0);
+        return (i != 0u ? (j != 0u ? 2 : 1) : (j != 0u ? 3 : 0)) +
+               (k != 0u ? 4 : 0);
       }
 
     int offset = 8;
@@ -874,18 +987,21 @@ namespace
       {
         if (!ibdy)
           { // On i axis
-            return (i - 1) + (j ? order[0] - 1 + order[1] - 1 : 0) +
-                   (k ? 2 * (order[0] - 1 + order[1] - 1) : 0) + offset;
+            return (i - 1) + (j != 0u ? order[0] - 1 + order[1] - 1 : 0) +
+                   (k != 0u ? 2 * (order[0] - 1 + order[1] - 1) : 0) + offset;
           }
         if (!jbdy)
           { // On j axis
             return (j - 1) +
-                   (i ? order[0] - 1 : 2 * (order[0] - 1) + order[1] - 1) +
-                   (k ? 2 * (order[0] - 1 + order[1] - 1) : 0) + offset;
+                   (i != 0u ? order[0] - 1 :
+                              2 * (order[0] - 1) + order[1] - 1) +
+                   (k != 0u ? 2 * (order[0] - 1 + order[1] - 1) : 0) + offset;
           }
         // !kbdy, On k axis
         offset += 4 * (order[0] - 1) + 4 * (order[1] - 1);
-        return (k - 1) + (order[2] - 1) * (i ? (j ? 3 : 1) : (j ? 2 : 0)) +
+        return (k - 1) +
+               (order[2] - 1) *
+                 (i != 0u ? (j != 0u ? 3 : 1) : (j != 0u ? 2 : 0)) +
                offset;
       }
 
@@ -895,18 +1011,18 @@ namespace
         if (ibdy) // On i-normal face
           {
             return (j - 1) + ((order[1] - 1) * (k - 1)) +
-                   (i ? (order[1] - 1) * (order[2] - 1) : 0) + offset;
+                   (i != 0u ? (order[1] - 1) * (order[2] - 1) : 0) + offset;
           }
         offset += 2 * (order[1] - 1) * (order[2] - 1);
         if (jbdy) // On j-normal face
           {
             return (i - 1) + ((order[0] - 1) * (k - 1)) +
-                   (j ? (order[2] - 1) * (order[0] - 1) : 0) + offset;
+                   (j != 0u ? (order[2] - 1) * (order[0] - 1) : 0) + offset;
           }
         offset += 2 * (order[2] - 1) * (order[0] - 1);
         // kbdy, On k-normal face
         return (i - 1) + ((order[0] - 1) * (j - 1)) +
-               (k ? (order[0] - 1) * (order[1] - 1) : 0) + offset;
+               (k != 0u ? (order[0] - 1) * (order[1] - 1) : 0) + offset;
       }
 
     // nbdy == 0: Body DOF
@@ -917,6 +1033,8 @@ namespace
            (order[0] - 1) * ((j - 1) + (order[1] - 1) * ((k - 1)));
   }
 
+
+
   int
   vtk_point_index_from_ijk(const unsigned,
                            const unsigned,
@@ -926,6 +1044,8 @@ namespace
     Assert(false, ExcNotImplemented());
     return 0;
   }
+
+
 
   int
   vtk_point_index_from_ijk(const unsigned,
@@ -938,6 +1058,7 @@ namespace
   }
 
 
+
   template <int dim, int spacedim>
   static void
   compute_sizes(const std::vector<DataOutBase::Patch<dim, spacedim>> &patches,
@@ -948,6 +1069,12 @@ namespace
     n_cells = 0;
     for (const auto &patch : patches)
       {
+        Assert(patch.reference_cell != ReferenceCells::Invalid,
+               ExcMessage(
+                 "The reference cell for this patch is set to 'Invalid', "
+                 "but that is clearly not a valid choice. Did you forget "
+                 "to set the reference cell for the patch?"));
+
         // The following formula doesn't hold for non-tensor products.
         if (patch.reference_cell == ReferenceCells::get_hypercube<dim>())
           {
@@ -962,6 +1089,8 @@ namespace
           }
       }
   }
+
+
 
   template <int dim, int spacedim>
   static void
@@ -1072,13 +1201,15 @@ namespace
      * @note All inheriting classes should implement this function.
      */
     void
-    write_cell_single(const unsigned int index,
-                      const unsigned int start,
-                      const unsigned int n_points)
+    write_cell_single(const unsigned int   index,
+                      const unsigned int   start,
+                      const unsigned int   n_points,
+                      const ReferenceCell &reference_cell)
     {
       (void)index;
       (void)start;
       (void)n_points;
+      (void)reference_cell;
 
       Assert(false,
              ExcMessage("The derived class you are using needs to "
@@ -1299,9 +1430,10 @@ namespace
      * Print vertices [start, start+n_points[
      */
     void
-    write_cell_single(const unsigned int index,
-                      const unsigned int start,
-                      const unsigned int n_points);
+    write_cell_single(const unsigned int   index,
+                      const unsigned int   start,
+                      const unsigned int   n_points,
+                      const ReferenceCell &reference_cell);
 
     /**
      * Write a high-order cell type, i.e., a Lagrange cell
@@ -1350,9 +1482,10 @@ namespace
      * Print vertices [start, start+n_points[
      */
     void
-    write_cell_single(const unsigned int index,
-                      const unsigned int start,
-                      const unsigned int n_points);
+    write_cell_single(const unsigned int   index,
+                      const unsigned int   start,
+                      const unsigned int   n_points,
+                      const ReferenceCell &reference_cell);
 
     /**
      * Write a high-order cell type, i.e., a Lagrange cell
@@ -1427,6 +1560,82 @@ namespace
 
 
 
+  // Separate these out to avoid an internal compiler error with intel 17
+  namespace DataOutBaseImplementation
+  {
+    /**
+     * Set up the node numbers for a given cell being written to an output
+     * stream.
+     */
+    template <int dim>
+    std::array<unsigned int, GeometryInfo<dim>::vertices_per_cell>
+    set_node_numbers(const unsigned int /*start*/,
+                     const unsigned int /*d1*/,
+                     const unsigned int /*d2*/,
+                     const unsigned int /*d3*/)
+    {
+      Assert(false, ExcInternalError());
+      return {};
+    }
+
+
+
+    template <>
+    std::array<unsigned int, GeometryInfo<1>::vertices_per_cell>
+    set_node_numbers<1>(const unsigned int start,
+                        const unsigned int d1,
+                        const unsigned int /*d2*/,
+                        const unsigned int /*d3*/)
+
+    {
+      std::array<unsigned int, GeometryInfo<1>::vertices_per_cell> nodes;
+      nodes[0] = start;
+      nodes[1] = start + d1;
+      return nodes;
+    }
+
+
+
+    template <>
+    std::array<unsigned int, GeometryInfo<2>::vertices_per_cell>
+    set_node_numbers<2>(const unsigned int start,
+                        const unsigned int d1,
+                        const unsigned int d2,
+                        const unsigned int /*d3*/)
+
+    {
+      std::array<unsigned int, GeometryInfo<2>::vertices_per_cell> nodes;
+      nodes[0] = start;
+      nodes[1] = start + d1;
+      nodes[2] = start + d2;
+      nodes[3] = start + d2 + d1;
+      return nodes;
+    }
+
+
+
+    template <>
+    std::array<unsigned int, GeometryInfo<3>::vertices_per_cell>
+    set_node_numbers<3>(const unsigned int start,
+                        const unsigned int d1,
+                        const unsigned int d2,
+                        const unsigned int d3)
+    {
+      std::array<unsigned int, GeometryInfo<3>::vertices_per_cell> nodes;
+      nodes[0] = start;
+      nodes[1] = start + d1;
+      nodes[2] = start + d2;
+      nodes[3] = start + d2 + d1;
+      nodes[4] = start + d3;
+      nodes[5] = start + d3 + d1;
+      nodes[6] = start + d3 + d2;
+      nodes[7] = start + d3 + d2 + d1;
+      return nodes;
+    }
+  } // namespace DataOutBaseImplementation
+
+
+
   template <int dim>
   void
   DXStream::write_cell(unsigned int,
@@ -1435,36 +1644,23 @@ namespace
                        unsigned int d2,
                        unsigned int d3)
   {
-    int nodes[1 << dim];
-    nodes[GeometryInfo<dim>::dx_to_deal[0]] = start;
-    if (dim >= 1)
-      {
-        nodes[GeometryInfo<dim>::dx_to_deal[1]] = start + d1;
-        if (dim >= 2)
-          {
-            // Add shifted line in y direction
-            nodes[GeometryInfo<dim>::dx_to_deal[2]] = start + d2;
-            nodes[GeometryInfo<dim>::dx_to_deal[3]] = start + d2 + d1;
-            if (dim >= 3)
-              {
-                // Add shifted quad in z direction
-                nodes[GeometryInfo<dim>::dx_to_deal[4]] = start + d3;
-                nodes[GeometryInfo<dim>::dx_to_deal[5]] = start + d3 + d1;
-                nodes[GeometryInfo<dim>::dx_to_deal[6]] = start + d3 + d2;
-                nodes[GeometryInfo<dim>::dx_to_deal[7]] = start + d3 + d2 + d1;
-              }
-          }
-      }
+    const auto nodes =
+      DataOutBaseImplementation::set_node_numbers<dim>(start, d1, d2, d3);
 
     if (flags.int_binary)
-      stream.write(reinterpret_cast<const char *>(nodes),
-                   (1 << dim) * sizeof(*nodes));
+      {
+        std::array<unsigned int, GeometryInfo<dim>::vertices_per_cell> temp;
+        for (unsigned int i = 0; i < nodes.size(); ++i)
+          temp[i] = nodes[GeometryInfo<dim>::dx_to_deal[i]];
+        stream.write(reinterpret_cast<const char *>(temp.data()),
+                     temp.size() * sizeof(temp[0]));
+      }
     else
       {
-        const unsigned int final = (1 << dim) - 1;
-        for (unsigned int i = 0; i < final; ++i)
-          stream << nodes[i] << '\t';
-        stream << nodes[final] << '\n';
+        for (unsigned int i = 0; i < nodes.size() - 1; ++i)
+          stream << nodes[GeometryInfo<dim>::dx_to_deal[i]] << '\t';
+        stream << nodes[GeometryInfo<dim>::dx_to_deal[nodes.size() - 1]]
+               << '\n';
       }
   }
 
@@ -1613,32 +1809,13 @@ namespace
                         unsigned int d2,
                         unsigned int d3)
   {
-    int nodes[1 << dim];
-    nodes[GeometryInfo<dim>::ucd_to_deal[0]] = start;
-    if (dim >= 1)
-      {
-        nodes[GeometryInfo<dim>::ucd_to_deal[1]] = start + d1;
-        if (dim >= 2)
-          {
-            // Add shifted line in y direction
-            nodes[GeometryInfo<dim>::ucd_to_deal[2]] = start + d2;
-            nodes[GeometryInfo<dim>::ucd_to_deal[3]] = start + d2 + d1;
-            if (dim >= 3)
-              {
-                // Add shifted quad in z direction
-                nodes[GeometryInfo<dim>::ucd_to_deal[4]] = start + d3;
-                nodes[GeometryInfo<dim>::ucd_to_deal[5]] = start + d3 + d1;
-                nodes[GeometryInfo<dim>::ucd_to_deal[6]] = start + d3 + d2;
-                nodes[GeometryInfo<dim>::ucd_to_deal[7]] = start + d3 + d2 + d1;
-              }
-          }
-      }
+    const auto nodes =
+      DataOutBaseImplementation::set_node_numbers<dim>(start, d1, d2, d3);
 
     // Write out all cells and remember that all indices must be shifted by one.
     stream << index + 1 << "\t0 " << ucd_cell_type[dim];
-    const unsigned int final = (1 << dim);
-    for (unsigned int i = 0; i < final; ++i)
-      stream << '\t' << nodes[i] + 1;
+    for (unsigned int i = 0; i < nodes.size(); ++i)
+      stream << '\t' << nodes[GeometryInfo<dim>::ucd_to_deal[i]] + 1;
     stream << '\n';
   }
 
@@ -1705,15 +1882,20 @@ namespace
   }
 
   void
-  VtkStream::write_cell_single(const unsigned int index,
-                               const unsigned int start,
-                               const unsigned int n_points)
+  VtkStream::write_cell_single(const unsigned int   index,
+                               const unsigned int   start,
+                               const unsigned int   n_points,
+                               const ReferenceCell &reference_cell)
   {
     (void)index;
 
+    static const std::array<unsigned int, 5> table = {{0, 1, 3, 2, 4}};
+
     stream << '\t' << n_points;
     for (unsigned int i = 0; i < n_points; ++i)
-      stream << '\t' << start + i;
+      stream << '\t'
+             << start +
+                  (reference_cell == ReferenceCells::Pyramid ? table[i] : i);
     stream << '\n';
   }
 
@@ -1813,19 +1995,25 @@ namespace
   }
 
   void
-  VtuStream::write_cell_single(const unsigned int index,
-                               const unsigned int start,
-                               const unsigned int n_points)
+  VtuStream::write_cell_single(const unsigned int   index,
+                               const unsigned int   start,
+                               const unsigned int   n_points,
+                               const ReferenceCell &reference_cell)
   {
     (void)index;
 
+    static const std::array<unsigned int, 5> table = {{0, 1, 3, 2, 4}};
+
 #if !defined(DEAL_II_WITH_ZLIB)
     for (unsigned int i = 0; i < n_points; ++i)
-      stream << '\t' << start + i;
+      stream << '\t'
+             << start +
+                  (reference_cell == ReferenceCells::Pyramid ? table[i] : i);
     stream << '\n';
 #else
     for (unsigned int i = 0; i < n_points; ++i)
-      cells.push_back(start + i);
+      cells.push_back(
+        start + (reference_cell == ReferenceCells::Pyramid ? table[i] : i));
 #endif
   }
 
@@ -1878,7 +2066,7 @@ namespace
 
 namespace DataOutBase
 {
-  const unsigned int Deal_II_IntermediateFlags::format_version = 3;
+  const unsigned int Deal_II_IntermediateFlags::format_version = 4;
 
 
   template <int dim, int spacedim>
@@ -1894,7 +2082,7 @@ namespace DataOutBase
     : patch_index(no_neighbor)
     , n_subdivisions(1)
     , points_are_available(false)
-    , reference_cell(ReferenceCells::get_hypercube<dim>())
+    , reference_cell(ReferenceCells::Invalid)
   // all the other data has a constructor of its own, except for the "neighbors"
   // field, which we set to invalid values.
   {
@@ -1911,6 +2099,9 @@ namespace DataOutBase
   bool
   Patch<dim, spacedim>::operator==(const Patch &patch) const
   {
+    if (reference_cell != patch.reference_cell)
+      return false;
+
     // TODO: make tolerance relative
     const double epsilon = 3e-16;
     for (const unsigned int i : GeometryInfo<dim>::vertex_indices())
@@ -1957,7 +2148,8 @@ namespace DataOutBase
             MemoryConsumption::memory_consumption(patch_index) +
             MemoryConsumption::memory_consumption(n_subdivisions) +
             MemoryConsumption::memory_consumption(data) +
-            MemoryConsumption::memory_consumption(points_are_available));
+            MemoryConsumption::memory_consumption(points_are_available) +
+            sizeof(reference_cell));
   }
 
 
@@ -1990,13 +2182,16 @@ namespace DataOutBase
     Patch<0, spacedim>::no_neighbor};
 
   template <int spacedim>
-  unsigned int Patch<0, spacedim>::n_subdivisions = 1;
+  const unsigned int Patch<0, spacedim>::n_subdivisions = 1;
+
+  template <int spacedim>
+  const ReferenceCell Patch<0, spacedim>::reference_cell =
+    ReferenceCells::Vertex;
 
   template <int spacedim>
   Patch<0, spacedim>::Patch()
     : patch_index(no_neighbor)
     , points_are_available(false)
-    , reference_cell(ReferenceCells::get_hypercube<0>())
   {
     Assert(spacedim <= 3, ExcNotImplemented());
   }
@@ -2050,7 +2245,8 @@ namespace DataOutBase
 
 
   template <int spacedim>
-  void Patch<0, spacedim>::swap(Patch<0, spacedim> &other_patch)
+  void
+  Patch<0, spacedim>::swap(Patch<0, spacedim> &other_patch)
   {
     std::swap(vertices, other_patch.vertices);
     std::swap(patch_index, other_patch.patch_index);
@@ -2531,16 +2727,18 @@ namespace DataOutBase
 
 
 
-  VtkFlags::VtkFlags(const double                         time,
-                     const unsigned int                   cycle,
-                     const bool                           print_date_and_time,
-                     const VtkFlags::ZlibCompressionLevel compression_level,
-                     const bool write_higher_order_cells)
+  VtkFlags::VtkFlags(const double           time,
+                     const unsigned int     cycle,
+                     const bool             print_date_and_time,
+                     const CompressionLevel compression_level,
+                     const bool             write_higher_order_cells,
+                     const std::map<std::string, std::string> &physical_units)
     : time(time)
     , cycle(cycle)
     , print_date_and_time(print_date_and_time)
     , compression_level(compression_level)
     , write_higher_order_cells(write_higher_order_cells)
+    , physical_units(physical_units)
   {}
 
 
@@ -2654,6 +2852,8 @@ namespace DataOutBase
     Assert(dim <= 3, ExcNotImplemented());
     unsigned int count = 0;
 
+    static const std::array<unsigned int, 5> table = {{0, 1, 3, 2, 4}};
+
     for (const auto &patch : patches)
       {
         // special treatment of non-hypercube cells
@@ -2661,24 +2861,53 @@ namespace DataOutBase
           {
             for (unsigned int point_no = 0; point_no < patch.data.n_cols();
                  ++point_no)
-              out.write_point(count++, compute_arbitrary_node(patch, point_no));
+              out.write_point(count++,
+                              get_node_location(patch,
+                                                (patch.reference_cell ==
+                                                     ReferenceCells::Pyramid ?
+                                                   table[point_no] :
+                                                   point_no)));
           }
         else
           {
             const unsigned int n_subdivisions = patch.n_subdivisions;
             const unsigned int n              = n_subdivisions + 1;
-            // Length of loops in all dimensions. If a dimension is not used, a
-            // loop of length one will do the job.
-            const unsigned int n1 = (dim > 0) ? n : 1;
-            const unsigned int n2 = (dim > 1) ? n : 1;
-            const unsigned int n3 = (dim > 2) ? n : 1;
 
-            for (unsigned int i3 = 0; i3 < n3; ++i3)
-              for (unsigned int i2 = 0; i2 < n2; ++i2)
-                for (unsigned int i1 = 0; i1 < n1; ++i1)
-                  out.write_point(
-                    count++,
-                    compute_hypercube_node(patch, i1, i2, i3, n_subdivisions));
+            switch (dim)
+              {
+                case 0:
+                  out.write_point(count++,
+                                  get_equispaced_location(patch,
+                                                          {},
+                                                          n_subdivisions));
+                  break;
+                case 1:
+                  for (unsigned int i1 = 0; i1 < n; ++i1)
+                    out.write_point(count++,
+                                    get_equispaced_location(patch,
+                                                            {i1},
+                                                            n_subdivisions));
+                  break;
+                case 2:
+                  for (unsigned int i2 = 0; i2 < n; ++i2)
+                    for (unsigned int i1 = 0; i1 < n; ++i1)
+                      out.write_point(count++,
+                                      get_equispaced_location(patch,
+                                                              {i1, i2},
+                                                              n_subdivisions));
+                  break;
+                case 3:
+                  for (unsigned int i3 = 0; i3 < n; ++i3)
+                    for (unsigned int i2 = 0; i2 < n; ++i2)
+                      for (unsigned int i1 = 0; i1 < n; ++i1)
+                        out.write_point(count++,
+                                        get_equispaced_location(
+                                          patch, {i1, i2, i3}, n_subdivisions));
+                  break;
+
+                default:
+                  Assert(false, ExcInternalError());
+              }
           }
       }
     out.flush_points();
@@ -2698,7 +2927,8 @@ namespace DataOutBase
           {
             out.write_cell_single(count++,
                                   first_vertex_of_patch,
-                                  patch.data.n_cols());
+                                  patch.data.n_cols(),
+                                  patch.reference_cell);
             first_vertex_of_patch += patch.data.n_cols();
           }
         else
@@ -2860,11 +3090,12 @@ namespace DataOutBase
      * camera_horizontal, necessary for the correct alignment of the
      * later images), and the focus of the camera (float camera_focus).
      */
-    Point<2> svg_project_point(Point<3> point,
-                               Point<3> camera_position,
-                               Point<3> camera_direction,
-                               Point<3> camera_horizontal,
-                               float    camera_focus)
+    Point<2>
+    svg_project_point(Point<3> point,
+                      Point<3> camera_position,
+                      Point<3> camera_direction,
+                      Point<3> camera_horizontal,
+                      float    camera_focus)
     {
       Point<3> camera_vertical;
       camera_vertical[0] = camera_horizontal[1] * camera_direction[2] -
@@ -2917,7 +3148,8 @@ namespace DataOutBase
      * Function to compute the gradient parameters for a triangle with given
      * values for the vertices.
      */
-    Point<6> svg_get_gradient_parameters(Point<3> points[])
+    Point<6>
+    svg_get_gradient_parameters(Point<3> points[])
     {
       Point<3> v_min, v_max, v_inter;
 
@@ -2968,13 +3200,13 @@ namespace DataOutBase
           A[1][1]     = temp;
         }
 
-      for (unsigned int k = 0; k < 1; k++)
+      for (unsigned int k = 0; k < 1; ++k)
         {
-          for (unsigned int i = k + 1; i < 2; i++)
+          for (unsigned int i = k + 1; i < 2; ++i)
             {
               x = A[i][k] / A[k][k];
 
-              for (unsigned int j = k + 1; j < 2; j++)
+              for (unsigned int j = k + 1; j < 2; ++j)
                 A[i][j] = A[i][j] - A[k][j] * x;
 
               b[i] = b[i] - b[k] * x;
@@ -2987,7 +3219,7 @@ namespace DataOutBase
         {
           sum = b[i];
 
-          for (unsigned int j = i + 1; j < 2; j++)
+          for (unsigned int j = i + 1; j < 2; ++j)
             sum = sum - A[i][j] * b[j];
 
           b[i] = sum / A[i][i];
@@ -3026,13 +3258,13 @@ namespace DataOutBase
           A[1][1]     = temp;
         }
 
-      for (unsigned int k = 0; k < 1; k++)
+      for (unsigned int k = 0; k < 1; ++k)
         {
-          for (unsigned int i = k + 1; i < 2; i++)
+          for (unsigned int i = k + 1; i < 2; ++i)
             {
               x = A[i][k] / A[k][k];
 
-              for (unsigned int j = k + 1; j < 2; j++)
+              for (unsigned int j = k + 1; j < 2; ++j)
                 A[i][j] = A[i][j] - A[k][j] * x;
 
               b[i] = b[i] - b[k] * x;
@@ -3045,7 +3277,7 @@ namespace DataOutBase
         {
           sum = b[i];
 
-          for (unsigned int j = i + 1; j < 2; j++)
+          for (unsigned int j = i + 1; j < 2; ++j)
             sum = sum - A[i][j] * b[j];
 
           b[i] = sum / A[i][i];
@@ -3084,13 +3316,13 @@ namespace DataOutBase
           A[1][1]     = temp;
         }
 
-      for (unsigned int k = 0; k < 1; k++)
+      for (unsigned int k = 0; k < 1; ++k)
         {
-          for (unsigned int i = k + 1; i < 2; i++)
+          for (unsigned int i = k + 1; i < 2; ++i)
             {
               x = A[i][k] / A[k][k];
 
-              for (unsigned int j = k + 1; j < 2; j++)
+              for (unsigned int j = k + 1; j < 2; ++j)
                 A[i][j] = A[i][j] - A[k][j] * x;
 
               b[i] = b[i] - b[k] * x;
@@ -3103,7 +3335,7 @@ namespace DataOutBase
         {
           sum = b[i];
 
-          for (unsigned int j = i + 1; j < 2; j++)
+          for (unsigned int j = i + 1; j < 2; ++j)
             sum = sum - A[i][j] * b[j];
 
           b[i] = sum / A[i][i];
@@ -3120,13 +3352,10 @@ namespace DataOutBase
                     b[1] * (v_inter[2] - v_min[2]) - c + v_min[2];
 
       // normalize the gradient
-      double gradient_norm =
-        std::sqrt(std::pow(gradient[0], 2.0) + std::pow(gradient[1], 2.0));
-      gradient[0] /= gradient_norm;
-      gradient[1] /= gradient_norm;
+      gradient /= gradient.norm();
 
-      double lambda = -gradient[0] * (v_min[0] - v_max[0]) -
-                      gradient[1] * (v_min[1] - v_max[1]);
+      const double lambda = -gradient[0] * (v_min[0] - v_max[0]) -
+                            gradient[1] * (v_min[1] - v_max[1]);
 
       Point<6> gradient_parameters;
 
@@ -3162,7 +3391,7 @@ namespace DataOutBase
     // tested, therefore currently not allowed.
     AssertThrow(dim > 0, ExcNotImplemented());
 
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
 #ifndef DEAL_II_WITH_MPI
     // verify that there are indeed patches to be written out. most of the
@@ -3185,14 +3414,14 @@ namespace DataOutBase
     unsigned int n_nodes;
     unsigned int n_cells;
     compute_sizes<dim, spacedim>(patches, n_nodes, n_cells);
-    ///////////////////////
+    //---------------------
     // preamble
     if (flags.write_preamble)
       {
         out
           << "# This file was generated by the deal.II library." << '\n'
-          << "# Date =  " << Utilities::System::get_date() << "\n"
-          << "# Time =  " << Utilities::System::get_time() << "\n"
+          << "# Date =  " << Utilities::System::get_date() << '\n'
+          << "# Time =  " << Utilities::System::get_time() << '\n'
           << "#" << '\n'
           << "# For a description of the UCD format see the AVS Developer's guide."
           << '\n'
@@ -3211,7 +3440,7 @@ namespace DataOutBase
     write_cells(patches, ucd_out);
     out << '\n';
 
-    /////////////////////////////
+    //---------------------------
     // now write data
     if (n_data_sets != 0)
       {
@@ -3232,7 +3461,7 @@ namespace DataOutBase
     out.flush();
 
     // assert the stream is still ok
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
   }
 
 
@@ -3252,7 +3481,7 @@ namespace DataOutBase
     // Point output is currently not implemented.
     AssertThrow(dim > 0, ExcNotImplemented());
 
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
 #ifndef DEAL_II_WITH_MPI
     // verify that there are indeed patches to be written out. most of the
@@ -3293,10 +3522,10 @@ namespace DataOutBase
         write_nodes(patches, dx_out);
       }
 
-    ///////////////////////////////
+    //-----------------------------
     // first write the coordinates of all vertices
 
-    /////////////////////////////////////////
+    //---------------------------------------
     // write cells
     out << "object \"cells\" class array type int rank 1 shape "
         << GeometryInfo<dim>::vertices_per_cell << " items " << n_cells;
@@ -3324,7 +3553,7 @@ namespace DataOutBase
     out << "\"" << '\n' << "attribute \"ref\" string \"positions\"" << '\n';
 
     // TODO:[GK] Patches must be of same size!
-    /////////////////////////////
+    //---------------------------
     // write neighbor information
     if (flags.write_neighbors)
       {
@@ -3457,7 +3686,7 @@ namespace DataOutBase
             out << '\n';
           }
       }
-    /////////////////////////////
+    //---------------------------
     // now write data
     if (n_data_sets != 0)
       {
@@ -3514,7 +3743,7 @@ namespace DataOutBase
     out.flush();
 
     // assert the stream is still ok
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
   }
 
 
@@ -3532,7 +3761,7 @@ namespace DataOutBase
     const GnuplotFlags &flags,
     std::ostream &      out)
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
 #ifndef DEAL_II_WITH_MPI
     // verify that there are indeed patches to be written out. most
@@ -3577,15 +3806,8 @@ namespace DataOutBase
     // loop over all patches
     for (const auto &patch : patches)
       {
-        const unsigned int n_subdivisions = patch.n_subdivisions;
-        const unsigned int n              = n_subdivisions + 1;
-        // Length of loops in all dimensions
-        const unsigned int n1 = (dim > 0) ? n : 1;
-        const unsigned int n2 = (dim > 1) ? n : 1;
-        const unsigned int n3 = (dim > 2) ? n : 1;
-        unsigned int       d1 = 1;
-        unsigned int       d2 = n;
-        unsigned int       d3 = n * n;
+        const unsigned int n_subdivisions         = patch.n_subdivisions;
+        const unsigned int n_points_per_direction = n_subdivisions + 1;
 
         Assert((patch.data.n_rows() == n_data_sets &&
                 !patch.points_are_available) ||
@@ -3595,135 +3817,671 @@ namespace DataOutBase
                                       (n_data_sets + spacedim) :
                                       n_data_sets,
                                     patch.data.n_rows()));
-        Assert(patch.data.n_cols() == Utilities::fixed_power<dim>(n),
-               ExcInvalidDatasetSize(patch.data.n_cols(), n_subdivisions + 1));
 
-        Point<spacedim> this_point;
-        if (dim < 3)
+        auto output_point_data =
+          [&out, &patch, n_data_sets](const unsigned int point_index) mutable {
+            for (unsigned int data_set = 0; data_set < n_data_sets; ++data_set)
+              out << patch.data(data_set, point_index) << ' ';
+          };
+
+        switch (dim)
           {
-            for (unsigned int i2 = 0; i2 < n2; ++i2)
+            case 0:
               {
-                for (unsigned int i1 = 0; i1 < n1; ++i1)
+                Assert(patch.reference_cell == ReferenceCells::Vertex,
+                       ExcInternalError());
+                Assert(patch.data.n_cols() == 1,
+                       ExcInvalidDatasetSize(patch.data.n_cols(),
+                                             n_subdivisions + 1));
+
+
+                // compute coordinates for this patch point
+                out << get_equispaced_location(patch, {}, n_subdivisions)
+                    << ' ';
+                output_point_data(0);
+                out << '\n';
+                out << '\n';
+                break;
+              }
+
+            case 1:
+              {
+                Assert(patch.reference_cell == ReferenceCells::Line,
+                       ExcInternalError());
+                Assert(patch.data.n_cols() ==
+                         Utilities::fixed_power<dim>(n_points_per_direction),
+                       ExcInvalidDatasetSize(patch.data.n_cols(),
+                                             n_subdivisions + 1));
+
+                for (unsigned int i1 = 0; i1 < n_points_per_direction; ++i1)
                   {
                     // compute coordinates for this patch point
-                    out << compute_hypercube_node(
-                             patch, i1, i2, 0, n_subdivisions)
+                    out << get_equispaced_location(patch, {i1}, n_subdivisions)
                         << ' ';
 
-                    for (unsigned int data_set = 0; data_set < n_data_sets;
-                         ++data_set)
-                      out << patch.data(data_set, i1 * d1 + i2 * d2) << ' ';
+                    output_point_data(i1);
                     out << '\n';
                   }
-                // end of row in patch
-                if (dim > 1)
-                  out << '\n';
+                // end of patch
+                out << '\n';
+                out << '\n';
+                break;
               }
-            // end of patch
-            if (dim == 1)
-              out << '\n';
-            out << '\n';
-          }
-        else if (dim == 3)
-          {
-            // for all grid points: draw lines into all positive coordinate
-            // directions if there is another grid point there
-            for (unsigned int i3 = 0; i3 < n3; ++i3)
-              for (unsigned int i2 = 0; i2 < n2; ++i2)
-                for (unsigned int i1 = 0; i1 < n1; ++i1)
+
+            case 2:
+              {
+                if (patch.reference_cell == ReferenceCells::Quadrilateral)
                   {
-                    // compute coordinates for this patch point
-                    this_point =
-                      compute_hypercube_node(patch, i1, i2, i3, n_subdivisions);
-                    // line into positive x-direction if possible
-                    if (i1 < n_subdivisions)
+                    Assert(patch.data.n_cols() == Utilities::fixed_power<dim>(
+                                                    n_points_per_direction),
+                           ExcInvalidDatasetSize(patch.data.n_cols(),
+                                                 n_subdivisions + 1));
+
+                    for (unsigned int i2 = 0; i2 < n_points_per_direction; ++i2)
                       {
-                        // write point here and its data
-                        out << this_point;
-                        for (unsigned int data_set = 0; data_set < n_data_sets;
-                             ++data_set)
-                          out << ' '
-                              << patch.data(data_set,
-                                            i1 * d1 + i2 * d2 + i3 * d3);
+                        for (unsigned int i1 = 0; i1 < n_points_per_direction;
+                             ++i1)
+                          {
+                            // compute coordinates for this patch point
+                            out << get_equispaced_location(patch,
+                                                           {i1, i2},
+                                                           n_subdivisions)
+                                << ' ';
+
+                            output_point_data(i1 + i2 * n_points_per_direction);
+                            out << '\n';
+                          }
+                        // end of row in patch
                         out << '\n';
-
-                        // write point there and its data
-                        out << compute_hypercube_node(
-                          patch, i1 + 1, i2, i3, n_subdivisions);
-
-                        for (unsigned int data_set = 0; data_set < n_data_sets;
-                             ++data_set)
-                          out << ' '
-                              << patch.data(data_set,
-                                            (i1 + 1) * d1 + i2 * d2 + i3 * d3);
-                        out << '\n';
-
-                        // end of line
-                        out << '\n' << '\n';
-                      }
-
-                    // line into positive y-direction if possible
-                    if (i2 < n_subdivisions)
-                      {
-                        // write point here and its data
-                        out << this_point;
-                        for (unsigned int data_set = 0; data_set < n_data_sets;
-                             ++data_set)
-                          out << ' '
-                              << patch.data(data_set,
-                                            i1 * d1 + i2 * d2 + i3 * d3);
-                        out << '\n';
-
-                        // write point there and its data
-                        out << compute_hypercube_node(
-                          patch, i1, i2 + 1, i3, n_subdivisions);
-
-                        for (unsigned int data_set = 0; data_set < n_data_sets;
-                             ++data_set)
-                          out << ' '
-                              << patch.data(data_set,
-                                            i1 * d1 + (i2 + 1) * d2 + i3 * d3);
-                        out << '\n';
-
-                        // end of line
-                        out << '\n' << '\n';
-                      }
-
-                    // line into positive z-direction if possible
-                    if (i3 < n_subdivisions)
-                      {
-                        // write point here and its data
-                        out << this_point;
-                        for (unsigned int data_set = 0; data_set < n_data_sets;
-                             ++data_set)
-                          out << ' '
-                              << patch.data(data_set,
-                                            i1 * d1 + i2 * d2 + i3 * d3);
-                        out << '\n';
-
-                        // write point there and its data
-                        out << compute_hypercube_node(
-                          patch, i1, i2, i3 + 1, n_subdivisions);
-
-                        for (unsigned int data_set = 0; data_set < n_data_sets;
-                             ++data_set)
-                          out << ' '
-                              << patch.data(data_set,
-                                            i1 * d1 + i2 * d2 + (i3 + 1) * d3);
-                        out << '\n';
-                        // end of line
-                        out << '\n' << '\n';
                       }
                   }
+                else if (patch.reference_cell == ReferenceCells::Triangle)
+                  {
+                    Assert(n_subdivisions == 1, ExcNotImplemented());
+
+                    Assert(patch.data.n_cols() == 3, ExcInternalError());
+
+                    // Gnuplot can only plot surfaces if each facet of the
+                    // surface is a bilinear patch, or a subdivided bilinear
+                    // patch with equally many points along each row of the
+                    // subdivision. This is what the code above for
+                    // quadrilaterals does. We emulate this by repeating the
+                    // third point of a triangle twice so that there are two
+                    // points for that row as well -- i.e., we write a 2x2
+                    // bilinear patch where two of the points are collapsed onto
+                    // one vertex.
+                    //
+                    // This also matches the example here:
+                    // https://stackoverflow.com/questions/42784369/drawing-triangular-mesh-using-gnuplot
+                    out << get_node_location(patch, 0) << ' ';
+                    output_point_data(0);
+                    out << '\n';
+
+                    out << get_node_location(patch, 1) << ' ';
+                    output_point_data(1);
+                    out << '\n';
+                    out << '\n'; // end of one row of points
+
+                    out << get_node_location(patch, 2) << ' ';
+                    output_point_data(2);
+                    out << '\n';
+
+                    out << get_node_location(patch, 2) << ' ';
+                    output_point_data(2);
+                    out << '\n';
+                    out << '\n'; // end of the second row of points
+                    out << '\n'; // end of the entire patch
+                  }
+                else
+                  // There aren't any other reference cells in 2d than the
+                  // quadrilateral and the triangle. So whatever we got here
+                  // can't be any good
+                  Assert(false, ExcInternalError());
+                // end of patch
+                out << '\n';
+
+                break;
+              }
+
+            case 3:
+              {
+                if (patch.reference_cell == ReferenceCells::Hexahedron)
+                  {
+                    Assert(patch.data.n_cols() == Utilities::fixed_power<dim>(
+                                                    n_points_per_direction),
+                           ExcInvalidDatasetSize(patch.data.n_cols(),
+                                                 n_subdivisions + 1));
+
+                    // for all grid points: draw lines into all positive
+                    // coordinate directions if there is another grid point
+                    // there
+                    for (unsigned int i3 = 0; i3 < n_points_per_direction; ++i3)
+                      for (unsigned int i2 = 0; i2 < n_points_per_direction;
+                           ++i2)
+                        for (unsigned int i1 = 0; i1 < n_points_per_direction;
+                             ++i1)
+                          {
+                            // compute coordinates for this patch point
+                            const Point<spacedim> this_point =
+                              get_equispaced_location(patch,
+                                                      {i1, i2, i3},
+                                                      n_subdivisions);
+                            // line into positive x-direction if possible
+                            if (i1 < n_subdivisions)
+                              {
+                                // write point here and its data
+                                out << this_point << ' ';
+                                output_point_data(i1 +
+                                                  i2 * n_points_per_direction +
+                                                  i3 * n_points_per_direction *
+                                                    n_points_per_direction);
+                                out << '\n';
+
+                                // write point there and its data
+                                out << get_equispaced_location(patch,
+                                                               {i1 + 1, i2, i3},
+                                                               n_subdivisions)
+                                    << ' ';
+
+                                output_point_data((i1 + 1) +
+                                                  i2 * n_points_per_direction +
+                                                  i3 * n_points_per_direction *
+                                                    n_points_per_direction);
+                                out << '\n';
+
+                                // end of line
+                                out << '\n' << '\n';
+                              }
+
+                            // line into positive y-direction if possible
+                            if (i2 < n_subdivisions)
+                              {
+                                // write point here and its data
+                                out << this_point << ' ';
+                                output_point_data(i1 +
+                                                  i2 * n_points_per_direction +
+                                                  i3 * n_points_per_direction *
+                                                    n_points_per_direction);
+                                out << '\n';
+
+                                // write point there and its data
+                                out << get_equispaced_location(patch,
+                                                               {i1, i2 + 1, i3},
+                                                               n_subdivisions)
+                                    << ' ';
+
+                                output_point_data(
+                                  i1 + (i2 + 1) * n_points_per_direction +
+                                  i3 * n_points_per_direction *
+                                    n_points_per_direction);
+                                out << '\n';
+
+                                // end of line
+                                out << '\n' << '\n';
+                              }
+
+                            // line into positive z-direction if possible
+                            if (i3 < n_subdivisions)
+                              {
+                                // write point here and its data
+                                out << this_point << ' ';
+                                output_point_data(i1 +
+                                                  i2 * n_points_per_direction +
+                                                  i3 * n_points_per_direction *
+                                                    n_points_per_direction);
+                                out << '\n';
+
+                                // write point there and its data
+                                out << get_equispaced_location(patch,
+                                                               {i1, i2, i3 + 1},
+                                                               n_subdivisions)
+                                    << ' ';
+
+                                output_point_data(
+                                  i1 + i2 * n_points_per_direction +
+                                  (i3 + 1) * n_points_per_direction *
+                                    n_points_per_direction);
+                                out << '\n';
+                                // end of line
+                                out << '\n' << '\n';
+                              }
+                          }
+                  }
+                else if (patch.reference_cell == ReferenceCells::Tetrahedron)
+                  {
+                    Assert(n_subdivisions == 1, ExcNotImplemented());
+
+                    // Draw the tetrahedron as a collection of two lines.
+                    for (const unsigned int v : {0, 1, 2, 0, 3, 2})
+                      {
+                        out << get_node_location(patch, v) << ' ';
+                        output_point_data(v);
+                        out << '\n';
+                      }
+                    out << '\n'; // end of first line
+
+                    for (const unsigned int v : {3, 1})
+                      {
+                        out << get_node_location(patch, v) << ' ';
+                        output_point_data(v);
+                        out << '\n';
+                      }
+                    out << '\n'; // end of second line
+                  }
+                else if (patch.reference_cell == ReferenceCells::Pyramid)
+                  {
+                    Assert(n_subdivisions == 1, ExcNotImplemented());
+
+                    // Draw the pyramid as a collection of two lines.
+                    for (const unsigned int v : {0, 1, 3, 2, 0, 4, 1})
+                      {
+                        out << get_node_location(patch, v) << ' ';
+                        output_point_data(v);
+                        out << '\n';
+                      }
+                    out << '\n'; // end of first line
+
+                    for (const unsigned int v : {2, 4, 3})
+                      {
+                        out << get_node_location(patch, v) << ' ';
+                        output_point_data(v);
+                        out << '\n';
+                      }
+                    out << '\n'; // end of second line
+                  }
+                else if (patch.reference_cell == ReferenceCells::Wedge)
+                  {
+                    Assert(n_subdivisions == 1, ExcNotImplemented());
+
+                    // Draw the wedge as a collection of three
+                    // lines. The first one wraps around the base,
+                    // goes up to the top, and wraps around that. The
+                    // second and third are just individual lines
+                    // going from base to top.
+                    for (const unsigned int v : {0, 1, 2, 0, 3, 4, 5, 3})
+                      {
+                        out << get_node_location(patch, v) << ' ';
+                        output_point_data(v);
+                        out << '\n';
+                      }
+                    out << '\n'; // end of first line
+
+                    for (const unsigned int v : {1, 4})
+                      {
+                        out << get_node_location(patch, v) << ' ';
+                        output_point_data(v);
+                        out << '\n';
+                      }
+                    out << '\n'; // end of second line
+
+                    for (const unsigned int v : {2, 5})
+                      {
+                        out << get_node_location(patch, v) << ' ';
+                        output_point_data(v);
+                        out << '\n';
+                      }
+                    out << '\n'; // end of second line
+                  }
+                else
+                  // No other reference cells are currently implemented
+                  Assert(false, ExcNotImplemented());
+
+                break;
+              }
+
+            default:
+              Assert(false, ExcNotImplemented());
           }
-        else
-          Assert(false, ExcNotImplemented());
       }
     // make sure everything now gets to disk
     out.flush();
 
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
   }
+
+
+  namespace
+  {
+    template <int dim, int spacedim>
+    void
+    do_write_povray(const std::vector<Patch<dim, spacedim>> &,
+                    const std::vector<std::string> &,
+                    const PovrayFlags &,
+                    std::ostream &)
+    {
+      Assert(false,
+             ExcMessage("Writing files in POVRAY format is only supported "
+                        "for two-dimensional meshes."));
+    }
+
+
+
+    void
+    do_write_povray(const std::vector<Patch<2, 2>> &patches,
+                    const std::vector<std::string> &data_names,
+                    const PovrayFlags &             flags,
+                    std::ostream &                  out)
+    {
+      AssertThrow(out.fail() == false, ExcIO());
+
+#ifndef DEAL_II_WITH_MPI
+      // verify that there are indeed patches to be written out. most
+      // of the times, people just forget to call build_patches when there
+      // are no patches, so a warning is in order. that said, the
+      // assertion is disabled if we support MPI since then it can
+      // happen that on the coarsest mesh, a processor simply has no cells it
+      // actually owns, and in that case it is legit if there are no patches
+      Assert(patches.size() > 0, ExcNoPatches());
+#else
+      if (patches.size() == 0)
+        return;
+#endif
+      constexpr int dim = 2;
+      (void)dim;
+      constexpr int spacedim = 2;
+
+      const unsigned int n_data_sets = data_names.size();
+      (void)n_data_sets;
+
+      // write preamble
+      {
+        out
+          << "/* This file was generated by the deal.II library." << '\n'
+          << "   Date =  " << Utilities::System::get_date() << '\n'
+          << "   Time =  " << Utilities::System::get_time() << '\n'
+          << '\n'
+          << "   For a description of the POVRAY format see the POVRAY manual."
+          << '\n'
+          << "*/ " << '\n';
+
+        // include files
+        out << "#include \"colors.inc\" " << '\n'
+            << "#include \"textures.inc\" " << '\n';
+
+
+        // use external include file for textures, camera and light
+        if (flags.external_data)
+          out << "#include \"data.inc\" " << '\n';
+        else // all definitions in data file
+          {
+            // camera
+            out << '\n'
+                << '\n'
+                << "camera {" << '\n'
+                << "  location <1,4,-7>" << '\n'
+                << "  look_at <0,0,0>" << '\n'
+                << "  angle 30" << '\n'
+                << "}" << '\n';
+
+            // light
+            out << '\n'
+                << "light_source {" << '\n'
+                << "  <1,4,-7>" << '\n'
+                << "  color Grey" << '\n'
+                << "}" << '\n';
+            out << '\n'
+                << "light_source {" << '\n'
+                << "  <0,20,0>" << '\n'
+                << "  color White" << '\n'
+                << "}" << '\n';
+          }
+      }
+
+      // max. and min. height of solution
+      Assert(patches.size() > 0, ExcNoPatches());
+      double hmin = patches[0].data(0, 0);
+      double hmax = patches[0].data(0, 0);
+
+      for (const auto &patch : patches)
+        {
+          const unsigned int n_subdivisions = patch.n_subdivisions;
+
+          Assert((patch.data.n_rows() == n_data_sets &&
+                  !patch.points_are_available) ||
+                   (patch.data.n_rows() == n_data_sets + spacedim &&
+                    patch.points_are_available),
+                 ExcDimensionMismatch(patch.points_are_available ?
+                                        (n_data_sets + spacedim) :
+                                        n_data_sets,
+                                      patch.data.n_rows()));
+          Assert(patch.data.n_cols() ==
+                   Utilities::fixed_power<dim>(n_subdivisions + 1),
+                 ExcInvalidDatasetSize(patch.data.n_cols(),
+                                       n_subdivisions + 1));
+
+          for (unsigned int i = 0; i < n_subdivisions + 1; ++i)
+            for (unsigned int j = 0; j < n_subdivisions + 1; ++j)
+              {
+                const int dl = i * (n_subdivisions + 1) + j;
+                if (patch.data(0, dl) < hmin)
+                  hmin = patch.data(0, dl);
+                if (patch.data(0, dl) > hmax)
+                  hmax = patch.data(0, dl);
+              }
+        }
+
+      out << "#declare HMIN=" << hmin << ";" << '\n'
+          << "#declare HMAX=" << hmax << ";" << '\n'
+          << '\n';
+
+      if (!flags.external_data)
+        {
+          // texture with scaled niveau lines 10 lines in the surface
+          out << "#declare Tex=texture{" << '\n'
+              << "  pigment {" << '\n'
+              << "    gradient y" << '\n'
+              << "    scale y*(HMAX-HMIN)*" << 0.1 << '\n'
+              << "    color_map {" << '\n'
+              << "      [0.00 color Light_Purple] " << '\n'
+              << "      [0.95 color Light_Purple] " << '\n'
+              << "      [1.00 color White]    " << '\n'
+              << "} } }" << '\n'
+              << '\n';
+        }
+
+      if (!flags.bicubic_patch)
+        {
+          // start of mesh header
+          out << '\n' << "mesh {" << '\n';
+        }
+
+      // loop over all patches
+      for (const auto &patch : patches)
+        {
+          const unsigned int n_subdivisions = patch.n_subdivisions;
+          const unsigned int n              = n_subdivisions + 1;
+          const unsigned int d1             = 1;
+          const unsigned int d2             = n;
+
+          Assert((patch.data.n_rows() == n_data_sets &&
+                  !patch.points_are_available) ||
+                   (patch.data.n_rows() == n_data_sets + spacedim &&
+                    patch.points_are_available),
+                 ExcDimensionMismatch(patch.points_are_available ?
+                                        (n_data_sets + spacedim) :
+                                        n_data_sets,
+                                      patch.data.n_rows()));
+          Assert(patch.data.n_cols() == Utilities::fixed_power<dim>(n),
+                 ExcInvalidDatasetSize(patch.data.n_cols(),
+                                       n_subdivisions + 1));
+
+
+          std::vector<Point<spacedim>> ver(n * n);
+
+          for (unsigned int i2 = 0; i2 < n; ++i2)
+            for (unsigned int i1 = 0; i1 < n; ++i1)
+              {
+                // compute coordinates for this patch point, storing in ver
+                ver[i1 * d1 + i2 * d2] =
+                  get_equispaced_location(patch, {i1, i2}, n_subdivisions);
+              }
+
+
+          if (!flags.bicubic_patch)
+            {
+              // approximate normal vectors in patch
+              std::vector<Point<3>> nrml;
+              // only if smooth triangles are used
+              if (flags.smooth)
+                {
+                  nrml.resize(n * n);
+                  // These are difference quotients of the surface
+                  // mapping. We take them symmetric inside the
+                  // patch and one-sided at the edges
+                  Point<3> h1, h2;
+                  // Now compute normals in every point
+                  for (unsigned int i = 0; i < n; ++i)
+                    for (unsigned int j = 0; j < n; ++j)
+                      {
+                        const unsigned int il = (i == 0) ? i : (i - 1);
+                        const unsigned int ir =
+                          (i == n_subdivisions) ? i : (i + 1);
+                        const unsigned int jl = (j == 0) ? j : (j - 1);
+                        const unsigned int jr =
+                          (j == n_subdivisions) ? j : (j + 1);
+
+                        h1(0) =
+                          ver[ir * d1 + j * d2](0) - ver[il * d1 + j * d2](0);
+                        h1(1) = patch.data(0, ir * d1 + j * d2) -
+                                patch.data(0, il * d1 + j * d2);
+                        h1(2) =
+                          ver[ir * d1 + j * d2](1) - ver[il * d1 + j * d2](1);
+
+                        h2(0) =
+                          ver[i * d1 + jr * d2](0) - ver[i * d1 + jl * d2](0);
+                        h2(1) = patch.data(0, i * d1 + jr * d2) -
+                                patch.data(0, i * d1 + jl * d2);
+                        h2(2) =
+                          ver[i * d1 + jr * d2](1) - ver[i * d1 + jl * d2](1);
+
+                        nrml[i * d1 + j * d2](0) =
+                          h1(1) * h2(2) - h1(2) * h2(1);
+                        nrml[i * d1 + j * d2](1) =
+                          h1(2) * h2(0) - h1(0) * h2(2);
+                        nrml[i * d1 + j * d2](2) =
+                          h1(0) * h2(1) - h1(1) * h2(0);
+
+                        // normalize Vector
+                        double norm =
+                          std::sqrt(std::pow(nrml[i * d1 + j * d2](0), 2.) +
+                                    std::pow(nrml[i * d1 + j * d2](1), 2.) +
+                                    std::pow(nrml[i * d1 + j * d2](2), 2.));
+
+                        if (nrml[i * d1 + j * d2](1) < 0)
+                          norm *= -1.;
+
+                        for (unsigned int k = 0; k < 3; ++k)
+                          nrml[i * d1 + j * d2](k) /= norm;
+                      }
+                }
+
+              // setting up triangles
+              for (unsigned int i = 0; i < n_subdivisions; ++i)
+                for (unsigned int j = 0; j < n_subdivisions; ++j)
+                  {
+                    // down/left vertex of triangle
+                    const int dl = i * d1 + j * d2;
+                    if (flags.smooth)
+                      {
+                        // writing smooth_triangles
+
+                        // down/right triangle
+                        out << "smooth_triangle {" << '\n'
+                            << "\t<" << ver[dl](0) << "," << patch.data(0, dl)
+                            << "," << ver[dl](1) << ">, <" << nrml[dl](0)
+                            << ", " << nrml[dl](1) << ", " << nrml[dl](2)
+                            << ">," << '\n';
+                        out << " \t<" << ver[dl + d1](0) << ","
+                            << patch.data(0, dl + d1) << "," << ver[dl + d1](1)
+                            << ">, <" << nrml[dl + d1](0) << ", "
+                            << nrml[dl + d1](1) << ", " << nrml[dl + d1](2)
+                            << ">," << '\n';
+                        out << "\t<" << ver[dl + d1 + d2](0) << ","
+                            << patch.data(0, dl + d1 + d2) << ","
+                            << ver[dl + d1 + d2](1) << ">, <"
+                            << nrml[dl + d1 + d2](0) << ", "
+                            << nrml[dl + d1 + d2](1) << ", "
+                            << nrml[dl + d1 + d2](2) << ">}" << '\n';
+
+                        // upper/left triangle
+                        out << "smooth_triangle {" << '\n'
+                            << "\t<" << ver[dl](0) << "," << patch.data(0, dl)
+                            << "," << ver[dl](1) << ">, <" << nrml[dl](0)
+                            << ", " << nrml[dl](1) << ", " << nrml[dl](2)
+                            << ">," << '\n';
+                        out << "\t<" << ver[dl + d1 + d2](0) << ","
+                            << patch.data(0, dl + d1 + d2) << ","
+                            << ver[dl + d1 + d2](1) << ">, <"
+                            << nrml[dl + d1 + d2](0) << ", "
+                            << nrml[dl + d1 + d2](1) << ", "
+                            << nrml[dl + d1 + d2](2) << ">," << '\n';
+                        out << "\t<" << ver[dl + d2](0) << ","
+                            << patch.data(0, dl + d2) << "," << ver[dl + d2](1)
+                            << ">, <" << nrml[dl + d2](0) << ", "
+                            << nrml[dl + d2](1) << ", " << nrml[dl + d2](2)
+                            << ">}" << '\n';
+                      }
+                    else
+                      {
+                        // writing standard triangles down/right triangle
+                        out << "triangle {" << '\n'
+                            << "\t<" << ver[dl](0) << "," << patch.data(0, dl)
+                            << "," << ver[dl](1) << ">," << '\n';
+                        out << "\t<" << ver[dl + d1](0) << ","
+                            << patch.data(0, dl + d1) << "," << ver[dl + d1](1)
+                            << ">," << '\n';
+                        out << "\t<" << ver[dl + d1 + d2](0) << ","
+                            << patch.data(0, dl + d1 + d2) << ","
+                            << ver[dl + d1 + d2](1) << ">}" << '\n';
+
+                        // upper/left triangle
+                        out << "triangle {" << '\n'
+                            << "\t<" << ver[dl](0) << "," << patch.data(0, dl)
+                            << "," << ver[dl](1) << ">," << '\n';
+                        out << "\t<" << ver[dl + d1 + d2](0) << ","
+                            << patch.data(0, dl + d1 + d2) << ","
+                            << ver[dl + d1 + d2](1) << ">," << '\n';
+                        out << "\t<" << ver[dl + d2](0) << ","
+                            << patch.data(0, dl + d2) << "," << ver[dl + d2](1)
+                            << ">}" << '\n';
+                      }
+                  }
+            }
+          else
+            {
+              // writing bicubic_patch
+              Assert(n_subdivisions == 3,
+                     ExcDimensionMismatch(n_subdivisions, 3));
+              out << '\n'
+                  << "bicubic_patch {" << '\n'
+                  << "  type 0" << '\n'
+                  << "  flatness 0" << '\n'
+                  << "  u_steps 0" << '\n'
+                  << "  v_steps 0" << '\n';
+              for (int i = 0; i < 16; ++i)
+                {
+                  out << "\t<" << ver[i](0) << "," << patch.data(0, i) << ","
+                      << ver[i](1) << ">";
+                  if (i != 15)
+                    out << ",";
+                  out << '\n';
+                }
+              out << "  texture {Tex}" << '\n' << "}" << '\n';
+            }
+        }
+
+      if (!flags.bicubic_patch)
+        {
+          // the end of the mesh
+          out << "  texture {Tex}" << '\n' << "}" << '\n' << '\n';
+        }
+
+      // make sure everything now gets to disk
+      out.flush();
+
+      AssertThrow(out.fail() == false, ExcIO());
+    }
+  } // namespace
 
 
 
@@ -3740,316 +4498,7 @@ namespace DataOutBase
     const PovrayFlags &flags,
     std::ostream &     out)
   {
-    AssertThrow(out, ExcIO());
-
-#ifndef DEAL_II_WITH_MPI
-    // verify that there are indeed patches to be written out. most
-    // of the times, people just forget to call build_patches when there
-    // are no patches, so a warning is in order. that said, the
-    // assertion is disabled if we support MPI since then it can
-    // happen that on the coarsest mesh, a processor simply has no cells it
-    // actually owns, and in that case it is legit if there are no patches
-    Assert(patches.size() > 0, ExcNoPatches());
-#else
-    if (patches.size() == 0)
-      return;
-#endif
-    Assert(dim == 2,
-           ExcNotImplemented()); // only for 2-D surfaces on a 2-D plane
-    Assert(spacedim == 2, ExcNotImplemented());
-
-    const unsigned int n_data_sets = data_names.size();
-    (void)n_data_sets;
-
-    // write preamble
-    {
-      out << "/* This file was generated by the deal.II library." << '\n'
-          << "   Date =  " << Utilities::System::get_date() << '\n'
-          << "   Time =  " << Utilities::System::get_time() << '\n'
-          << '\n'
-          << "   For a description of the POVRAY format see the POVRAY manual."
-          << '\n'
-          << "*/ " << '\n';
-
-      // include files
-      out << "#include \"colors.inc\" " << '\n'
-          << "#include \"textures.inc\" " << '\n';
-
-
-      // use external include file for textures, camera and light
-      if (flags.external_data)
-        out << "#include \"data.inc\" " << '\n';
-      else // all definitions in data file
-        {
-          // camera
-          out << '\n'
-              << '\n'
-              << "camera {" << '\n'
-              << "  location <1,4,-7>" << '\n'
-              << "  look_at <0,0,0>" << '\n'
-              << "  angle 30" << '\n'
-              << "}" << '\n';
-
-          // light
-          out << '\n'
-              << "light_source {" << '\n'
-              << "  <1,4,-7>" << '\n'
-              << "  color Grey" << '\n'
-              << "}" << '\n';
-          out << '\n'
-              << "light_source {" << '\n'
-              << "  <0,20,0>" << '\n'
-              << "  color White" << '\n'
-              << "}" << '\n';
-        }
-    }
-
-    // max. and min. height of solution
-    Assert(patches.size() > 0, ExcNoPatches());
-    double hmin = patches[0].data(0, 0);
-    double hmax = patches[0].data(0, 0);
-
-    for (const auto &patch : patches)
-      {
-        const unsigned int n_subdivisions = patch.n_subdivisions;
-
-        Assert((patch.data.n_rows() == n_data_sets &&
-                !patch.points_are_available) ||
-                 (patch.data.n_rows() == n_data_sets + spacedim &&
-                  patch.points_are_available),
-               ExcDimensionMismatch(patch.points_are_available ?
-                                      (n_data_sets + spacedim) :
-                                      n_data_sets,
-                                    patch.data.n_rows()));
-        Assert(patch.data.n_cols() ==
-                 Utilities::fixed_power<dim>(n_subdivisions + 1),
-               ExcInvalidDatasetSize(patch.data.n_cols(), n_subdivisions + 1));
-
-        for (unsigned int i = 0; i < n_subdivisions + 1; ++i)
-          for (unsigned int j = 0; j < n_subdivisions + 1; ++j)
-            {
-              const int dl = i * (n_subdivisions + 1) + j;
-              if (patch.data(0, dl) < hmin)
-                hmin = patch.data(0, dl);
-              if (patch.data(0, dl) > hmax)
-                hmax = patch.data(0, dl);
-            }
-      }
-
-    out << "#declare HMIN=" << hmin << ";" << '\n'
-        << "#declare HMAX=" << hmax << ";" << '\n'
-        << '\n';
-
-    if (!flags.external_data)
-      {
-        // texture with scaled niveau lines 10 lines in the surface
-        out << "#declare Tex=texture{" << '\n'
-            << "  pigment {" << '\n'
-            << "    gradient y" << '\n'
-            << "    scale y*(HMAX-HMIN)*" << 0.1 << '\n'
-            << "    color_map {" << '\n'
-            << "      [0.00 color Light_Purple] " << '\n'
-            << "      [0.95 color Light_Purple] " << '\n'
-            << "      [1.00 color White]    " << '\n'
-            << "} } }" << '\n'
-            << '\n';
-      }
-
-    if (!flags.bicubic_patch)
-      {
-        // start of mesh header
-        out << '\n' << "mesh {" << '\n';
-      }
-
-    // loop over all patches
-    for (const auto &patch : patches)
-      {
-        const unsigned int n_subdivisions = patch.n_subdivisions;
-        const unsigned int n              = n_subdivisions + 1;
-        const unsigned int d1             = 1;
-        const unsigned int d2             = n;
-
-        Assert((patch.data.n_rows() == n_data_sets &&
-                !patch.points_are_available) ||
-                 (patch.data.n_rows() == n_data_sets + spacedim &&
-                  patch.points_are_available),
-               ExcDimensionMismatch(patch.points_are_available ?
-                                      (n_data_sets + spacedim) :
-                                      n_data_sets,
-                                    patch.data.n_rows()));
-        Assert(patch.data.n_cols() == Utilities::fixed_power<dim>(n),
-               ExcInvalidDatasetSize(patch.data.n_cols(), n_subdivisions + 1));
-
-
-        std::vector<Point<spacedim>> ver(n * n);
-
-        for (unsigned int i2 = 0; i2 < n; ++i2)
-          for (unsigned int i1 = 0; i1 < n; ++i1)
-            {
-              // compute coordinates for this patch point, storing in ver
-              ver[i1 * d1 + i2 * d2] =
-                compute_hypercube_node(patch, i1, i2, 0, n_subdivisions);
-            }
-
-
-        if (!flags.bicubic_patch)
-          {
-            // approximate normal vectors in patch
-            std::vector<Point<3>> nrml;
-            // only if smooth triangles are used
-            if (flags.smooth)
-              {
-                nrml.resize(n * n);
-                // These are difference quotients of the surface
-                // mapping. We take them symmetric inside the
-                // patch and one-sided at the edges
-                Point<3> h1, h2;
-                // Now compute normals in every point
-                for (unsigned int i = 0; i < n; ++i)
-                  for (unsigned int j = 0; j < n; ++j)
-                    {
-                      const unsigned int il = (i == 0) ? i : (i - 1);
-                      const unsigned int ir =
-                        (i == n_subdivisions) ? i : (i + 1);
-                      const unsigned int jl = (j == 0) ? j : (j - 1);
-                      const unsigned int jr =
-                        (j == n_subdivisions) ? j : (j + 1);
-
-                      h1(0) =
-                        ver[ir * d1 + j * d2](0) - ver[il * d1 + j * d2](0);
-                      h1(1) = patch.data(0, ir * d1 + j * d2) -
-                              patch.data(0, il * d1 + j * d2);
-                      h1(2) =
-                        ver[ir * d1 + j * d2](1) - ver[il * d1 + j * d2](1);
-
-                      h2(0) =
-                        ver[i * d1 + jr * d2](0) - ver[i * d1 + jl * d2](0);
-                      h2(1) = patch.data(0, i * d1 + jr * d2) -
-                              patch.data(0, i * d1 + jl * d2);
-                      h2(2) =
-                        ver[i * d1 + jr * d2](1) - ver[i * d1 + jl * d2](1);
-
-                      nrml[i * d1 + j * d2](0) = h1(1) * h2(2) - h1(2) * h2(1);
-                      nrml[i * d1 + j * d2](1) = h1(2) * h2(0) - h1(0) * h2(2);
-                      nrml[i * d1 + j * d2](2) = h1(0) * h2(1) - h1(1) * h2(0);
-
-                      // normalize Vector
-                      double norm =
-                        std::sqrt(std::pow(nrml[i * d1 + j * d2](0), 2.) +
-                                  std::pow(nrml[i * d1 + j * d2](1), 2.) +
-                                  std::pow(nrml[i * d1 + j * d2](2), 2.));
-
-                      if (nrml[i * d1 + j * d2](1) < 0)
-                        norm *= -1.;
-
-                      for (unsigned int k = 0; k < 3; ++k)
-                        nrml[i * d1 + j * d2](k) /= norm;
-                    }
-              }
-
-            // setting up triangles
-            for (unsigned int i = 0; i < n_subdivisions; ++i)
-              for (unsigned int j = 0; j < n_subdivisions; ++j)
-                {
-                  // down/left vertex of triangle
-                  const int dl = i * d1 + j * d2;
-                  if (flags.smooth)
-                    {
-                      // writing smooth_triangles
-
-                      // down/right triangle
-                      out << "smooth_triangle {" << '\n'
-                          << "\t<" << ver[dl](0) << "," << patch.data(0, dl)
-                          << "," << ver[dl](1) << ">, <" << nrml[dl](0) << ", "
-                          << nrml[dl](1) << ", " << nrml[dl](2) << ">," << '\n';
-                      out << " \t<" << ver[dl + d1](0) << ","
-                          << patch.data(0, dl + d1) << "," << ver[dl + d1](1)
-                          << ">, <" << nrml[dl + d1](0) << ", "
-                          << nrml[dl + d1](1) << ", " << nrml[dl + d1](2)
-                          << ">," << '\n';
-                      out << "\t<" << ver[dl + d1 + d2](0) << ","
-                          << patch.data(0, dl + d1 + d2) << ","
-                          << ver[dl + d1 + d2](1) << ">, <"
-                          << nrml[dl + d1 + d2](0) << ", "
-                          << nrml[dl + d1 + d2](1) << ", "
-                          << nrml[dl + d1 + d2](2) << ">}" << '\n';
-
-                      // upper/left triangle
-                      out << "smooth_triangle {" << '\n'
-                          << "\t<" << ver[dl](0) << "," << patch.data(0, dl)
-                          << "," << ver[dl](1) << ">, <" << nrml[dl](0) << ", "
-                          << nrml[dl](1) << ", " << nrml[dl](2) << ">," << '\n';
-                      out << "\t<" << ver[dl + d1 + d2](0) << ","
-                          << patch.data(0, dl + d1 + d2) << ","
-                          << ver[dl + d1 + d2](1) << ">, <"
-                          << nrml[dl + d1 + d2](0) << ", "
-                          << nrml[dl + d1 + d2](1) << ", "
-                          << nrml[dl + d1 + d2](2) << ">," << '\n';
-                      out << "\t<" << ver[dl + d2](0) << ","
-                          << patch.data(0, dl + d2) << "," << ver[dl + d2](1)
-                          << ">, <" << nrml[dl + d2](0) << ", "
-                          << nrml[dl + d2](1) << ", " << nrml[dl + d2](2)
-                          << ">}" << '\n';
-                    }
-                  else
-                    {
-                      // writing standard triangles down/right triangle
-                      out << "triangle {" << '\n'
-                          << "\t<" << ver[dl](0) << "," << patch.data(0, dl)
-                          << "," << ver[dl](1) << ">," << '\n';
-                      out << "\t<" << ver[dl + d1](0) << ","
-                          << patch.data(0, dl + d1) << "," << ver[dl + d1](1)
-                          << ">," << '\n';
-                      out << "\t<" << ver[dl + d1 + d2](0) << ","
-                          << patch.data(0, dl + d1 + d2) << ","
-                          << ver[dl + d1 + d2](1) << ">}" << '\n';
-
-                      // upper/left triangle
-                      out << "triangle {" << '\n'
-                          << "\t<" << ver[dl](0) << "," << patch.data(0, dl)
-                          << "," << ver[dl](1) << ">," << '\n';
-                      out << "\t<" << ver[dl + d1 + d2](0) << ","
-                          << patch.data(0, dl + d1 + d2) << ","
-                          << ver[dl + d1 + d2](1) << ">," << '\n';
-                      out << "\t<" << ver[dl + d2](0) << ","
-                          << patch.data(0, dl + d2) << "," << ver[dl + d2](1)
-                          << ">}" << '\n';
-                    }
-                }
-          }
-        else
-          {
-            // writing bicubic_patch
-            Assert(n_subdivisions == 3,
-                   ExcDimensionMismatch(n_subdivisions, 3));
-            out << '\n'
-                << "bicubic_patch {" << '\n'
-                << "  type 0" << '\n'
-                << "  flatness 0" << '\n'
-                << "  u_steps 0" << '\n'
-                << "  v_steps 0" << '\n';
-            for (int i = 0; i < 16; ++i)
-              {
-                out << "\t<" << ver[i](0) << "," << patch.data(0, i) << ","
-                    << ver[i](1) << ">";
-                if (i != 15)
-                  out << ",";
-                out << '\n';
-              }
-            out << "  texture {Tex}" << '\n' << "}" << '\n';
-          }
-      }
-
-    if (!flags.bicubic_patch)
-      {
-        // the end of the mesh
-        out << "  texture {Tex}" << '\n' << "}" << '\n' << '\n';
-      }
-
-    // make sure everything now gets to disk
-    out.flush();
-
-    AssertThrow(out, ExcIO());
+    do_write_povray(patches, data_names, flags, out);
   }
 
 
@@ -4085,7 +4534,7 @@ namespace DataOutBase
     const EpsFlags &flags,
     std::ostream &  out)
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
 #ifndef DEAL_II_WITH_MPI
     // verify that there are indeed patches to be written out. most of the
@@ -4131,13 +4580,14 @@ namespace DataOutBase
             {
               Point<spacedim> points[4];
               points[0] =
-                compute_hypercube_node(patch, i1, i2, 0, n_subdivisions);
+                get_equispaced_location(patch, {i1, i2}, n_subdivisions);
               points[1] =
-                compute_hypercube_node(patch, i1 + 1, i2, 0, n_subdivisions);
+                get_equispaced_location(patch, {i1 + 1, i2}, n_subdivisions);
               points[2] =
-                compute_hypercube_node(patch, i1, i2 + 1, 0, n_subdivisions);
-              points[3] = compute_hypercube_node(
-                patch, i1 + 1, i2 + 1, 0, n_subdivisions);
+                get_equispaced_location(patch, {i1, i2 + 1}, n_subdivisions);
+              points[3] = get_equispaced_location(patch,
+                                                  {i1 + 1, i2 + 1},
+                                                  n_subdivisions);
 
               switch (spacedim)
                 {
@@ -4384,7 +4834,7 @@ namespace DataOutBase
 
     out.flush();
 
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
   }
 
 
@@ -4409,7 +4859,7 @@ namespace DataOutBase
     AssertThrow(dim > 0, ExcNotImplemented());
 
     Assert(dim <= 3, ExcNotImplemented());
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
 #ifndef DEAL_II_WITH_MPI
     // verify that there are indeed patches to be written out. most of the
@@ -4437,7 +4887,7 @@ namespace DataOutBase
                                   n_data_sets,
                                 patches[0].data.n_rows()));
 
-    ///////////////////////
+    //---------------------
     // preamble
     out << "gmvinput ascii" << '\n' << '\n';
 
@@ -4465,7 +4915,7 @@ namespace DataOutBase
     Threads::Task<> reorder_task =
       Threads::new_task(fun_ptr, patches, data_vectors);
 
-    ///////////////////////////////
+    //-----------------------------
     // first make up a list of used vertices along with their coordinates
     //
     // note that we have to print 3 dimensions
@@ -4485,12 +4935,12 @@ namespace DataOutBase
         out << '\n';
       }
 
-    /////////////////////////////////
+    //-------------------------------
     // now for the cells. note that vertices are counted from 1 onwards
     out << "cells " << n_cells << '\n';
     write_cells(patches, gmv_out);
 
-    ///////////////////////////////////////
+    //-------------------------------------
     // data output.
     out << "variable" << '\n';
 
@@ -4521,7 +4971,7 @@ namespace DataOutBase
     out.flush();
 
     // assert the stream is still ok
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
   }
 
 
@@ -4539,7 +4989,7 @@ namespace DataOutBase
     const TecplotFlags &flags,
     std::ostream &      out)
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
     // The FEBLOCK or FEPOINT formats of tecplot only allows full elements (e.g.
     // triangles), not single points. Other tecplot format allow point output,
@@ -4578,7 +5028,7 @@ namespace DataOutBase
     unsigned int n_cells;
     compute_sizes<dim, spacedim>(patches, n_nodes, n_cells);
 
-    ///////////
+    //---------
     // preamble
     {
       out
@@ -4646,7 +5096,7 @@ namespace DataOutBase
     Threads::Task<> reorder_task =
       Threads::new_task(fun_ptr, patches, data_vectors);
 
-    ///////////////////////////////
+    //-----------------------------
     // first make up a list of used vertices along with their coordinates
 
 
@@ -4658,7 +5108,7 @@ namespace DataOutBase
       }
 
 
-    ///////////////////////////////////////
+    //-------------------------------------
     // data output.
     //
     // now write the data vectors to @p{out} first make sure that all data is in
@@ -4680,7 +5130,7 @@ namespace DataOutBase
     out.flush();
 
     // assert the stream is still ok
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
   }
 
 
@@ -4808,7 +5258,7 @@ namespace DataOutBase
       }
 
 
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
 #  ifndef DEAL_II_WITH_MPI
     // verify that there are indeed patches to be written out. most of the
@@ -4885,7 +5335,7 @@ namespace DataOutBase
     Threads::Task<> reorder_task =
       Threads::new_task(fun_ptr, patches, data_vectors);
 
-    ///////////////////////////////
+    //-----------------------------
     // first make up a list of used vertices along with their coordinates
     for (unsigned int d = 1; d <= spacedim; ++d)
       {
@@ -4955,7 +5405,7 @@ namespace DataOutBase
       }
 
 
-    ///////////////////////////////////////
+    //-------------------------------------
     // data output.
     //
     reorder_task.join();
@@ -4969,7 +5419,7 @@ namespace DataOutBase
 
 
 
-    /////////////////////////////////
+    //-------------------------------
     // now for the cells. note that vertices are counted from 1 onwards
     unsigned int first_vertex_of_patch = 0;
     unsigned int elem                  = 0;
@@ -5096,7 +5546,7 @@ namespace DataOutBase
     const VtkFlags &flags,
     std::ostream &  out)
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
 #ifndef DEAL_II_WITH_MPI
     // verify that there are indeed patches to be written out. most of the
@@ -5124,7 +5574,7 @@ namespace DataOutBase
         AssertDimension(n_data_sets, patches[0].data.n_rows())
       }
 
-    ///////////////////////
+    //---------------------
     // preamble
     {
       out << "# vtk DataFile Version 3.0" << '\n'
@@ -5135,7 +5585,7 @@ namespace DataOutBase
               << Utilities::System::get_time();
         }
       else
-        out << ".";
+        out << '.';
       out << '\n' << "ASCII" << '\n';
       // now output the data header
       out << "DATASET UNSTRUCTURED_GRID\n" << '\n';
@@ -5150,15 +5600,15 @@ namespace DataOutBase
          (flags.time != std::numeric_limits<double>::min() ? 1 : 0));
       if (n_metadata > 0)
         {
-          out << "FIELD FieldData " << n_metadata << "\n";
+          out << "FIELD FieldData " << n_metadata << '\n';
 
           if (flags.cycle != std::numeric_limits<unsigned int>::min())
             {
-              out << "CYCLE 1 1 int\n" << flags.cycle << "\n";
+              out << "CYCLE 1 1 int\n" << flags.cycle << '\n';
             }
           if (flags.time != std::numeric_limits<double>::min())
             {
-              out << "TIME 1 1 double\n" << flags.time << "\n";
+              out << "TIME 1 1 double\n" << flags.time << '\n';
             }
         }
     }
@@ -5191,14 +5641,14 @@ namespace DataOutBase
     Threads::Task<> reorder_task =
       Threads::new_task(fun_ptr, patches, data_vectors);
 
-    ///////////////////////////////
+    //-----------------------------
     // first make up a list of used vertices along with their coordinates
     //
     // note that we have to print d=1..3 dimensions
     out << "POINTS " << n_nodes << " double" << '\n';
     write_nodes(patches, vtk_out);
     out << '\n';
-    /////////////////////////////////
+    //-------------------------------
     // now for the cells
     out << "CELLS " << n_cells << ' ' << n_points_and_n_cells << '\n';
     if (flags.write_higher_order_cells)
@@ -5222,7 +5672,7 @@ namespace DataOutBase
       }
 
     out << '\n';
-    ///////////////////////////////////////
+    //-------------------------------------
     // data output.
 
     // now write the data vectors to @p{out} first make sure that all data is in
@@ -5331,14 +5781,14 @@ namespace DataOutBase
     out.flush();
 
     // assert the stream is still ok
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
   }
 
 
   void
   write_vtu_header(std::ostream &out, const VtkFlags &flags)
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
     out << "<?xml version=\"1.0\" ?> \n";
     out << "<!-- \n";
     out << "# vtk DataFile Version 3.0" << '\n'
@@ -5349,7 +5799,7 @@ namespace DataOutBase
             << Utilities::System::get_date();
       }
     else
-      out << ".";
+      out << '.';
     out << "\n-->\n";
     out << "<VTKFile type=\"UnstructuredGrid\" version=\"0.1\"";
 #ifdef DEAL_II_WITH_ZLIB
@@ -5371,7 +5821,7 @@ namespace DataOutBase
   void
   write_vtu_footer(std::ostream &out)
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
     out << " </UnstructuredGrid>\n";
     out << "</VTKFile>\n";
   }
@@ -5414,7 +5864,21 @@ namespace DataOutBase
     const VtkFlags &flags,
     std::ostream &  out)
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
+
+    // If the user provided physical units, make sure that they don't contain
+    // quote characters as this would make the VTU file invalid XML and
+    // probably lead to all sorts of difficult error messages. Other than that,
+    // trust the user that whatever they provide makes sense somehow.
+    for (const auto &unit : flags.physical_units)
+      {
+        (void)unit;
+        Assert(
+          unit.second.find('\"') == std::string::npos,
+          ExcMessage(
+            "A physical unit you provided, <" + unit.second +
+            ">, contained a quotation mark character. This is not allowed."));
+      }
 
 #ifndef DEAL_II_WITH_MPI
     // verify that there are indeed patches to be written out. most of the
@@ -5558,7 +6022,7 @@ namespace DataOutBase
     Threads::Task<> reorder_task =
       Threads::new_task(fun_ptr, patches, data_vectors);
 
-    ///////////////////////////////
+    //-----------------------------
     // first make up a list of used vertices along with their coordinates
     //
     // note that according to the standard, we have to print d=1..3 dimensions,
@@ -5571,7 +6035,7 @@ namespace DataOutBase
     write_nodes(patches, vtu_out);
     out << "    </DataArray>\n";
     out << "  </Points>\n\n";
-    /////////////////////////////////
+    //-------------------------------
     // now for the cells
     out << "  <Cells>\n";
     out << "    <DataArray type=\"Int32\" Name=\"connectivity\" format=\""
@@ -5590,10 +6054,10 @@ namespace DataOutBase
     std::vector<int32_t> offsets;
     offsets.reserve(n_cells);
 
-    // uint8_t might be an alias to unsigned char which is then not printed
+    // std::uint8_t might be an alias to unsigned char which is then not printed
     // as ascii integers
 #ifdef DEAL_II_WITH_ZLIB
-    std::vector<uint8_t> cell_types;
+    std::vector<std::uint8_t> cell_types;
 #else
     std::vector<unsigned int> cell_types;
 #endif
@@ -5615,7 +6079,7 @@ namespace DataOutBase
       }
 
     vtu_out << offsets;
-    out << "\n";
+    out << '\n';
     out << "    </DataArray>\n";
 
     // next output the types of the cells. since all cells are the same, this is
@@ -5625,12 +6089,12 @@ namespace DataOutBase
 
     // this should compress well :-)
     vtu_out << cell_types;
-    out << "\n";
+    out << '\n';
     out << "    </DataArray>\n";
     out << "  </Cells>\n";
 
 
-    ///////////////////////////////////////
+    //-------------------------------------
     // data output.
 
     // now write the data vectors to @p{out} first make sure that all data is in
@@ -5663,14 +6127,14 @@ namespace DataOutBase
             AssertThrow((last_component + 1 - first_component <= 9),
                         ExcMessage(
                           "Can't declare a tensor with more than 9 components "
-                          "in VTK"));
+                          "in VTK/VTU format."));
           }
         else
           {
             AssertThrow((last_component + 1 - first_component <= 3),
                         ExcMessage(
                           "Can't declare a vector with more than 3 components "
-                          "in VTK"));
+                          "in VTK/VTU format."));
           }
 
         // mark these components as already written:
@@ -5691,7 +6155,24 @@ namespace DataOutBase
           }
 
         out << "\" NumberOfComponents=\"" << n_components << "\" format=\""
-            << ascii_or_binary << "\">\n";
+            << ascii_or_binary << "\"";
+        // If present, also list the physical units for this quantity. Look this
+        // up for either the name of the whole vector/tensor, or if that isn't
+        // listed, via its first component.
+        if (!name.empty())
+          {
+            if (flags.physical_units.find(name) != flags.physical_units.end())
+              out << " units=\"" << flags.physical_units.at(name) << "\"";
+          }
+        else
+          {
+            if (flags.physical_units.find(data_names[first_component]) !=
+                flags.physical_units.end())
+              out << " units=\""
+                  << flags.physical_units.at(data_names[first_component])
+                  << "\"";
+          }
+        out << ">\n";
 
         // now write data. pad all vectors to have three components
         std::vector<float> data;
@@ -5774,6 +6255,7 @@ namespace DataOutBase
           } // loop over nodes
 
         vtu_out << data;
+        out << '\n';
         out << "    </DataArray>\n";
 
       } // loop over ranges
@@ -5784,11 +6266,19 @@ namespace DataOutBase
         {
           out << "    <DataArray type=\"Float32\" Name=\""
               << data_names[data_set] << "\" format=\"" << ascii_or_binary
-              << "\">\n";
+              << "\"";
+          // If present, also list the physical units for this quantity.
+          if (flags.physical_units.find(data_names[data_set]) !=
+              flags.physical_units.end())
+            out << " units=\"" << flags.physical_units.at(data_names[data_set])
+                << "\"";
+
+          out << ">\n";
 
           std::vector<float> data(data_vectors[data_set].begin(),
                                   data_vectors[data_set].end());
           vtu_out << data;
+          out << '\n';
           out << "    </DataArray>\n";
         }
 
@@ -5801,7 +6291,7 @@ namespace DataOutBase
     out.flush();
 
     // assert the stream is still ok
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
   }
 
 
@@ -5816,9 +6306,24 @@ namespace DataOutBase
                  unsigned int,
                  std::string,
                  DataComponentInterpretation::DataComponentInterpretation>>
-      &nonscalar_data_ranges)
+      &             nonscalar_data_ranges,
+    const VtkFlags &flags)
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
+
+    // If the user provided physical units, make sure that they don't contain
+    // quote characters as this would make the VTU file invalid XML and
+    // probably lead to all sorts of difficult error messages. Other than that,
+    // trust the user that whatever they provide makes sense somehow.
+    for (const auto &unit : flags.physical_units)
+      {
+        (void)unit;
+        Assert(
+          unit.second.find('\"') == std::string::npos,
+          ExcMessage(
+            "A physical unit you provided, <" + unit.second +
+            ">, contained a quotation mark character. This is not allowed."));
+      }
 
     const unsigned int n_data_sets = data_names.size();
 
@@ -5873,8 +6378,9 @@ namespace DataOutBase
         // underscores unless a vector name has been specified
         out << "    <PDataArray type=\"Float32\" Name=\"";
 
-        if (!std::get<2>(nonscalar_data_range).empty())
-          out << std::get<2>(nonscalar_data_range);
+        const std::string &name = std::get<2>(nonscalar_data_range);
+        if (!name.empty())
+          out << name;
         else
           {
             for (unsigned int i = std::get<0>(nonscalar_data_range);
@@ -5885,14 +6391,42 @@ namespace DataOutBase
           }
 
         out << "\" NumberOfComponents=\"" << n_components
-            << "\" format=\"ascii\"/>\n";
+            << "\" format=\"ascii\"";
+        // If present, also list the physical units for this quantity. Look this
+        // up for either the name of the whole vector/tensor, or if that isn't
+        // listed, via its first component.
+        if (!name.empty())
+          {
+            if (flags.physical_units.find(name) != flags.physical_units.end())
+              out << " units=\"" << flags.physical_units.at(name) << "\"";
+          }
+        else
+          {
+            if (flags.physical_units.find(
+                  data_names[std::get<1>(nonscalar_data_range)]) !=
+                flags.physical_units.end())
+              out << " units=\""
+                  << flags.physical_units.at(
+                       data_names[std::get<1>(nonscalar_data_range)])
+                  << "\"";
+          }
+
+        out << "/>\n";
       }
 
+    // Now for the scalar fields
     for (unsigned int data_set = 0; data_set < n_data_sets; ++data_set)
       if (data_set_written[data_set] == false)
         {
           out << "    <PDataArray type=\"Float32\" Name=\""
-              << data_names[data_set] << "\" format=\"ascii\"/>\n";
+              << data_names[data_set] << "\" format=\"ascii\"";
+
+          if (flags.physical_units.find(data_names[data_set]) !=
+              flags.physical_units.end())
+            out << " units=\"" << flags.physical_units.at(data_names[data_set])
+                << "\"";
+
+          out << "/>\n";
         }
 
     out << "    </PPointData>\n";
@@ -5910,7 +6444,7 @@ namespace DataOutBase
     out.flush();
 
     // assert the stream is still ok
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
   }
 
 
@@ -5920,7 +6454,7 @@ namespace DataOutBase
     std::ostream &                                     out,
     const std::vector<std::pair<double, std::string>> &times_and_names)
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
     out << "<?xml version=\"1.0\"?>\n";
 
@@ -5947,7 +6481,7 @@ namespace DataOutBase
     out.flush();
     out.precision(ss);
 
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
   }
 
 
@@ -5969,7 +6503,7 @@ namespace DataOutBase
   write_visit_record(std::ostream &                               out,
                      const std::vector<std::vector<std::string>> &piece_names)
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
     if (piece_names.size() == 0)
       return;
@@ -5999,7 +6533,7 @@ namespace DataOutBase
     const std::vector<std::pair<double, std::vector<std::string>>>
       &times_and_piece_names)
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
     if (times_and_piece_names.size() == 0)
       return;
@@ -6084,7 +6618,7 @@ namespace DataOutBase
     std::array<Point<2>, 4> projection_decompositions;
 
     projected_point =
-      compute_hypercube_node(first_patch, 0, 0, 0, n_subdivisions);
+      get_equispaced_location(first_patch, {0, 0}, n_subdivisions);
 
     if (first_patch.data.n_rows() != 0)
       {
@@ -6111,13 +6645,14 @@ namespace DataOutBase
             for (unsigned int i1 = 0; i1 < n_subdivisions; ++i1)
               {
                 projected_points[0] =
-                  compute_hypercube_node(patch, i1, i2, 0, n_subdivisions);
+                  get_equispaced_location(patch, {i1, i2}, n_subdivisions);
                 projected_points[1] =
-                  compute_hypercube_node(patch, i1 + 1, i2, 0, n_subdivisions);
+                  get_equispaced_location(patch, {i1 + 1, i2}, n_subdivisions);
                 projected_points[2] =
-                  compute_hypercube_node(patch, i1, i2 + 1, 0, n_subdivisions);
-                projected_points[3] = compute_hypercube_node(
-                  patch, i1 + 1, i2 + 1, 0, n_subdivisions);
+                  get_equispaced_location(patch, {i1, i2 + 1}, n_subdivisions);
+                projected_points[3] = get_equispaced_location(patch,
+                                                              {i1 + 1, i2 + 1},
+                                                              n_subdivisions);
 
                 x_min = std::min(x_min, projected_points[0][0]);
                 x_min = std::min(x_min, projected_points[1][0]);
@@ -6293,7 +6828,7 @@ namespace DataOutBase
     Point<3> point;
 
     projected_point =
-      compute_hypercube_node(first_patch, 0, 0, 0, n_subdivisions);
+      get_equispaced_location(first_patch, {0, 0}, n_subdivisions);
 
     if (first_patch.data.n_rows() != 0)
       {
@@ -6326,11 +6861,12 @@ namespace DataOutBase
             for (unsigned int i1 = 0; i1 < n_subdivisions; ++i1)
               {
                 const std::array<Point<spacedim>, 4> projected_vertices{
-                  {compute_hypercube_node(patch, i1, i2, 0, n_subdivisions),
-                   compute_hypercube_node(patch, i1 + 1, i2, 0, n_subdivisions),
-                   compute_hypercube_node(patch, i1, i2 + 1, 0, n_subdivisions),
-                   compute_hypercube_node(
-                     patch, i1 + 1, i2 + 1, 0, n_subdivisions)}};
+                  {get_equispaced_location(patch, {i1, i2}, n_subdivisions),
+                   get_equispaced_location(patch, {i1 + 1, i2}, n_subdivisions),
+                   get_equispaced_location(patch, {i1, i2 + 1}, n_subdivisions),
+                   get_equispaced_location(patch,
+                                           {i1 + 1, i2 + 1},
+                                           n_subdivisions)}};
 
                 Assert((flags.height_vector < patch.data.n_rows()) ||
                          patch.data.n_rows() == 0,
@@ -6468,11 +7004,12 @@ namespace DataOutBase
             for (unsigned int i1 = 0; i1 < n_subdivisions; ++i1)
               {
                 const std::array<Point<spacedim>, 4> projected_vertices = {
-                  {compute_hypercube_node(patch, i1, i2, 0, n_subdivisions),
-                   compute_hypercube_node(patch, i1 + 1, i2, 0, n_subdivisions),
-                   compute_hypercube_node(patch, i1, i2 + 1, 0, n_subdivisions),
-                   compute_hypercube_node(
-                     patch, i1 + 1, i2 + 1, 0, n_subdivisions)}};
+                  {get_equispaced_location(patch, {i1, i2}, n_subdivisions),
+                   get_equispaced_location(patch, {i1 + 1, i2}, n_subdivisions),
+                   get_equispaced_location(patch, {i1, i2 + 1}, n_subdivisions),
+                   get_equispaced_location(patch,
+                                           {i1 + 1, i2 + 1},
+                                           n_subdivisions)}};
 
                 Assert((flags.height_vector < patch.data.n_rows()) ||
                          patch.data.n_rows() == 0,
@@ -6852,7 +7389,7 @@ namespace DataOutBase
           additional_width =
             static_cast<unsigned int>(.5 + (height / 100.) * 2.5);
 
-        for (unsigned int index = 0; index < 4; index++)
+        for (unsigned int index = 0; index < 4; ++index)
           {
             double start_h = .667 - ((index + 1) / 4.) * .667;
             double stop_h  = .667 - (index / 4.) * .667;
@@ -6969,7 +7506,7 @@ namespace DataOutBase
               << index << ")\"/>" << '\n';
           }
 
-        for (unsigned int index = 0; index < 5; index++)
+        for (unsigned int index = 0; index < 5; ++index)
           {
             out
               << "  <text x=\""
@@ -7021,7 +7558,7 @@ namespace DataOutBase
     const Deal_II_IntermediateFlags & /*flags*/,
     std::ostream &out)
   {
-    AssertThrow(out, ExcIO());
+    AssertThrow(out.fail() == false, ExcIO());
 
     // first write tokens indicating the template parameters. we need this in
     // here because we may want to read in data again even if we don't know in
@@ -7055,11 +7592,172 @@ namespace DataOutBase
   }
 
 
+  template <int dim, int spacedim>
+  void
+  write_deal_II_intermediate_in_parallel(
+    const std::vector<Patch<dim, spacedim>> &patches,
+    const std::vector<std::string> &         data_names,
+    const std::vector<
+      std::tuple<unsigned int,
+                 unsigned int,
+                 std::string,
+                 DataComponentInterpretation::DataComponentInterpretation>>
+      &                              nonscalar_data_ranges,
+    const Deal_II_IntermediateFlags &flags,
+    const std::string &              filename,
+    const MPI_Comm &                 comm,
+    const CompressionLevel           compression)
+  {
+#ifndef DEAL_II_WITH_MPI
+    (void)patches;
+    (void)data_names;
+    (void)nonscalar_data_ranges;
+    (void)flags;
+    (void)filename;
+    (void)comm;
+    (void)compression;
+
+    AssertThrow(false,
+                ExcMessage("This functionality requires MPI to be enabled."));
+
+#else
+
+    // We write a simple format based on the text format of
+    // write_deal_II_intermediate() on each MPI rank. The text format
+    // is quite verbose and we should probably change this to a more
+    // efficient binary representation at some point. The file layout
+    // is as follows:
+    //
+    // 1. A binary header with layout struct
+    //    ParallelIntermediateHeaderType.
+    // 2. A list of uint64_t with one value per rank denoting the
+    //    compressed size of the chunks of the next step.
+    // 3. The (potentially compressed) chunks as generated by
+    //    write_deal_II_intermediate() on each MPI rank.
+
+    // First generate my data by writing (optionally compressed) data into
+    // my_buffer:
+    std::vector<char> my_buffer;
+    {
+      boost::iostreams::filtering_ostream f;
+
+      if (compression != CompressionLevel::no_compression)
+#  ifdef DEAL_II_WITH_ZLIB
+        f.push(boost::iostreams::zlib_compressor(
+          get_boost_zlib_compression_level(compression)));
+#  else
+        AssertThrow(
+          false,
+          ExcMessage(
+            "Compression requires deal.II to be configured with ZLIB support."));
+#  endif
+
+      boost::iostreams::back_insert_device<std::vector<char>> inserter(
+        my_buffer);
+      f.push(inserter);
+
+      write_deal_II_intermediate<dim, spacedim>(
+        patches, data_names, nonscalar_data_ranges, flags, f);
+    }
+    const std::uint64_t my_size = my_buffer.size();
+
+    const unsigned int  my_rank   = Utilities::MPI::this_mpi_process(comm);
+    const std::uint64_t n_ranks   = Utilities::MPI::n_mpi_processes(comm);
+    const std::uint64_t n_patches = Utilities::MPI::sum(patches.size(), comm);
+
+    const ParallelIntermediateHeader header{
+      0x00dea111,
+      Deal_II_IntermediateFlags::format_version,
+      static_cast<std::uint64_t>(compression),
+      dim,
+      spacedim,
+      n_ranks,
+      n_patches};
+
+    // Rank 0 also collects and writes the size of the data from each
+    // rank in bytes. The static_cast for the destination buffer looks
+    // useless, but without it clang-tidy will complain about a wrong
+    // MPI type.
+    std::vector<std::uint64_t> chunk_sizes(n_ranks);
+    int                        ierr = MPI_Gather(&my_size,
+                          1,
+                          MPI_UINT64_T,
+                          static_cast<std::uint64_t *>(chunk_sizes.data()),
+                          1,
+                          MPI_UINT64_T,
+                          0,
+                          comm);
+    AssertThrowMPI(ierr);
+
+    MPI_Info info;
+    MPI_Info_create(&info);
+    AssertThrowMPI(ierr);
+    MPI_File fh;
+    ierr = MPI_File_open(
+      comm, filename.c_str(), MPI_MODE_CREATE | MPI_MODE_WRONLY, info, &fh);
+    AssertThrow(ierr == MPI_SUCCESS, ExcFileNotOpen(filename));
+    ierr = MPI_Info_free(&info);
+    AssertThrowMPI(ierr);
+
+    // Delete the file contents:
+    ierr = MPI_File_set_size(fh, 0);
+    AssertThrowMPI(ierr);
+    // This barrier is necessary, because otherwise others might already write
+    // while one core is still setting the size to zero.
+    ierr = MPI_Barrier(comm);
+    AssertThrowMPI(ierr);
+
+    // Write the two parts of the header on rank 0:
+    if (my_rank == 0)
+      {
+        ierr = Utilities::MPI::LargeCount::File_write_at_c(
+          fh, 0, &header, sizeof(header), MPI_CHAR, MPI_STATUS_IGNORE);
+        AssertThrowMPI(ierr);
+
+        ierr = Utilities::MPI::LargeCount::File_write_at_c(
+          fh,
+          /* offset = */ sizeof(header),
+          chunk_sizes.data(),
+          chunk_sizes.size(),
+          MPI_UINT64_T,
+          MPI_STATUS_IGNORE);
+        AssertThrowMPI(ierr);
+      }
+
+    // Write the main part on each rank:
+    {
+      std::uint64_t prefix_sum = 0;
+      ierr = MPI_Exscan(&my_size, &prefix_sum, 1, MPI_UINT64_T, MPI_SUM, comm);
+      AssertThrowMPI(ierr);
+
+      // Locate specific offset for each processor.
+      const MPI_Offset offset = static_cast<MPI_Offset>(sizeof(header)) +
+                                n_ranks * sizeof(std::uint64_t) + prefix_sum;
+
+      ierr = Utilities::MPI::LargeCount::File_write_at_all_c(
+        fh, offset, my_buffer.data(), my_size, MPI_CHAR, MPI_STATUS_IGNORE);
+      AssertThrowMPI(ierr);
+    }
+
+    // Make sure we sync to disk. As written in the standard,
+    // MPI_File_close() actually already implies a sync but there seems
+    // to be a bug on at least one configuration (running with multiple
+    // nodes using OpenMPI 4.1) that requires it. Without this call, the
+    // footer is sometimes missing.
+    ierr = MPI_File_sync(fh);
+    AssertThrowMPI(ierr);
+
+    ierr = MPI_File_close(&fh);
+    AssertThrowMPI(ierr);
+#endif
+  }
+
+
 
   std::pair<unsigned int, unsigned int>
   determine_intermediate_format_dimensions(std::istream &input)
   {
-    AssertThrow(input, ExcIO());
+    AssertThrow(input.fail() == false, ExcIO());
 
     unsigned int dim, spacedim;
     input >> dim >> spacedim;
@@ -7205,6 +7903,7 @@ DataOutInterface<dim, spacedim>::write_svg(std::ostream &out) const
                          out);
 }
 
+
 template <int dim, int spacedim>
 void
 DataOutInterface<dim, spacedim>::write_vtu_in_parallel(
@@ -7220,17 +7919,14 @@ DataOutInterface<dim, spacedim>::write_vtu_in_parallel(
   write_vtu(f);
 #else
 
-  const int myrank = Utilities::MPI::this_mpi_process(comm);
-
+  const unsigned int myrank = Utilities::MPI::this_mpi_process(comm);
+  const unsigned int n_ranks = Utilities::MPI::n_mpi_processes(comm);
   MPI_Info info;
   int ierr = MPI_Info_create(&info);
   AssertThrowMPI(ierr);
   MPI_File fh;
-  ierr = MPI_File_open(comm,
-                       DEAL_II_MPI_CONST_CAST(filename.c_str()),
-                       MPI_MODE_CREATE | MPI_MODE_WRONLY,
-                       info,
-                       &fh);
+  ierr = MPI_File_open(
+    comm, filename.c_str(), MPI_MODE_CREATE | MPI_MODE_WRONLY, info, &fh);
   AssertThrow(ierr == MPI_SUCCESS, ExcFileNotOpen(filename));
 
   ierr = MPI_File_set_size(fh, 0); // delete the file contents
@@ -7242,7 +7938,9 @@ DataOutInterface<dim, spacedim>::write_vtu_in_parallel(
   ierr = MPI_Info_free(&info);
   AssertThrowMPI(ierr);
 
+  // Define header size so we can broadcast later.
   unsigned int header_size;
+  std::uint64_t footer_offset;
 
   // write header
   if (myrank == 0)
@@ -7250,19 +7948,15 @@ DataOutInterface<dim, spacedim>::write_vtu_in_parallel(
       std::stringstream ss;
       DataOutBase::write_vtu_header(ss, vtk_flags);
       header_size = ss.str().size();
-      ierr = MPI_File_write(fh,
-                            DEAL_II_MPI_CONST_CAST(ss.str().c_str()),
-                            header_size,
-                            MPI_CHAR,
-                            MPI_STATUS_IGNORE);
+      // Write the header on rank 0 at the start of a file, i.e., offset 0.
+      ierr = Utilities::MPI::LargeCount::File_write_at_c(
+        fh, 0, ss.str().c_str(), header_size, MPI_CHAR, MPI_STATUS_IGNORE);
       AssertThrowMPI(ierr);
     }
 
   ierr = MPI_Bcast(&header_size, 1, MPI_UNSIGNED, 0, comm);
   AssertThrowMPI(ierr);
 
-  ierr = MPI_File_seek_shared(fh, header_size, MPI_SEEK_SET);
-  AssertThrowMPI(ierr);
   {
     const auto &patches = get_patches();
     const types::global_dof_index my_n_patches = patches.size();
@@ -7281,31 +7975,57 @@ DataOutInterface<dim, spacedim>::write_vtu_in_parallel(
                                   vtk_flags,
                                   ss);
 
-    ierr = MPI_File_write_ordered(fh,
-                                  DEAL_II_MPI_CONST_CAST(ss.str().c_str()),
-                                  ss.str().size(),
-                                  MPI_CHAR,
-                                  MPI_STATUS_IGNORE);
+    // Use prefix sum to find specific offset to write at.
+    const std::uint64_t size_on_proc = ss.str().size();
+    std::uint64_t prefix_sum = 0;
+    ierr =
+      MPI_Exscan(&size_on_proc, &prefix_sum, 1, MPI_UINT64_T, MPI_SUM, comm);
     AssertThrowMPI(ierr);
+
+    // Locate specific offset for each processor.
+    const MPI_Offset offset = static_cast<MPI_Offset>(header_size) + prefix_sum;
+
+    ierr = Utilities::MPI::LargeCount::File_write_at_all_c(fh,
+                                                           offset,
+                                                           ss.str().c_str(),
+                                                           ss.str().size(),
+                                                           MPI_CHAR,
+                                                           MPI_STATUS_IGNORE);
+    AssertThrowMPI(ierr);
+
+    if (myrank == n_ranks - 1)
+      {
+        // Locating Footer with offset on last rank.
+        footer_offset = size_on_proc + offset;
+
+        std::stringstream ss;
+        DataOutBase::write_vtu_footer(ss);
+        const unsigned int footer_size = ss.str().size();
+
+        // Writing footer:
+        ierr = Utilities::MPI::LargeCount::File_write_at_c(fh,
+                                                           footer_offset,
+                                                           ss.str().c_str(),
+                                                           footer_size,
+                                                           MPI_CHAR,
+                                                           MPI_STATUS_IGNORE);
+        AssertThrowMPI(ierr);
+      }
   }
 
-  // write footer
-  if (myrank == 0)
-    {
-      std::stringstream ss;
-      DataOutBase::write_vtu_footer(ss);
-      unsigned int footer_size = ss.str().size();
-      ierr = MPI_File_write_shared(fh,
-                                   DEAL_II_MPI_CONST_CAST(ss.str().c_str()),
-                                   footer_size,
-                                   MPI_CHAR,
-                                   MPI_STATUS_IGNORE);
-      AssertThrowMPI(ierr);
-    }
+  // Make sure we sync to disk. As written in the standard,
+  // MPI_File_close() actually already implies a sync but there seems
+  // to be a bug on at least one configuration (running with multiple
+  // nodes using OpenMPI 4.1) that requires it. Without this call, the
+  // footer is sometimes missing.
+  ierr = MPI_File_sync(fh);
+  AssertThrowMPI(ierr);
+
   ierr = MPI_File_close(&fh);
   AssertThrowMPI(ierr);
 #endif
 }
+
 
 
 template <int dim, int spacedim>
@@ -7317,8 +8037,10 @@ DataOutInterface<dim, spacedim>::write_pvtu_record(
   DataOutBase::write_pvtu_record(out,
                                  piece_names,
                                  get_dataset_names(),
-                                 get_nonscalar_data_ranges());
+                                 get_nonscalar_data_ranges(),
+                                 vtk_flags);
 }
+
 
 
 template <int dim, int spacedim>
@@ -7369,8 +8091,7 @@ DataOutInterface<dim, spacedim>::write_vtu_with_pvtu_record(
       int ierr = MPI_Comm_split(mpi_communicator, color, rank, &comm_group);
       AssertThrowMPI(ierr);
       this->write_vtu_in_parallel(filename.c_str(), comm_group);
-      ierr = MPI_Comm_free(&comm_group);
-      AssertThrowMPI(ierr);
+      Utilities::MPI::free_communicator(comm_group);
 #else
       AssertThrow(false, ExcMessage("Logical error. Should not arrive here."));
 #endif
@@ -7416,6 +8137,26 @@ DataOutInterface<dim, spacedim>::write_deal_II_intermediate(
 }
 
 
+
+template <int dim, int spacedim>
+void
+DataOutInterface<dim, spacedim>::write_deal_II_intermediate_in_parallel(
+  const std::string &                 filename,
+  const MPI_Comm &                    comm,
+  const DataOutBase::CompressionLevel compression) const
+{
+  DataOutBase::write_deal_II_intermediate_in_parallel(
+    get_patches(),
+    get_dataset_names(),
+    get_nonscalar_data_ranges(),
+    deal_II_intermediate_flags,
+    filename,
+    comm,
+    compression);
+}
+
+
+
 template <int dim, int spacedim>
 XDMFEntry
 DataOutInterface<dim, spacedim>::create_xdmf_entry(
@@ -7439,7 +8180,7 @@ DataOutInterface<dim, spacedim>::create_xdmf_entry(
   const double                      cur_time,
   const MPI_Comm &                  comm) const
 {
-  unsigned int local_node_cell_count[2], global_node_cell_count[2];
+  std::uint64_t local_node_cell_count[2], global_node_cell_count[2];
 
 #ifndef DEAL_II_WITH_HDF5
   // throw an exception, but first make sure the compiler does not warn about
@@ -7463,7 +8204,7 @@ DataOutInterface<dim, spacedim>::create_xdmf_entry(
   int       ierr   = MPI_Allreduce(local_node_cell_count,
                            global_node_cell_count,
                            2,
-                           MPI_UNSIGNED,
+                           MPI_UINT64_T,
                            MPI_SUM,
                            comm);
   AssertThrowMPI(ierr);
@@ -7477,13 +8218,24 @@ DataOutInterface<dim, spacedim>::create_xdmf_entry(
   // Output the XDMF file only on the root process
   if (myrank == 0)
     {
+      const auto &patches = get_patches();
+      Assert(patches.size() > 0, DataOutBase::ExcNoPatches());
+      // We currently don't support writing mixed meshes:
+#ifdef DEBUG
+      for (const auto &patch : patches)
+        Assert(patch.reference_cell == patches[0].reference_cell,
+               ExcNotImplemented());
+#endif
+
+
       XDMFEntry    entry(h5_mesh_filename,
                       h5_solution_filename,
                       cur_time,
                       global_node_cell_count[0],
                       global_node_cell_count[1],
                       dim,
-                      spacedim);
+                      spacedim,
+                      patches[0].reference_cell);
       unsigned int n_data_sets = data_filter.n_data_sets();
 
       // The vector names generated here must match those generated in the HDF5
@@ -7520,8 +8272,7 @@ DataOutInterface<dim, spacedim>::write_xdmf_file(
   // Only rank 0 process writes the XDMF file
   if (myrank == 0)
     {
-      std::ofstream                          xdmf_file(filename.c_str());
-      std::vector<XDMFEntry>::const_iterator it;
+      std::ofstream xdmf_file(filename);
 
       xdmf_file << "<?xml version=\"1.0\" ?>\n";
       xdmf_file << "<!DOCTYPE Xdmf SYSTEM \"Xdmf.dtd\" []>\n";
@@ -7530,13 +8281,9 @@ DataOutInterface<dim, spacedim>::write_xdmf_file(
       xdmf_file
         << "    <Grid Name=\"CellTime\" GridType=\"Collection\" CollectionType=\"Temporal\">\n";
 
-      // Write out all the entries indented
-      const auto &patches = get_patches();
-      Assert(patches.size() > 0, DataOutBase::ExcNoPatches());
-
-      for (it = entries.begin(); it != entries.end(); ++it)
+      for (const auto &entry : entries)
         {
-          xdmf_file << it->get_xdmf_content(3, patches[0].reference_cell);
+          xdmf_file << entry.get_xdmf_content(3);
         }
 
       xdmf_file << "    </Grid>\n";
@@ -7565,6 +8312,332 @@ DataOutInterface<dim, spacedim>::write_filtered_data(
 }
 
 
+namespace
+{
+#ifdef DEAL_II_WITH_HDF5
+  /**
+   * Helper function to actually perform the HDF5 output.
+   */
+  template <int dim, int spacedim>
+  void
+  do_write_hdf5(const std::vector<DataOutBase::Patch<dim, spacedim>> &patches,
+                const DataOutBase::DataOutFilter &data_filter,
+                const bool                        write_mesh_file,
+                const std::string &               mesh_filename,
+                const std::string &               solution_filename,
+                const MPI_Comm &                  comm)
+  {
+    hid_t h5_mesh_file_id = -1, h5_solution_file_id, file_plist_id, plist_id;
+    hid_t node_dataspace, node_dataset, node_file_dataspace,
+      node_memory_dataspace;
+    hid_t cell_dataspace, cell_dataset, cell_file_dataspace,
+      cell_memory_dataspace;
+    hid_t pt_data_dataspace, pt_data_dataset, pt_data_file_dataspace,
+      pt_data_memory_dataspace;
+    herr_t              status;
+    std::uint64_t       local_node_cell_count[2];
+    hsize_t             count[2], offset[2], node_ds_dim[2], cell_ds_dim[2];
+    std::vector<double> node_data_vec;
+    std::vector<unsigned int> cell_data_vec;
+
+
+
+    local_node_cell_count[0] = data_filter.n_nodes();
+    local_node_cell_count[1] = data_filter.n_cells();
+
+    // Create file access properties
+    file_plist_id = H5Pcreate(H5P_FILE_ACCESS);
+    AssertThrow(file_plist_id != -1, ExcIO());
+    // If MPI is enabled *and* HDF5 is parallel, we can do parallel output
+#  ifdef DEAL_II_WITH_MPI
+#    ifdef H5_HAVE_PARALLEL
+    // Set the access to use the specified MPI_Comm object
+    status = H5Pset_fapl_mpio(file_plist_id, comm, MPI_INFO_NULL);
+    AssertThrow(status >= 0, ExcIO());
+#    endif
+#  endif
+
+    // Compute the global total number of nodes/cells and determine the offset
+    // of the data for this process
+
+    std::uint64_t global_node_cell_count[2]   = {0, 0};
+    std::uint64_t global_node_cell_offsets[2] = {0, 0};
+
+#  ifdef DEAL_II_WITH_MPI
+    int ierr = MPI_Allreduce(local_node_cell_count,
+                             global_node_cell_count,
+                             2,
+                             MPI_UINT64_T,
+                             MPI_SUM,
+                             comm);
+    AssertThrowMPI(ierr);
+    ierr = MPI_Exscan(local_node_cell_count,
+                      global_node_cell_offsets,
+                      2,
+                      MPI_UINT64_T,
+                      MPI_SUM,
+                      comm);
+    AssertThrowMPI(ierr);
+#  else
+    global_node_cell_count[0]   = local_node_cell_count[0];
+    global_node_cell_count[1]   = local_node_cell_count[1];
+    global_node_cell_offsets[0] = global_node_cell_offsets[1] = 0;
+#  endif
+
+    // Create the property list for a collective write
+    plist_id = H5Pcreate(H5P_DATASET_XFER);
+    AssertThrow(plist_id >= 0, ExcIO());
+#  ifdef DEAL_II_WITH_MPI
+#    ifdef H5_HAVE_PARALLEL
+    status = H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
+    AssertThrow(status >= 0, ExcIO());
+#    endif
+#  endif
+
+    if (write_mesh_file)
+      {
+        // Overwrite any existing files (change this to an option?)
+        h5_mesh_file_id = H5Fcreate(mesh_filename.c_str(),
+                                    H5F_ACC_TRUNC,
+                                    H5P_DEFAULT,
+                                    file_plist_id);
+        AssertThrow(h5_mesh_file_id >= 0, ExcIO());
+
+        // Create the dataspace for the nodes and cells. HDF5 only supports 2-
+        // or 3-dimensional coordinates
+        node_ds_dim[0] = global_node_cell_count[0];
+        node_ds_dim[1] = (spacedim < 2) ? 2 : spacedim;
+        node_dataspace = H5Screate_simple(2, node_ds_dim, nullptr);
+        AssertThrow(node_dataspace >= 0, ExcIO());
+
+        cell_ds_dim[0] = global_node_cell_count[1];
+        cell_ds_dim[1] = patches[0].reference_cell.n_vertices();
+        cell_dataspace = H5Screate_simple(2, cell_ds_dim, nullptr);
+        AssertThrow(cell_dataspace >= 0, ExcIO());
+
+        // Create the dataset for the nodes and cells
+#  if H5Gcreate_vers == 1
+        node_dataset = H5Dcreate(h5_mesh_file_id,
+                                 "nodes",
+                                 H5T_NATIVE_DOUBLE,
+                                 node_dataspace,
+                                 H5P_DEFAULT);
+#  else
+        node_dataset    = H5Dcreate(h5_mesh_file_id,
+                                 "nodes",
+                                 H5T_NATIVE_DOUBLE,
+                                 node_dataspace,
+                                 H5P_DEFAULT,
+                                 H5P_DEFAULT,
+                                 H5P_DEFAULT);
+#  endif
+        AssertThrow(node_dataset >= 0, ExcIO());
+#  if H5Gcreate_vers == 1
+        cell_dataset = H5Dcreate(h5_mesh_file_id,
+                                 "cells",
+                                 H5T_NATIVE_UINT,
+                                 cell_dataspace,
+                                 H5P_DEFAULT);
+#  else
+        cell_dataset    = H5Dcreate(h5_mesh_file_id,
+                                 "cells",
+                                 H5T_NATIVE_UINT,
+                                 cell_dataspace,
+                                 H5P_DEFAULT,
+                                 H5P_DEFAULT,
+                                 H5P_DEFAULT);
+#  endif
+        AssertThrow(cell_dataset >= 0, ExcIO());
+
+        // Close the node and cell dataspaces since we're done with them
+        status = H5Sclose(node_dataspace);
+        AssertThrow(status >= 0, ExcIO());
+        status = H5Sclose(cell_dataspace);
+        AssertThrow(status >= 0, ExcIO());
+
+        // Create the data subset we'll use to read from memory. HDF5 only
+        // supports 2- or 3-dimensional coordinates
+        count[0] = local_node_cell_count[0];
+        count[1] = (spacedim < 2) ? 2 : spacedim;
+
+        offset[0] = global_node_cell_offsets[0];
+        offset[1] = 0;
+
+        node_memory_dataspace = H5Screate_simple(2, count, nullptr);
+        AssertThrow(node_memory_dataspace >= 0, ExcIO());
+
+        // Select the hyperslab in the file
+        node_file_dataspace = H5Dget_space(node_dataset);
+        AssertThrow(node_file_dataspace >= 0, ExcIO());
+        status = H5Sselect_hyperslab(
+          node_file_dataspace, H5S_SELECT_SET, offset, nullptr, count, nullptr);
+        AssertThrow(status >= 0, ExcIO());
+
+        // And repeat for cells
+        count[0]              = local_node_cell_count[1];
+        count[1]              = patches[0].reference_cell.n_vertices();
+        offset[0]             = global_node_cell_offsets[1];
+        offset[1]             = 0;
+        cell_memory_dataspace = H5Screate_simple(2, count, nullptr);
+        AssertThrow(cell_memory_dataspace >= 0, ExcIO());
+
+        cell_file_dataspace = H5Dget_space(cell_dataset);
+        AssertThrow(cell_file_dataspace >= 0, ExcIO());
+        status = H5Sselect_hyperslab(
+          cell_file_dataspace, H5S_SELECT_SET, offset, nullptr, count, nullptr);
+        AssertThrow(status >= 0, ExcIO());
+
+        // And finally, write the node data
+        data_filter.fill_node_data(node_data_vec);
+        status = H5Dwrite(node_dataset,
+                          H5T_NATIVE_DOUBLE,
+                          node_memory_dataspace,
+                          node_file_dataspace,
+                          plist_id,
+                          node_data_vec.data());
+        AssertThrow(status >= 0, ExcIO());
+        node_data_vec.clear();
+
+        // And the cell data
+        data_filter.fill_cell_data(global_node_cell_offsets[0], cell_data_vec);
+        status = H5Dwrite(cell_dataset,
+                          H5T_NATIVE_UINT,
+                          cell_memory_dataspace,
+                          cell_file_dataspace,
+                          plist_id,
+                          cell_data_vec.data());
+        AssertThrow(status >= 0, ExcIO());
+        cell_data_vec.clear();
+
+        // Close the file dataspaces
+        status = H5Sclose(node_file_dataspace);
+        AssertThrow(status >= 0, ExcIO());
+        status = H5Sclose(cell_file_dataspace);
+        AssertThrow(status >= 0, ExcIO());
+
+        // Close the memory dataspaces
+        status = H5Sclose(node_memory_dataspace);
+        AssertThrow(status >= 0, ExcIO());
+        status = H5Sclose(cell_memory_dataspace);
+        AssertThrow(status >= 0, ExcIO());
+
+        // Close the datasets
+        status = H5Dclose(node_dataset);
+        AssertThrow(status >= 0, ExcIO());
+        status = H5Dclose(cell_dataset);
+        AssertThrow(status >= 0, ExcIO());
+
+        // If the filenames are different, we need to close the mesh file
+        if (mesh_filename != solution_filename)
+          {
+            status = H5Fclose(h5_mesh_file_id);
+            AssertThrow(status >= 0, ExcIO());
+          }
+      }
+
+    // If the filenames are identical, continue with the same file
+    if (mesh_filename == solution_filename && write_mesh_file)
+      {
+        h5_solution_file_id = h5_mesh_file_id;
+      }
+    else
+      {
+        // Otherwise we need to open a new file
+        h5_solution_file_id = H5Fcreate(solution_filename.c_str(),
+                                        H5F_ACC_TRUNC,
+                                        H5P_DEFAULT,
+                                        file_plist_id);
+        AssertThrow(h5_solution_file_id >= 0, ExcIO());
+      }
+
+    // when writing, first write out all vector data, then handle the scalar
+    // data sets that have been left over
+    unsigned int i;
+    std::string  vector_name;
+    for (i = 0; i < data_filter.n_data_sets(); ++i)
+      {
+        // Allocate space for the point data
+        // Must be either 1D or 3D
+        const unsigned int pt_data_vector_dim = data_filter.get_data_set_dim(i);
+        vector_name = data_filter.get_data_set_name(i);
+
+        // Create the dataspace for the point data
+        node_ds_dim[0]    = global_node_cell_count[0];
+        node_ds_dim[1]    = pt_data_vector_dim;
+        pt_data_dataspace = H5Screate_simple(2, node_ds_dim, nullptr);
+        AssertThrow(pt_data_dataspace >= 0, ExcIO());
+
+#  if H5Gcreate_vers == 1
+        pt_data_dataset = H5Dcreate(h5_solution_file_id,
+                                    vector_name.c_str(),
+                                    H5T_NATIVE_DOUBLE,
+                                    pt_data_dataspace,
+                                    H5P_DEFAULT);
+#  else
+        pt_data_dataset = H5Dcreate(h5_solution_file_id,
+                                    vector_name.c_str(),
+                                    H5T_NATIVE_DOUBLE,
+                                    pt_data_dataspace,
+                                    H5P_DEFAULT,
+                                    H5P_DEFAULT,
+                                    H5P_DEFAULT);
+#  endif
+        AssertThrow(pt_data_dataset >= 0, ExcIO());
+
+        // Create the data subset we'll use to read from memory
+        count[0]                 = local_node_cell_count[0];
+        count[1]                 = pt_data_vector_dim;
+        offset[0]                = global_node_cell_offsets[0];
+        offset[1]                = 0;
+        pt_data_memory_dataspace = H5Screate_simple(2, count, nullptr);
+        AssertThrow(pt_data_memory_dataspace >= 0, ExcIO());
+
+        // Select the hyperslab in the file
+        pt_data_file_dataspace = H5Dget_space(pt_data_dataset);
+        AssertThrow(pt_data_file_dataspace >= 0, ExcIO());
+        status = H5Sselect_hyperslab(pt_data_file_dataspace,
+                                     H5S_SELECT_SET,
+                                     offset,
+                                     nullptr,
+                                     count,
+                                     nullptr);
+        AssertThrow(status >= 0, ExcIO());
+
+        // And finally, write the data
+        status = H5Dwrite(pt_data_dataset,
+                          H5T_NATIVE_DOUBLE,
+                          pt_data_memory_dataspace,
+                          pt_data_file_dataspace,
+                          plist_id,
+                          data_filter.get_data_set(i));
+        AssertThrow(status >= 0, ExcIO());
+
+        // Close the dataspaces
+        status = H5Sclose(pt_data_dataspace);
+        AssertThrow(status >= 0, ExcIO());
+        status = H5Sclose(pt_data_memory_dataspace);
+        AssertThrow(status >= 0, ExcIO());
+        status = H5Sclose(pt_data_file_dataspace);
+        AssertThrow(status >= 0, ExcIO());
+        // Close the dataset
+        status = H5Dclose(pt_data_dataset);
+        AssertThrow(status >= 0, ExcIO());
+      }
+
+    // Close the file property list
+    status = H5Pclose(file_plist_id);
+    AssertThrow(status >= 0, ExcIO());
+
+    // Close the parallel access
+    status = H5Pclose(plist_id);
+    AssertThrow(status >= 0, ExcIO());
+
+    // Close the file
+    status = H5Fclose(h5_solution_file_id);
+    AssertThrow(status >= 0, ExcIO());
+  }
+#endif
+} // namespace
 
 template <int dim, int spacedim>
 void
@@ -7754,332 +8827,54 @@ DataOutBase::write_hdf5_parallel(
   (void)comm;
   AssertThrow(false, ExcMessage("HDF5 support is disabled."));
 #else
-#  ifndef DEAL_II_WITH_MPI
-  (void)comm;
-#  endif
 
-  // verify that there are indeed patches to be written out. most of the times,
-  // people just forget to call build_patches when there are no patches, so a
-  // warning is in order. that said, the assertion is disabled if we support MPI
-  // since then it can happen that on the coarsest mesh, a processor simply has
-  // no cells it actually owns, and in that case it is legit if there are no
-  // patches
-  Assert(patches.size() > 0, ExcNoPatches());
+  const unsigned int n_ranks = Utilities::MPI::n_mpi_processes(comm);
+  (void)n_ranks;
 
-  hid_t h5_mesh_file_id = -1, h5_solution_file_id, file_plist_id, plist_id;
-  hid_t node_dataspace, node_dataset, node_file_dataspace,
-    node_memory_dataspace;
-  hid_t cell_dataspace, cell_dataset, cell_file_dataspace,
-    cell_memory_dataspace;
-  hid_t pt_data_dataspace, pt_data_dataset, pt_data_file_dataspace,
-    pt_data_memory_dataspace;
-  herr_t status;
-  unsigned int local_node_cell_count[2];
-  hsize_t count[2], offset[2], node_ds_dim[2], cell_ds_dim[2];
-  std::vector<double> node_data_vec;
-  std::vector<unsigned int> cell_data_vec;
-
-  // If HDF5 is not parallel and we're using multiple processes, abort
+  // If HDF5 is not parallel and we're using multiple processes, abort:
 #  ifndef H5_HAVE_PARALLEL
-#    ifdef DEAL_II_WITH_MPI
-  int world_size = Utilities::MPI::n_mpi_processes(comm);
   AssertThrow(
-    world_size <= 1,
+    n_ranks <= 1,
     ExcMessage(
       "Serial HDF5 output on multiple processes is not yet supported."));
-#    endif
 #  endif
 
-  local_node_cell_count[0] = data_filter.n_nodes();
-  local_node_cell_count[1] = data_filter.n_cells();
+  // Verify that there are indeed patches to be written out. most of
+  // the times, people just forget to call build_patches when there
+  // are no patches, so a warning is in order. That said, the
+  // assertion is disabled if we run with more than one MPI rank,
+  // since then it can happen that, on coarse meshes, a processor
+  // simply has no cells it actually owns, and in that case it is
+  // legit if there are no patches.
+  Assert((patches.size() > 0) || (n_ranks > 1), ExcNoPatches());
 
-  // Create file access properties
-  file_plist_id = H5Pcreate(H5P_FILE_ACCESS);
-  AssertThrow(file_plist_id != -1, ExcIO());
-  // If MPI is enabled *and* HDF5 is parallel, we can do parallel output
-#  ifdef DEAL_II_WITH_MPI
-#    ifdef H5_HAVE_PARALLEL
-  // Set the access to use the specified MPI_Comm object
-  status = H5Pset_fapl_mpio(file_plist_id, comm, MPI_INFO_NULL);
-  AssertThrow(status >= 0, ExcIO());
-#    endif
-#  endif
+  // The HDF5 routines perform a bunch of collective calls that expect all
+  // ranks to participate. One ranks without any patches we are missing
+  // critical information, so rather than broadcasting that information, just
+  // create a new communicator that only contains ranks with cells and
+  // use that to perform the write operations:
+  const bool have_patches = (patches.size() > 0);
+  MPI_Comm split_comm;
+  {
+    const int key = Utilities::MPI::this_mpi_process(comm);
+    const int color = (have_patches ? 1 : 0);
+    const int ierr = MPI_Comm_split(comm, color, key, &split_comm);
+    AssertThrowMPI(ierr);
+  }
 
-  // Compute the global total number of nodes/cells and determine the offset of
-  // the data for this process
+  if (have_patches)
+    {
+      do_write_hdf5<dim, spacedim>(patches,
+                                   data_filter,
+                                   write_mesh_file,
+                                   mesh_filename,
+                                   solution_filename,
+                                   split_comm);
+    }
 
-  unsigned int global_node_cell_count[2] = {0, 0};
-  unsigned int global_node_cell_offsets[2] = {0, 0};
-
-#  ifdef DEAL_II_WITH_MPI
-  ierr = MPI_Allreduce(local_node_cell_count,
-                       global_node_cell_count,
-                       2,
-                       MPI_UNSIGNED,
-                       MPI_SUM,
-                       comm);
+  ierr = MPI_Comm_free(&split_comm);
   AssertThrowMPI(ierr);
-  ierr = MPI_Exscan(local_node_cell_count,
-                    global_node_cell_offsets,
-                    2,
-                    MPI_UNSIGNED,
-                    MPI_SUM,
-                    comm);
-  AssertThrowMPI(ierr);
-#  else
-  global_node_cell_count[0] = local_node_cell_count[0];
-  global_node_cell_count[1] = local_node_cell_count[1];
-  global_node_cell_offsets[0] = global_node_cell_offsets[1] = 0;
-#  endif
 
-  // Create the property list for a collective write
-  plist_id = H5Pcreate(H5P_DATASET_XFER);
-  AssertThrow(plist_id >= 0, ExcIO());
-#  ifdef DEAL_II_WITH_MPI
-#    ifdef H5_HAVE_PARALLEL
-  status = H5Pset_dxpl_mpio(plist_id, H5FD_MPIO_COLLECTIVE);
-  AssertThrow(status >= 0, ExcIO());
-#    endif
-#  endif
-
-  if (write_mesh_file)
-    {
-      // Overwrite any existing files (change this to an option?)
-      h5_mesh_file_id = H5Fcreate(mesh_filename.c_str(),
-                                  H5F_ACC_TRUNC,
-                                  H5P_DEFAULT,
-                                  file_plist_id);
-      AssertThrow(h5_mesh_file_id >= 0, ExcIO());
-
-      // Create the dataspace for the nodes and cells. HDF5 only supports 2- or
-      // 3-dimensional coordinates
-      node_ds_dim[0] = global_node_cell_count[0];
-      node_ds_dim[1] = (spacedim < 2) ? 2 : spacedim;
-      node_dataspace = H5Screate_simple(2, node_ds_dim, nullptr);
-      AssertThrow(node_dataspace >= 0, ExcIO());
-
-      cell_ds_dim[0] = global_node_cell_count[1];
-      cell_ds_dim[1] = patches[0].reference_cell.n_vertices();
-      cell_dataspace = H5Screate_simple(2, cell_ds_dim, nullptr);
-      AssertThrow(cell_dataspace >= 0, ExcIO());
-
-      // Create the dataset for the nodes and cells
-#  if H5Gcreate_vers == 1
-      node_dataset = H5Dcreate(h5_mesh_file_id,
-                               "nodes",
-                               H5T_NATIVE_DOUBLE,
-                               node_dataspace,
-                               H5P_DEFAULT);
-#  else
-      node_dataset = H5Dcreate(h5_mesh_file_id,
-                               "nodes",
-                               H5T_NATIVE_DOUBLE,
-                               node_dataspace,
-                               H5P_DEFAULT,
-                               H5P_DEFAULT,
-                               H5P_DEFAULT);
-#  endif
-      AssertThrow(node_dataset >= 0, ExcIO());
-#  if H5Gcreate_vers == 1
-      cell_dataset = H5Dcreate(
-        h5_mesh_file_id, "cells", H5T_NATIVE_UINT, cell_dataspace, H5P_DEFAULT);
-#  else
-      cell_dataset = H5Dcreate(h5_mesh_file_id,
-                               "cells",
-                               H5T_NATIVE_UINT,
-                               cell_dataspace,
-                               H5P_DEFAULT,
-                               H5P_DEFAULT,
-                               H5P_DEFAULT);
-#  endif
-      AssertThrow(cell_dataset >= 0, ExcIO());
-
-      // Close the node and cell dataspaces since we're done with them
-      status = H5Sclose(node_dataspace);
-      AssertThrow(status >= 0, ExcIO());
-      status = H5Sclose(cell_dataspace);
-      AssertThrow(status >= 0, ExcIO());
-
-      // Create the data subset we'll use to read from memory. HDF5 only
-      // supports 2- or 3-dimensional coordinates
-      count[0] = local_node_cell_count[0];
-      count[1] = (spacedim < 2) ? 2 : spacedim;
-
-      offset[0] = global_node_cell_offsets[0];
-      offset[1] = 0;
-
-      node_memory_dataspace = H5Screate_simple(2, count, nullptr);
-      AssertThrow(node_memory_dataspace >= 0, ExcIO());
-
-      // Select the hyperslab in the file
-      node_file_dataspace = H5Dget_space(node_dataset);
-      AssertThrow(node_file_dataspace >= 0, ExcIO());
-      status = H5Sselect_hyperslab(
-        node_file_dataspace, H5S_SELECT_SET, offset, nullptr, count, nullptr);
-      AssertThrow(status >= 0, ExcIO());
-
-      // And repeat for cells
-      count[0] = local_node_cell_count[1];
-      count[1] = patches[0].reference_cell.n_vertices();
-      offset[0] = global_node_cell_offsets[1];
-      offset[1] = 0;
-      cell_memory_dataspace = H5Screate_simple(2, count, nullptr);
-      AssertThrow(cell_memory_dataspace >= 0, ExcIO());
-
-      cell_file_dataspace = H5Dget_space(cell_dataset);
-      AssertThrow(cell_file_dataspace >= 0, ExcIO());
-      status = H5Sselect_hyperslab(
-        cell_file_dataspace, H5S_SELECT_SET, offset, nullptr, count, nullptr);
-      AssertThrow(status >= 0, ExcIO());
-
-      // And finally, write the node data
-      data_filter.fill_node_data(node_data_vec);
-      status = H5Dwrite(node_dataset,
-                        H5T_NATIVE_DOUBLE,
-                        node_memory_dataspace,
-                        node_file_dataspace,
-                        plist_id,
-                        node_data_vec.data());
-      AssertThrow(status >= 0, ExcIO());
-      node_data_vec.clear();
-
-      // And the cell data
-      data_filter.fill_cell_data(global_node_cell_offsets[0], cell_data_vec);
-      status = H5Dwrite(cell_dataset,
-                        H5T_NATIVE_UINT,
-                        cell_memory_dataspace,
-                        cell_file_dataspace,
-                        plist_id,
-                        cell_data_vec.data());
-      AssertThrow(status >= 0, ExcIO());
-      cell_data_vec.clear();
-
-      // Close the file dataspaces
-      status = H5Sclose(node_file_dataspace);
-      AssertThrow(status >= 0, ExcIO());
-      status = H5Sclose(cell_file_dataspace);
-      AssertThrow(status >= 0, ExcIO());
-
-      // Close the memory dataspaces
-      status = H5Sclose(node_memory_dataspace);
-      AssertThrow(status >= 0, ExcIO());
-      status = H5Sclose(cell_memory_dataspace);
-      AssertThrow(status >= 0, ExcIO());
-
-      // Close the datasets
-      status = H5Dclose(node_dataset);
-      AssertThrow(status >= 0, ExcIO());
-      status = H5Dclose(cell_dataset);
-      AssertThrow(status >= 0, ExcIO());
-
-      // If the filenames are different, we need to close the mesh file
-      if (mesh_filename != solution_filename)
-        {
-          status = H5Fclose(h5_mesh_file_id);
-          AssertThrow(status >= 0, ExcIO());
-        }
-    }
-
-  // If the filenames are identical, continue with the same file
-  if (mesh_filename == solution_filename && write_mesh_file)
-    {
-      h5_solution_file_id = h5_mesh_file_id;
-    }
-  else
-    {
-      // Otherwise we need to open a new file
-      h5_solution_file_id = H5Fcreate(solution_filename.c_str(),
-                                      H5F_ACC_TRUNC,
-                                      H5P_DEFAULT,
-                                      file_plist_id);
-      AssertThrow(h5_solution_file_id >= 0, ExcIO());
-    }
-
-  // when writing, first write out all vector data, then handle the scalar data
-  // sets that have been left over
-  unsigned int i;
-  std::string vector_name;
-  for (i = 0; i < data_filter.n_data_sets(); ++i)
-    {
-      // Allocate space for the point data
-      // Must be either 1D or 3D
-      const unsigned int pt_data_vector_dim = data_filter.get_data_set_dim(i);
-      vector_name = data_filter.get_data_set_name(i);
-
-      // Create the dataspace for the point data
-      node_ds_dim[0] = global_node_cell_count[0];
-      node_ds_dim[1] = pt_data_vector_dim;
-      pt_data_dataspace = H5Screate_simple(2, node_ds_dim, nullptr);
-      AssertThrow(pt_data_dataspace >= 0, ExcIO());
-
-#  if H5Gcreate_vers == 1
-      pt_data_dataset = H5Dcreate(h5_solution_file_id,
-                                  vector_name.c_str(),
-                                  H5T_NATIVE_DOUBLE,
-                                  pt_data_dataspace,
-                                  H5P_DEFAULT);
-#  else
-      pt_data_dataset = H5Dcreate(h5_solution_file_id,
-                                  vector_name.c_str(),
-                                  H5T_NATIVE_DOUBLE,
-                                  pt_data_dataspace,
-                                  H5P_DEFAULT,
-                                  H5P_DEFAULT,
-                                  H5P_DEFAULT);
-#  endif
-      AssertThrow(pt_data_dataset >= 0, ExcIO());
-
-      // Create the data subset we'll use to read from memory
-      count[0] = local_node_cell_count[0];
-      count[1] = pt_data_vector_dim;
-      offset[0] = global_node_cell_offsets[0];
-      offset[1] = 0;
-      pt_data_memory_dataspace = H5Screate_simple(2, count, nullptr);
-      AssertThrow(pt_data_memory_dataspace >= 0, ExcIO());
-
-      // Select the hyperslab in the file
-      pt_data_file_dataspace = H5Dget_space(pt_data_dataset);
-      AssertThrow(pt_data_file_dataspace >= 0, ExcIO());
-      status = H5Sselect_hyperslab(pt_data_file_dataspace,
-                                   H5S_SELECT_SET,
-                                   offset,
-                                   nullptr,
-                                   count,
-                                   nullptr);
-      AssertThrow(status >= 0, ExcIO());
-
-      // And finally, write the data
-      status = H5Dwrite(pt_data_dataset,
-                        H5T_NATIVE_DOUBLE,
-                        pt_data_memory_dataspace,
-                        pt_data_file_dataspace,
-                        plist_id,
-                        data_filter.get_data_set(i));
-      AssertThrow(status >= 0, ExcIO());
-
-      // Close the dataspaces
-      status = H5Sclose(pt_data_dataspace);
-      AssertThrow(status >= 0, ExcIO());
-      status = H5Sclose(pt_data_memory_dataspace);
-      AssertThrow(status >= 0, ExcIO());
-      status = H5Sclose(pt_data_file_dataspace);
-      AssertThrow(status >= 0, ExcIO());
-      // Close the dataset
-      status = H5Dclose(pt_data_dataset);
-      AssertThrow(status >= 0, ExcIO());
-    }
-
-  // Close the file property list
-  status = H5Pclose(file_plist_id);
-  AssertThrow(status >= 0, ExcIO());
-
-  // Close the parallel access
-  status = H5Pclose(plist_id);
-  AssertThrow(status >= 0, ExcIO());
-
-  // Close the file
-  status = H5Fclose(h5_solution_file_id);
-  AssertThrow(status >= 0, ExcIO());
 #endif
 }
 
@@ -8404,7 +9199,7 @@ template <int dim, int spacedim>
 void
 DataOutReader<dim, spacedim>::read(std::istream &in)
 {
-  AssertThrow(in, ExcIO());
+  AssertThrow(in.fail() == false, ExcIO());
 
   // first empty previous content
   {
@@ -8506,7 +9301,70 @@ DataOutReader<dim, spacedim>::read(std::istream &in)
       std::get<2>(nonscalar_data_ranges[i]) = name;
     }
 
-  AssertThrow(in, ExcIO());
+  AssertThrow(in.fail() == false, ExcIO());
+}
+
+
+
+template <int dim, int spacedim>
+void
+DataOutReader<dim, spacedim>::read_whole_parallel_file(std::istream &in)
+{
+  AssertThrow(in.fail() == false, ExcIO());
+
+  ParallelIntermediateHeader header;
+  in.read(reinterpret_cast<char *>(&header), sizeof(header));
+  AssertThrow(
+    header.magic == 0x00dea111,
+    ExcMessage(
+      "Invalid header of parallel deal.II intermediate format encountered."));
+  AssertThrow(
+    header.version == DataOutBase::Deal_II_IntermediateFlags::format_version,
+    ExcMessage(
+      "Incorrect header version of parallel deal.II intermediate format."));
+
+  std::vector<std::uint64_t> chunk_sizes(header.n_ranks);
+  in.read(reinterpret_cast<char *>(chunk_sizes.data()),
+          header.n_ranks * sizeof(std::uint64_t));
+
+  for (unsigned int n = 0; n < header.n_ranks; ++n)
+    {
+      // First read the compressed data into temp_buffer and then
+      // decompress and put into datastream
+      std::vector<char> temp_buffer(chunk_sizes[n]);
+      in.read(temp_buffer.data(), chunk_sizes[n]);
+
+      boost::iostreams::filtering_istreambuf f;
+      if (static_cast<DataOutBase::CompressionLevel>(header.compression) !=
+          DataOutBase::CompressionLevel::no_compression)
+#ifdef DEAL_II_WITH_ZLIB
+        f.push(boost::iostreams::zlib_decompressor());
+#else
+        AssertThrow(
+          false,
+          ExcMessage(
+            "Decompression requires deal.II to be configured with ZLIB support."));
+#endif
+
+      boost::iostreams::basic_array_source<char> source(temp_buffer.data(),
+                                                        temp_buffer.size());
+      f.push(source);
+
+      std::stringstream datastream;
+      boost::iostreams::copy(f, datastream);
+
+      // Now we can load the data and merge this chunk into *this
+      if (n == 0)
+        {
+          read(datastream);
+        }
+      else
+        {
+          DataOutReader<dim, spacedim> temp_reader;
+          temp_reader.read(datastream);
+          merge(temp_reader);
+        }
+    }
 }
 
 
@@ -8615,38 +9473,127 @@ XDMFEntry::XDMFEntry()
   , num_cells(numbers::invalid_unsigned_int)
   , dimension(numbers::invalid_unsigned_int)
   , space_dimension(numbers::invalid_unsigned_int)
+  , cell_type()
 {}
 
 
 
-XDMFEntry::XDMFEntry(const std::string &filename,
-                     const double       time,
-                     const unsigned int nodes,
-                     const unsigned int cells,
-                     const unsigned int dim)
-  : XDMFEntry(filename, filename, time, nodes, cells, dim, dim)
+XDMFEntry::XDMFEntry(const std::string & filename,
+                     const double        time,
+                     const std::uint64_t nodes,
+                     const std::uint64_t cells,
+                     const unsigned int  dim)
+  : XDMFEntry(filename, filename, time, nodes, cells, dim, dim, ReferenceCell())
+{}
+
+XDMFEntry::XDMFEntry(const std::string &  filename,
+                     const double         time,
+                     const std::uint64_t  nodes,
+                     const std::uint64_t  cells,
+                     const unsigned int   dim,
+                     const ReferenceCell &cell_type)
+  : XDMFEntry(filename, filename, time, nodes, cells, dim, dim, cell_type)
 {}
 
 
 
-XDMFEntry::XDMFEntry(const std::string &mesh_filename,
-                     const std::string &solution_filename,
-                     const double       time,
-                     const unsigned int nodes,
-                     const unsigned int cells,
-                     const unsigned int dim)
-  : XDMFEntry(mesh_filename, solution_filename, time, nodes, cells, dim, dim)
+XDMFEntry::XDMFEntry(const std::string & mesh_filename,
+                     const std::string & solution_filename,
+                     const double        time,
+                     const std::uint64_t nodes,
+                     const std::uint64_t cells,
+                     const unsigned int  dim)
+  : XDMFEntry(mesh_filename,
+              solution_filename,
+              time,
+              nodes,
+              cells,
+              dim,
+              dim,
+              ReferenceCell())
 {}
 
 
 
-XDMFEntry::XDMFEntry(const std::string &mesh_filename,
-                     const std::string &solution_filename,
-                     const double       time,
-                     const unsigned int nodes,
-                     const unsigned int cells,
-                     const unsigned int dim,
-                     const unsigned int spacedim)
+XDMFEntry::XDMFEntry(const std::string &  mesh_filename,
+                     const std::string &  solution_filename,
+                     const double         time,
+                     const std::uint64_t  nodes,
+                     const std::uint64_t  cells,
+                     const unsigned int   dim,
+                     const ReferenceCell &cell_type)
+  : XDMFEntry(mesh_filename,
+              solution_filename,
+              time,
+              nodes,
+              cells,
+              dim,
+              dim,
+              cell_type)
+{}
+
+
+
+XDMFEntry::XDMFEntry(const std::string & mesh_filename,
+                     const std::string & solution_filename,
+                     const double        time,
+                     const std::uint64_t nodes,
+                     const std::uint64_t cells,
+                     const unsigned int  dim,
+                     const unsigned int  spacedim)
+  : XDMFEntry(mesh_filename,
+              solution_filename,
+              time,
+              nodes,
+              cells,
+              dim,
+              spacedim,
+              ReferenceCell())
+{}
+
+
+
+namespace
+{
+  /**
+   * Deprecated XDMFEntry constructors do not fill the cell_type, so we use this
+   * little helper to convert it to the appropriate hex cell.
+   */
+  ReferenceCell
+  cell_type_hex_if_invalid(const ReferenceCell &cell_type,
+                           const unsigned int   dimension)
+  {
+    if (cell_type == ReferenceCells::Invalid)
+      {
+        switch (dimension)
+          {
+            case 0:
+              return ReferenceCells::get_hypercube<0>();
+            case 1:
+              return ReferenceCells::get_hypercube<1>();
+            case 2:
+              return ReferenceCells::get_hypercube<2>();
+            case 3:
+              return ReferenceCells::get_hypercube<3>();
+            default:
+              AssertThrow(false, ExcMessage("Invalid dimension"));
+          }
+      }
+    else
+      return cell_type;
+  }
+} // namespace
+
+
+
+XDMFEntry::XDMFEntry(const std::string &  mesh_filename,
+                     const std::string &  solution_filename,
+                     const double         time,
+                     const std::uint64_t  nodes,
+                     const std::uint64_t  cells,
+                     const unsigned int   dim,
+                     const unsigned int   spacedim,
+                     const ReferenceCell &cell_type_)
   : valid(true)
   , h5_sol_filename(solution_filename)
   , h5_mesh_filename(mesh_filename)
@@ -8655,6 +9602,7 @@ XDMFEntry::XDMFEntry(const std::string &mesh_filename,
   , num_cells(cells)
   , dimension(dim)
   , space_dimension(spacedim)
+  , cell_type(cell_type_hex_if_invalid(cell_type_, dim))
 {}
 
 
@@ -8686,34 +9634,20 @@ namespace
 
 
 std::string
-XDMFEntry::get_xdmf_content(const unsigned int indent_level) const
+XDMFEntry::get_xdmf_content(const unsigned int   indent_level,
+                            const ReferenceCell &reference_cell) const
 {
-  switch (dimension)
-    {
-      case 0:
-        return get_xdmf_content(indent_level,
-                                ReferenceCells::get_hypercube<0>());
-      case 1:
-        return get_xdmf_content(indent_level,
-                                ReferenceCells::get_hypercube<1>());
-      case 2:
-        return get_xdmf_content(indent_level,
-                                ReferenceCells::get_hypercube<2>());
-      case 3:
-        return get_xdmf_content(indent_level,
-                                ReferenceCells::get_hypercube<3>());
-      default:
-        Assert(false, ExcNotImplemented());
-    }
-
-  return "";
+  // We now store the type of cell in the XDMFEntry:
+  (void)reference_cell;
+  Assert(cell_type == reference_cell,
+         ExcMessage("Incorrect ReferenceCell type passed in."));
+  return get_xdmf_content(indent_level);
 }
 
 
 
 std::string
-XDMFEntry::get_xdmf_content(const unsigned int   indent_level,
-                            const ReferenceCell &reference_cell) const
+XDMFEntry::get_xdmf_content(const unsigned int indent_level) const
 {
   if (!valid)
     return "";
@@ -8730,65 +9664,64 @@ XDMFEntry::get_xdmf_content(const unsigned int   indent_level,
   ss << indent(indent_level + 3) << h5_mesh_filename << ":/nodes\n";
   ss << indent(indent_level + 2) << "</DataItem>\n";
   ss << indent(indent_level + 1) << "</Geometry>\n";
+
   // If we have cells defined, use the topology corresponding to the dimension
   if (num_cells > 0)
     {
+      ss << indent(indent_level + 1) << "<Topology TopologyType=\"";
+
       if (dimension == 0)
-        ss << indent(indent_level + 1) << "<Topology TopologyType=\""
-           << "Polyvertex"
-           << "\" NumberOfElements=\"" << num_cells
-           << "\" NodesPerElement=\"1\">\n";
+        {
+          ss << "Polyvertex";
+        }
       else if (dimension == 1)
-        ss << indent(indent_level + 1) << "<Topology TopologyType=\""
-           << "Polyline"
-           << "\" NumberOfElements=\"" << num_cells
-           << "\" NodesPerElement=\"2\">\n";
+        {
+          ss << "Polyline";
+        }
       else if (dimension == 2)
         {
-          Assert(reference_cell == ReferenceCells::Quadrilateral ||
-                   reference_cell == ReferenceCells::Triangle,
+          Assert(cell_type == ReferenceCells::Quadrilateral ||
+                   cell_type == ReferenceCells::Triangle,
                  ExcNotImplemented());
 
-          ss << indent(indent_level + 1) << "<Topology TopologyType=\"";
-          if (reference_cell == ReferenceCells::Quadrilateral)
+          if (cell_type == ReferenceCells::Quadrilateral)
             {
-              ss << "Quadrilateral"
-                 << "\" NumberOfElements=\"" << num_cells << "\">\n"
-                 << indent(indent_level + 2) << "<DataItem Dimensions=\""
-                 << num_cells << " " << (1 << dimension);
+              ss << "Quadrilateral";
             }
-          else // if (reference_cell == ReferenceCells::Triangle)
+          else // if (cell_type == ReferenceCells::Triangle)
             {
-              ss << "Triangle"
-                 << "\" NumberOfElements=\"" << num_cells << "\">\n"
-                 << indent(indent_level + 2) << "<DataItem Dimensions=\""
-                 << num_cells << " " << 3;
+              ss << "Triangle";
             }
         }
       else if (dimension == 3)
         {
-          Assert(reference_cell == ReferenceCells::Hexahedron ||
-                   reference_cell == ReferenceCells::Tetrahedron,
+          Assert(cell_type == ReferenceCells::Hexahedron ||
+                   cell_type == ReferenceCells::Tetrahedron,
                  ExcNotImplemented());
 
-          ss << indent(indent_level + 1) << "<Topology TopologyType=\"";
-          if (reference_cell == ReferenceCells::Hexahedron)
+          if (cell_type == ReferenceCells::Hexahedron)
             {
-              ss << "Hexahedron"
-                 << "\" NumberOfElements=\"" << num_cells << "\">\n"
-                 << indent(indent_level + 2) << "<DataItem Dimensions=\""
-                 << num_cells << " " << (1 << dimension);
+              ss << "Hexahedron";
             }
           else // if (reference_cell == ReferenceCells::Tetrahedron)
             {
-              ss << "Tetrahedron"
-                 << "\" NumberOfElements=\"" << num_cells << "\">\n"
-                 << indent(indent_level + 2) << "<DataItem Dimensions=\""
-                 << num_cells << " " << 4;
+              ss << "Tetrahedron";
             }
         }
 
-      ss << "\" NumberType=\"UInt\" Format=\"HDF\">\n";
+      ss << "\" NumberOfElements=\"" << num_cells;
+      if (dimension == 0)
+        ss << "\" NodesPerElement=\"1\">\n";
+      else if (dimension == 1)
+        ss << "\" NodesPerElement=\"2\">\n";
+      else
+        // no "NodesPerElement" for dimension 2 and higher
+        ss << "\">\n";
+
+      ss << indent(indent_level + 2) << "<DataItem Dimensions=\"" << num_cells
+         << " " << cell_type.n_vertices()
+         << "\" NumberType=\"UInt\" Format=\"HDF\">\n";
+
       ss << indent(indent_level + 3) << h5_mesh_filename << ":/cells\n";
       ss << indent(indent_level + 2) << "</DataItem>\n";
       ss << indent(indent_level + 1) << "</Topology>\n";
@@ -8814,7 +9747,7 @@ XDMFEntry::get_xdmf_content(const unsigned int   indent_level,
          << " " << (attribute_dim.second > 1 ? 3 : 1)
          << "\" NumberType=\"Float\" Precision=\"8\" Format=\"HDF\">\n";
       ss << indent(indent_level + 3) << h5_sol_filename << ":/"
-         << attribute_dim.first << "\n";
+         << attribute_dim.first << '\n';
       ss << indent(indent_level + 2) << "</DataItem>\n";
       ss << indent(indent_level + 1) << "</Attribute>\n";
     }
@@ -8836,12 +9769,15 @@ namespace DataOutBase
     out << "[deal.II intermediate Patch<" << dim << ',' << spacedim << ">]"
         << '\n';
 
+    // First export what kind of reference cell we are looking at:
+    out << patch.reference_cell << '\n';
+
     // then write all the data that is in this patch
-    for (const unsigned int i : GeometryInfo<dim>::vertex_indices())
-      out << patch.vertices[GeometryInfo<dim>::ucd_to_deal[i]] << ' ';
+    for (const unsigned int i : patch.reference_cell.vertex_indices())
+      out << patch.vertices[i] << ' ';
     out << '\n';
 
-    for (unsigned int i : GeometryInfo<dim>::face_indices())
+    for (unsigned int i : patch.reference_cell.face_indices())
       out << patch.neighbors[i] << ' ';
     out << '\n';
 
@@ -8860,11 +9796,12 @@ namespace DataOutBase
   }
 
 
+
   template <int dim, int spacedim>
   std::istream &
   operator>>(std::istream &in, Patch<dim, spacedim> &patch)
   {
-    AssertThrow(in, ExcIO());
+    AssertThrow(in.fail() == false, ExcIO());
 
     // read a header line and compare it to what we usually write. skip all
     // lines that contain only blanks at the start
@@ -8873,7 +9810,7 @@ namespace DataOutBase
       do
         {
           getline(in, header);
-          while ((header.size() != 0) && (header[header.size() - 1] == ' '))
+          while ((header.size() != 0) && (header.back() == ' '))
             header.erase(header.size() - 1);
         }
       while ((header.empty()) && in);
@@ -8884,15 +9821,41 @@ namespace DataOutBase
       Assert(header == s.str(), ExcUnexpectedInput(s.str(), header));
     }
 
+    // First import what kind of reference cell we are looking at:
+#ifdef DEAL_II_HAVE_CXX17
+    if constexpr (dim > 0)
+      in >> patch.reference_cell;
+#else
+    // If we can't use 'if constexpr', work around the fact that we can't
+    // write to a 'const' variable by using a const_cast that is a no-op
+    // whenever the code is actually executed
+    if (dim > 0)
+      in >> const_cast<ReferenceCell &>(patch.reference_cell);
+#endif
 
     // then read all the data that is in this patch
-    for (const unsigned int i : GeometryInfo<dim>::vertex_indices())
-      in >> patch.vertices[GeometryInfo<dim>::ucd_to_deal[i]];
+    for (const unsigned int i : patch.reference_cell.vertex_indices())
+      in >> patch.vertices[i];
 
-    for (unsigned int i : GeometryInfo<dim>::face_indices())
+    for (unsigned int i : patch.reference_cell.face_indices())
       in >> patch.neighbors[i];
 
-    in >> patch.patch_index >> patch.n_subdivisions;
+    in >> patch.patch_index;
+
+    // If dim>1, we also need to set the number of subdivisions, whereas
+    // in dim==1, this is a const variable equal to one that can't be changed.
+    unsigned int n_subdivisions;
+    in >> n_subdivisions;
+#ifdef DEAL_II_HAVE_CXX17
+    if constexpr (dim > 1)
+      patch.n_subdivisions = n_subdivisions;
+#else
+    // If we can't use 'if constexpr', work around the fact that we can't
+    // write to a 'const' variable by using a const_cast that is a no-op
+    // whenever the code is actually executed
+    if (dim > 1)
+      const_cast<unsigned int &>(patch.n_subdivisions) = n_subdivisions;
+#endif
 
     in >> patch.points_are_available;
 
@@ -8903,7 +9866,7 @@ namespace DataOutBase
       for (unsigned int j = 0; j < patch.data.n_cols(); ++j)
         in >> patch.data[i][j];
 
-    AssertThrow(in, ExcIO());
+    AssertThrow(in.fail() == false, ExcIO());
 
     return in;
   }

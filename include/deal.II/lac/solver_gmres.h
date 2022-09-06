@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1998 - 2020 by the deal.II authors
+// Copyright (C) 1998 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -37,8 +37,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup Solvers */
-/*@{*/
+/**
+ * @addtogroup Solvers
+ * @{
+ */
 
 namespace internal
 {
@@ -74,7 +76,8 @@ namespace internal
        * Get vector number @p i. If this vector was unused before, an error
        * occurs.
        */
-      VectorType &operator[](const unsigned int i) const;
+      VectorType &
+      operator[](const unsigned int i) const;
 
       /**
        * Get vector number @p i. Allocate it if necessary.
@@ -518,7 +521,7 @@ private:
   FullMatrix<double> H1;
 };
 
-/*@}*/
+/** @} */
 /* --------------------- Inline and template functions ------------------- */
 
 
@@ -537,8 +540,8 @@ namespace internal
 
 
     template <class VectorType>
-    inline VectorType &TmpVectors<VectorType>::
-                       operator[](const unsigned int i) const
+    inline VectorType &
+    TmpVectors<VectorType>::operator[](const unsigned int i) const
     {
       AssertIndexRange(i, data.size());
 
@@ -631,7 +634,7 @@ SolverGMRES<VectorType>::givens_rotation(Vector<double> &h,
                                          Vector<double> &si,
                                          int             col) const
 {
-  for (int i = 0; i < col; i++)
+  for (int i = 0; i < col; ++i)
     {
       const double s     = si(i);
       const double c     = ci(i);
@@ -825,7 +828,7 @@ SolverGMRES<VectorType>::solve(const MatrixType &        A,
   unsigned int dim = 0;
 
   SolverControl::State iteration_state = SolverControl::iterate;
-  double               last_res        = -std::numeric_limits<double>::max();
+  double               last_res        = std::numeric_limits<double>::lowest();
 
   // switch to determine whether we want a left or a right preconditioner. at
   // present, left is default, but both ways are implemented
@@ -1216,7 +1219,7 @@ SolverFGMRES<VectorType>::solve(const MatrixType &        A,
   Vector<double> y;
 
   // Iteration starts here
-  double res = -std::numeric_limits<double>::max();
+  double res = std::numeric_limits<double>::lowest();
 
   typename VectorMemory<VectorType>::Pointer aux(this->memory);
   aux->reinit(x);

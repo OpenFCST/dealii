@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -35,7 +35,7 @@ test()
     for (unsigned int i = 0; i < m.m(); ++i)
       {
         for (unsigned int j = 0; j < m.n(); ++j)
-          deallog << m(i, j) << " ";
+          deallog << m(i, j) << ' ';
         deallog << std::endl;
       }
   };

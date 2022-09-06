@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2003 - 2020 by the deal.II authors
+// Copyright (C) 2003 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -69,7 +69,7 @@ check_this(const DoFHandler<dim> &dof_handler)
                ++c)
             deallog << sp.block(block_row.first, col)
                          .column_number(block_row.second, c)
-                    << " ";
+                    << ' ';
           deallog << std::endl;
         }
     }

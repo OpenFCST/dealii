@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -186,8 +186,8 @@ namespace Differentiation
 
       /**
        * @name Constructor / destructor
+       * @{
        */
-      //@{
 
       /**
        * The constructor for the class.
@@ -211,12 +211,12 @@ namespace Differentiation
        */
       virtual ~HelperBase() = default;
 
-      //@}
+      /** @} */
 
       /**
        * @name Interrogation of internal information
+       * @{
        */
-      //@{
 
       /**
        * Return the number of independent variables that this object expects to
@@ -266,12 +266,12 @@ namespace Differentiation
       print_tape_stats(const typename Types<ad_type>::tape_index tape_index,
                        std::ostream &                            stream) const;
 
-      //@}
+      /** @} */
 
       /**
        * @name Operations specific to tapeless mode
+       * @{
        */
-      //@{
 
       /**
        * Pre-specify the number of @p independent_variables to be used in
@@ -295,12 +295,12 @@ namespace Differentiation
       configure_tapeless_mode(const unsigned int n_independent_variables,
                               const bool ensure_persistent_setting = true);
 
-      //@}
+      /** @} */
 
       /**
        * @name Operations specific to taped mode: Recording tapes
+       * @{
        */
-      //@{
 
       /**
        * Reset the state of the helper class.
@@ -575,13 +575,13 @@ namespace Differentiation
       void
       clear_active_tape();
 
-      //@}
+      /** @} */
 
     protected:
       /**
        * @name Drivers and taping
+       * @{
        */
-      //@{
 
       /**
        * An object used to help manage stored tapes.
@@ -619,12 +619,12 @@ namespace Differentiation
       activate_tape(const typename Types<ad_type>::tape_index tape_index,
                     const bool                                read_mode);
 
-      //@}
+      /** @} */
 
       /**
        * @name Independent variables
+       * @{
        */
-      //@{
 
       /**
        * A set of independent variables $\mathbf{X}$ that differentiation will
@@ -728,12 +728,12 @@ namespace Differentiation
       unsigned int
       n_registered_independent_variables() const;
 
-      //@}
+      /** @} */
 
       /**
        * @name Dependent variables
+       * @{
        */
-      //@{
 
       /**
        * The set of dependent variables $\mathbf{f}(\mathbf{X})$ of which the
@@ -784,7 +784,7 @@ namespace Differentiation
       register_dependent_variable(const unsigned int index,
                                   const ad_type &    func);
 
-      //@}
+      /** @} */
 
     }; // class HelperBase
 
@@ -853,7 +853,7 @@ namespace Differentiation
       /**
        * @name Constructor / destructor
        */
-      //@{
+      /** @{ */
 
       /**
        * The constructor for the class.
@@ -877,12 +877,12 @@ namespace Differentiation
        */
       virtual ~CellLevelBase() = default;
 
-      //@}
+      /** @} */
 
       /**
        * @name Independent variables
        */
-      //@{
+      /** @{ */
 
       /**
        * Register the complete set of independent variables $\mathbf{X}$ that
@@ -951,12 +951,12 @@ namespace Differentiation
       const std::vector<ad_type> &
       get_sensitive_dof_values() const;
 
-      //@}
+      /** @} */
 
       /**
        * @name Operations specific to taped mode: Reusing tapes
        */
-      //@{
+      /** @{ */
 
       /**
        * Set the values for the independent variables $\mathbf{X}$, i.e., the
@@ -1003,12 +1003,12 @@ namespace Differentiation
         const VectorType &                                  values,
         const std::vector<dealii::types::global_dof_index> &local_dof_indices);
 
-      //@}
+      /** @} */
 
       /**
        * @name Dependent variables
        */
-      //@{
+      /** @{ */
 
       /**
        * Compute the value of the residual vector field
@@ -1047,7 +1047,7 @@ namespace Differentiation
       virtual void
       compute_linearization(FullMatrix<scalar_type> &linearization) const = 0;
 
-      //@}
+      /** @} */
 
     }; // class CellLevelBase
 
@@ -1235,7 +1235,7 @@ namespace Differentiation
       /**
        * @name Constructor / destructor
        */
-      //@{
+      /** @{ */
 
       /**
        * The constructor for the class.
@@ -1259,12 +1259,12 @@ namespace Differentiation
        */
       virtual ~EnergyFunctional() = default;
 
-      //@}
+      /** @} */
 
       /**
        * @name Dependent variables
        */
-      //@{
+      /** @{ */
 
       /**
        * Register the definition of the total cell energy
@@ -1344,7 +1344,7 @@ namespace Differentiation
       compute_linearization(
         FullMatrix<scalar_type> &linearization) const override;
 
-      //@}
+      /** @} */
 
     }; // class EnergyFunctional
 
@@ -1547,7 +1547,7 @@ namespace Differentiation
       /**
        * @name Constructor / destructor
        */
-      //@{
+      /** @{ */
 
       /**
        * The constructor for the class.
@@ -1571,12 +1571,12 @@ namespace Differentiation
        */
       virtual ~ResidualLinearization() = default;
 
-      //@}
+      /** @} */
 
       /**
        * @name Dependent variables
        */
-      //@{
+      /** @{ */
 
       /**
        * Register the definition of the cell residual vector
@@ -1634,7 +1634,7 @@ namespace Differentiation
       compute_linearization(
         FullMatrix<scalar_type> &linearization) const override;
 
-      //@}
+      /** @} */
 
     }; // class ResidualLinearization
 
@@ -2449,9 +2449,10 @@ namespace Differentiation
        * @p t to the given @p value.
        */
       template <int dim, typename NumberType>
-      inline void set_tensor_entry(Tensor<0, dim, NumberType> &t,
-                                   const unsigned int          unrolled_index,
-                                   const NumberType &          value)
+      inline void
+      set_tensor_entry(Tensor<0, dim, NumberType> &t,
+                       const unsigned int          unrolled_index,
+                       const NumberType &          value)
       {
         AssertIndexRange(unrolled_index, 1);
         (void)unrolled_index;
@@ -2482,10 +2483,11 @@ namespace Differentiation
        * @p t to the given @p value.
        */
       template <int dim, typename NumberType>
-      inline void set_tensor_entry(SymmetricTensor<4, dim, NumberType> &t,
-                                   const unsigned int unrolled_index_row,
-                                   const unsigned int unrolled_index_col,
-                                   const NumberType & value)
+      inline void
+      set_tensor_entry(SymmetricTensor<4, dim, NumberType> &t,
+                       const unsigned int                   unrolled_index_row,
+                       const unsigned int                   unrolled_index_col,
+                       const NumberType &                   value)
       {
         // Fourth order symmetric tensors require a specialized interface
         // to extract values.
@@ -2510,7 +2512,8 @@ namespace Differentiation
       template <int rank,
                 int dim,
                 typename NumberType,
-                template <int, int, typename> class TensorType>
+                template <int, int, typename>
+                class TensorType>
       inline NumberType
       get_tensor_entry(const TensorType<rank, dim, NumberType> &t,
                        const unsigned int                       unrolled_index)
@@ -2528,7 +2531,8 @@ namespace Differentiation
        */
       template <int dim,
                 typename NumberType,
-                template <int, int, typename> class TensorType>
+                template <int, int, typename>
+                class TensorType>
       inline NumberType
       get_tensor_entry(const TensorType<0, dim, NumberType> &t,
                        const unsigned int                    unrolled_index)
@@ -2561,7 +2565,8 @@ namespace Differentiation
       template <int rank,
                 int dim,
                 typename NumberType,
-                template <int, int, typename> class TensorType>
+                template <int, int, typename>
+                class TensorType>
       inline NumberType &
       get_tensor_entry(TensorType<rank, dim, NumberType> &t,
                        const unsigned int                 unrolled_index)
@@ -2579,9 +2584,11 @@ namespace Differentiation
        */
       template <int dim,
                 typename NumberType,
-                template <int, int, typename> class TensorType>
-      NumberType &get_tensor_entry(TensorType<0, dim, NumberType> &t,
-                                   const unsigned int              index)
+                template <int, int, typename>
+                class TensorType>
+      NumberType &
+      get_tensor_entry(TensorType<0, dim, NumberType> &t,
+                       const unsigned int              index)
       {
         AssertIndexRange(index, 1);
         (void)index;
@@ -2639,7 +2646,7 @@ namespace Differentiation
        * Type definition for the dimension of the associated input and output
        * tensor types.
        */
-      static const unsigned int dimension = dim;
+      static constexpr unsigned int dimension = dim;
 
       /**
        * Type definition for the floating point number type that is used in,
@@ -2658,7 +2665,7 @@ namespace Differentiation
       /**
        * @name Constructor / destructor
        */
-      //@{
+      /** @{ */
 
       /**
        * The constructor for the class.
@@ -2682,12 +2689,12 @@ namespace Differentiation
        */
       virtual ~PointLevelFunctionsBase() = default;
 
-      //@}
+      /** @} */
 
       /**
        * @name Independent variables
        */
-      //@{
+      /** @{ */
 
       /**
        * @copydoc HelperBase::reset()
@@ -2803,12 +2810,12 @@ namespace Differentiation
                                    ExtractorType>::template tensor_type<ad_type>
       get_sensitive_variables(const ExtractorType &extractor) const;
 
-      //@}
+      /** @} */
 
       /**
        * @name Operations specific to taped mode: Reusing tapes
        */
-      //@{
+      /** @{ */
 
       /**
        * Set the values for the independent variables $\mathbf{X}$.
@@ -2861,13 +2868,13 @@ namespace Differentiation
       set_independent_variable(const ValueType &    value,
                                const ExtractorType &extractor);
 
-      //@}
+      /** @} */
 
     protected:
       /**
        * @name Independent variables
        */
-      //@{
+      /** @{ */
 
       /**
        * Set the actual value of the independent variable $X_{i}$.
@@ -2899,13 +2906,13 @@ namespace Differentiation
       unsigned int
       n_symmetric_independent_variables() const;
 
-      //@}
+      /** @} */
 
     private:
       /**
        * @name Independent variables
        */
-      //@{
+      /** @{ */
 
       /**
        * The independent variables for which we must take into account symmetry
@@ -2913,7 +2920,7 @@ namespace Differentiation
        */
       std::vector<bool> symmetric_independent_variables;
 
-      //@}
+      /** @} */
 
     }; // class PointLevelFunctionsBase
 
@@ -3097,7 +3104,7 @@ namespace Differentiation
       /**
        * @name Constructor / destructor
        */
-      //@{
+      /** @{ */
 
       /**
        * The constructor for the class.
@@ -3115,12 +3122,12 @@ namespace Differentiation
        */
       virtual ~ScalarFunction() = default;
 
-      //@}
+      /** @} */
 
       /**
        * @name Dependent variables
        */
-      //@{
+      /** @{ */
 
       /**
        * Register the definition of the scalar field $\Psi(\mathbf{X})$.
@@ -3301,7 +3308,7 @@ namespace Differentiation
         const FEValuesExtractors::SymmetricTensor<2> &extractor_row,
         const FEValuesExtractors::SymmetricTensor<2> &extractor_col);
 
-      //@}
+      /** @} */
 
     }; // class ScalarFunction
 
@@ -3488,7 +3495,7 @@ namespace Differentiation
       /**
        * @name Constructor / destructor
        */
-      //@{
+      /** @{ */
 
       /**
        * The constructor for the class.
@@ -3512,12 +3519,12 @@ namespace Differentiation
        */
       virtual ~VectorFunction() = default;
 
-      //@}
+      /** @} */
 
       /**
        * @name Dependent variables
        */
-      //@{
+      /** @{ */
 
       /**
        * Register the definition of the vector field
@@ -3700,7 +3707,7 @@ namespace Differentiation
         const FEValuesExtractors::SymmetricTensor<2> &extractor_row,
         const FEValuesExtractors::SymmetricTensor<2> &extractor_col);
 
-      //@}
+      /** @} */
 
     }; // class VectorFunction
 

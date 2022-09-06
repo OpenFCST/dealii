@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -16,6 +16,7 @@
 
 #include <deal.II/base/logstream.h>
 #include <deal.II/base/memory_consumption.h>
+#include <deal.II/base/point.h>
 #include <deal.II/base/utilities.h>
 
 #include <deal.II/distributed/p4est_wrappers.h>
@@ -567,6 +568,584 @@ namespace
   }
 
 
+#  ifdef P4EST_SEARCH_LOCAL
+  template <int dim>
+  class PartitionSearch
+  {
+  public:
+    PartitionSearch()
+    {
+      Assert(dim > 1, ExcNotImplemented());
+    }
+
+    PartitionSearch(const PartitionSearch<dim> &other) = delete;
+
+    PartitionSearch<dim> &
+    operator=(const PartitionSearch<dim> &other) = delete;
+
+  public:
+    /**
+     * Callback executed before point function. Last argument is always
+     * nullptr.
+     *
+     * @return `int` interpreted as a C "bool". Zero means "stop the recursion".
+     *
+     * @note We never stop the recursion in this callback since we search for
+     * each point individually.
+     */
+    static int
+    local_quadrant_fn(typename internal::p4est::types<dim>::forest *forest,
+                      typename internal::p4est::types<dim>::topidx  which_tree,
+                      typename internal::p4est::types<dim>::quadrant *quadrant,
+                      int   rank_begin,
+                      int   rank_end,
+                      void *point);
+
+    /**
+     * Callback for point function. Check whether a point is in a (physical)
+     * quadrant.
+     *
+     * @note We can handle a quadrant that is mapped by bi-linear or tri-linear
+     * mappings. Checking for a point in a cell of a curved domain required
+     * knowledge of the attached manifold.
+     *
+     * @return `int` interpreted as a C "bool". Zero means "stop the recursion".
+     * This can happen once we know the owner rank or if we know that a point
+     * does not belong to a quadrant.
+     */
+    static int
+    local_point_fn(typename internal::p4est::types<dim>::forest *  forest,
+                   typename internal::p4est::types<dim>::topidx    which_tree,
+                   typename internal::p4est::types<dim>::quadrant *quadrant,
+                   int                                             rank_begin,
+                   int                                             rank_end,
+                   void *                                          point);
+
+  private:
+    /**
+     * Simple struct to keep relevant data. Can be accessed though p4est's user
+     * pointer.
+     */
+    class QuadrantData
+    {
+    public:
+      QuadrantData();
+
+      void
+      set_cell_vertices(
+        typename internal::p4est::types<dim>::forest *  forest,
+        typename internal::p4est::types<dim>::topidx    which_tree,
+        typename internal::p4est::types<dim>::quadrant *quadrant,
+        const typename internal::p4est::types<dim>::quadrant_coord
+          quad_length_on_level);
+
+      void
+      initialize_mapping();
+
+      Point<dim>
+      map_real_to_unit_cell(const Point<dim> &p) const;
+
+      bool
+      is_in_this_quadrant(const Point<dim> &p) const;
+
+    private:
+      std::vector<Point<dim>> cell_vertices;
+
+      /**
+       * Matrix holds coefficients mapping from this physical cell to unit
+       * cell.
+       */
+      FullMatrix<double> quadrant_mapping_matrix;
+
+      bool are_vertices_initialized;
+
+      bool is_reference_mapping_initialized;
+    };
+
+    /**
+     * Quadrant data to be filled upon call of `local_quadrant_fn`.
+     */
+    QuadrantData quadrant_data;
+  }; // class PartitionSearch
+
+
+
+  template <int dim>
+  int
+  PartitionSearch<dim>::local_quadrant_fn(
+    typename internal::p4est::types<dim>::forest *  forest,
+    typename internal::p4est::types<dim>::topidx    which_tree,
+    typename internal::p4est::types<dim>::quadrant *quadrant,
+    int /* rank_begin */,
+    int /* rank_end */,
+    void * /* this is always nullptr */ point)
+  {
+    // point must be nullptr here
+    (void)point;
+    Assert(point == nullptr, dealii::ExcInternalError());
+
+    // we need the user pointer
+    // note that this is not available since function is static
+    PartitionSearch<dim> *this_object =
+      reinterpret_cast<PartitionSearch<dim> *>(forest->user_pointer);
+
+    // Avoid p4est macros, instead do bitshifts manually with fixed size types
+    const typename internal::p4est::types<dim>::quadrant_coord
+      quad_length_on_level =
+        1 << (static_cast<typename internal::p4est::types<dim>::quadrant_coord>(
+                (dim == 2 ? P4EST_MAXLEVEL : P8EST_MAXLEVEL)) -
+              static_cast<typename internal::p4est::types<dim>::quadrant_coord>(
+                quadrant->level));
+
+    this_object->quadrant_data.set_cell_vertices(forest,
+                                                 which_tree,
+                                                 quadrant,
+                                                 quad_length_on_level);
+
+    // from cell vertices we can initialize the mapping
+    this_object->quadrant_data.initialize_mapping();
+
+    // always return true since we must decide by point
+    return /* true */ 1;
+  }
+
+
+
+  template <int dim>
+  int
+  PartitionSearch<dim>::local_point_fn(
+    typename internal::p4est::types<dim>::forest *forest,
+    typename internal::p4est::types<dim>::topidx /* which_tree */,
+    typename internal::p4est::types<dim>::quadrant * /* quadrant */,
+    int   rank_begin,
+    int   rank_end,
+    void *point)
+  {
+    // point must NOT be be nullptr here
+    Assert(point != nullptr, dealii::ExcInternalError());
+
+    // we need the user pointer
+    // note that this is not available since function is static
+    PartitionSearch<dim> *this_object =
+      reinterpret_cast<PartitionSearch<dim> *>(forest->user_pointer);
+
+    // point with rank as double pointer
+    double *this_point_dptr = static_cast<double *>(point);
+
+    Point<dim> this_point =
+      (dim == 2 ? Point<dim>(this_point_dptr[0], this_point_dptr[1]) :
+                  Point<dim>(this_point_dptr[0],
+                             this_point_dptr[1],
+                             this_point_dptr[2]));
+
+    // use reference mapping to decide whether this point is in this quadrant
+    const bool is_in_this_quadrant =
+      this_object->quadrant_data.is_in_this_quadrant(this_point);
+
+
+
+    if (!is_in_this_quadrant)
+      {
+        // no need to search further, stop recursion
+        return /* false */ 0;
+      }
+
+
+
+    // From here we have a candidate
+    if (rank_begin < rank_end)
+      {
+        // continue recursion
+        return /* true */ 1;
+      }
+
+    // Now, we know that the point is found (rank_begin==rank_end) and we have
+    // the MPI rank, so no need to search further.
+    this_point_dptr[dim] = static_cast<double>(rank_begin);
+
+    // stop recursion.
+    return /* false */ 0;
+  }
+
+
+
+  template <int dim>
+  bool
+  PartitionSearch<dim>::QuadrantData::is_in_this_quadrant(
+    const Point<dim> &p) const
+  {
+    const Point<dim> p_ref = map_real_to_unit_cell(p);
+
+    return GeometryInfo<dim>::is_inside_unit_cell(p_ref);
+  }
+
+
+
+  template <int dim>
+  Point<dim>
+  PartitionSearch<dim>::QuadrantData::map_real_to_unit_cell(
+    const Point<dim> &p) const
+  {
+    Assert(is_reference_mapping_initialized,
+           dealii::ExcMessage(
+             "Cell vertices and mapping coefficients must be fully "
+             "initialized before transforming a point to the unit cell."));
+
+    Point<dim> p_out;
+
+    if (dim == 2)
+      {
+        for (unsigned int alpha = 0;
+             alpha < GeometryInfo<dim>::vertices_per_cell;
+             ++alpha)
+          {
+            const Point<dim> &p_ref =
+              GeometryInfo<dim>::unit_cell_vertex(alpha);
+
+            p_out += (quadrant_mapping_matrix(alpha, 0) +
+                      quadrant_mapping_matrix(alpha, 1) * p(0) +
+                      quadrant_mapping_matrix(alpha, 2) * p(1) +
+                      quadrant_mapping_matrix(alpha, 3) * p(0) * p(1)) *
+                     p_ref;
+          }
+      }
+    else
+      {
+        for (unsigned int alpha = 0;
+             alpha < GeometryInfo<dim>::vertices_per_cell;
+             ++alpha)
+          {
+            const Point<dim> &p_ref =
+              GeometryInfo<dim>::unit_cell_vertex(alpha);
+
+            p_out += (quadrant_mapping_matrix(alpha, 0) +
+                      quadrant_mapping_matrix(alpha, 1) * p(0) +
+                      quadrant_mapping_matrix(alpha, 2) * p(1) +
+                      quadrant_mapping_matrix(alpha, 3) * p(2) +
+                      quadrant_mapping_matrix(alpha, 4) * p(0) * p(1) +
+                      quadrant_mapping_matrix(alpha, 5) * p(1) * p(2) +
+                      quadrant_mapping_matrix(alpha, 6) * p(0) * p(2) +
+                      quadrant_mapping_matrix(alpha, 7) * p(0) * p(1) * p(2)) *
+                     p_ref;
+          }
+      }
+
+    return p_out;
+  }
+
+
+  template <int dim>
+  PartitionSearch<dim>::QuadrantData::QuadrantData()
+    : cell_vertices(GeometryInfo<dim>::vertices_per_cell)
+    , quadrant_mapping_matrix(GeometryInfo<dim>::vertices_per_cell,
+                              GeometryInfo<dim>::vertices_per_cell)
+    , are_vertices_initialized(false)
+    , is_reference_mapping_initialized(false)
+  {}
+
+
+
+  template <int dim>
+  void
+  PartitionSearch<dim>::QuadrantData::initialize_mapping()
+  {
+    Assert(
+      are_vertices_initialized,
+      dealii::ExcMessage(
+        "Cell vertices must be initialized before the cell mapping can be filled."));
+
+    FullMatrix<double> point_matrix(GeometryInfo<dim>::vertices_per_cell,
+                                    GeometryInfo<dim>::vertices_per_cell);
+
+    if (dim == 2)
+      {
+        for (unsigned int alpha = 0;
+             alpha < GeometryInfo<dim>::vertices_per_cell;
+             ++alpha)
+          {
+            // point matrix to be inverted
+            point_matrix(0, alpha) = 1;
+            point_matrix(1, alpha) = cell_vertices[alpha](0);
+            point_matrix(2, alpha) = cell_vertices[alpha](1);
+            point_matrix(3, alpha) =
+              cell_vertices[alpha](0) * cell_vertices[alpha](1);
+          }
+
+        /*
+         * Rows of quadrant_mapping_matrix are the coefficients of the basis
+         * on the physical cell
+         */
+        quadrant_mapping_matrix.invert(point_matrix);
+      }
+    else
+      {
+        for (unsigned int alpha = 0;
+             alpha < GeometryInfo<dim>::vertices_per_cell;
+             ++alpha)
+          {
+            // point matrix to be inverted
+            point_matrix(0, alpha) = 1;
+            point_matrix(1, alpha) = cell_vertices[alpha](0);
+            point_matrix(2, alpha) = cell_vertices[alpha](1);
+            point_matrix(3, alpha) = cell_vertices[alpha](2);
+            point_matrix(4, alpha) =
+              cell_vertices[alpha](0) * cell_vertices[alpha](1);
+            point_matrix(5, alpha) =
+              cell_vertices[alpha](1) * cell_vertices[alpha](2);
+            point_matrix(6, alpha) =
+              cell_vertices[alpha](0) * cell_vertices[alpha](2);
+            point_matrix(7, alpha) = cell_vertices[alpha](0) *
+                                     cell_vertices[alpha](1) *
+                                     cell_vertices[alpha](2);
+          }
+
+        /*
+         * Rows of quadrant_mapping_matrix are the coefficients of the basis
+         * on the physical cell
+         */
+        quadrant_mapping_matrix.invert(point_matrix);
+      }
+
+    is_reference_mapping_initialized = true;
+  }
+
+
+
+  template <>
+  void
+  PartitionSearch<2>::QuadrantData::set_cell_vertices(
+    typename internal::p4est::types<2>::forest *  forest,
+    typename internal::p4est::types<2>::topidx    which_tree,
+    typename internal::p4est::types<2>::quadrant *quadrant,
+    const typename internal::p4est::types<2>::quadrant_coord
+      quad_length_on_level)
+  {
+    constexpr unsigned int dim = 2;
+
+    // p4est for some reason always needs double vxyz[3] as last argument to
+    // quadrant_coord_to_vertex
+    double corner_point[dim + 1] = {0};
+
+    // A lambda to avoid code duplication.
+    const auto copy_vertex = [&](unsigned int vertex_index) -> void {
+      // copy into local struct
+      for (unsigned int d = 0; d < dim; ++d)
+        {
+          cell_vertices[vertex_index](d) = corner_point[d];
+          // reset
+          corner_point[d] = 0;
+        }
+    };
+
+    // Fill points of QuadrantData in lexicographic order
+    /*
+     * Corner #0
+     */
+    unsigned int vertex_index = 0;
+    internal::p4est::functions<dim>::quadrant_coord_to_vertex(
+      forest->connectivity, which_tree, quadrant->x, quadrant->y, corner_point);
+
+    // copy into local struct
+    copy_vertex(vertex_index);
+
+    /*
+     * Corner #1
+     */
+    vertex_index = 1;
+    internal::p4est::functions<dim>::quadrant_coord_to_vertex(
+      forest->connectivity,
+      which_tree,
+      quadrant->x + quad_length_on_level,
+      quadrant->y,
+      corner_point);
+
+    // copy into local struct
+    copy_vertex(vertex_index);
+
+    /*
+     * Corner #2
+     */
+    vertex_index = 2;
+    internal::p4est::functions<dim>::quadrant_coord_to_vertex(
+      forest->connectivity,
+      which_tree,
+      quadrant->x,
+      quadrant->y + quad_length_on_level,
+      corner_point);
+
+    // copy into local struct
+    copy_vertex(vertex_index);
+
+    /*
+     * Corner #3
+     */
+    vertex_index = 3;
+    internal::p4est::functions<dim>::quadrant_coord_to_vertex(
+      forest->connectivity,
+      which_tree,
+      quadrant->x + quad_length_on_level,
+      quadrant->y + quad_length_on_level,
+      corner_point);
+
+    // copy into local struct
+    copy_vertex(vertex_index);
+
+    are_vertices_initialized = true;
+  }
+
+
+
+  template <>
+  void
+  PartitionSearch<3>::QuadrantData::set_cell_vertices(
+    typename internal::p4est::types<3>::forest *  forest,
+    typename internal::p4est::types<3>::topidx    which_tree,
+    typename internal::p4est::types<3>::quadrant *quadrant,
+    const typename internal::p4est::types<3>::quadrant_coord
+      quad_length_on_level)
+  {
+    constexpr unsigned int dim = 3;
+
+    double corner_point[dim] = {0};
+
+    // A lambda to avoid code duplication.
+    auto copy_vertex = [&](unsigned int vertex_index) -> void {
+      // copy into local struct
+      for (unsigned int d = 0; d < dim; ++d)
+        {
+          cell_vertices[vertex_index](d) = corner_point[d];
+          // reset
+          corner_point[d] = 0;
+        }
+    };
+
+    // Fill points of QuadrantData in lexicographic order
+    /*
+     * Corner #0
+     */
+    unsigned int vertex_index = 0;
+    internal::p4est::functions<dim>::quadrant_coord_to_vertex(
+      forest->connectivity,
+      which_tree,
+      quadrant->x,
+      quadrant->y,
+      quadrant->z,
+      corner_point);
+
+    // copy into local struct
+    copy_vertex(vertex_index);
+
+
+    /*
+     * Corner #1
+     */
+    vertex_index = 1;
+    internal::p4est::functions<dim>::quadrant_coord_to_vertex(
+      forest->connectivity,
+      which_tree,
+      quadrant->x + quad_length_on_level,
+      quadrant->y,
+      quadrant->z,
+      corner_point);
+
+    // copy into local struct
+    copy_vertex(vertex_index);
+
+    /*
+     * Corner #2
+     */
+    vertex_index = 2;
+    internal::p4est::functions<dim>::quadrant_coord_to_vertex(
+      forest->connectivity,
+      which_tree,
+      quadrant->x,
+      quadrant->y + quad_length_on_level,
+      quadrant->z,
+      corner_point);
+
+    // copy into local struct
+    copy_vertex(vertex_index);
+
+    /*
+     * Corner #3
+     */
+    vertex_index = 3;
+    internal::p4est::functions<dim>::quadrant_coord_to_vertex(
+      forest->connectivity,
+      which_tree,
+      quadrant->x + quad_length_on_level,
+      quadrant->y + quad_length_on_level,
+      quadrant->z,
+      corner_point);
+
+    // copy into local struct
+    copy_vertex(vertex_index);
+
+    /*
+     * Corner #4
+     */
+    vertex_index = 4;
+    internal::p4est::functions<dim>::quadrant_coord_to_vertex(
+      forest->connectivity,
+      which_tree,
+      quadrant->x,
+      quadrant->y,
+      quadrant->z + quad_length_on_level,
+      corner_point);
+
+    // copy into local struct
+    copy_vertex(vertex_index);
+
+    /*
+     * Corner #5
+     */
+    vertex_index = 5;
+    internal::p4est::functions<dim>::quadrant_coord_to_vertex(
+      forest->connectivity,
+      which_tree,
+      quadrant->x + quad_length_on_level,
+      quadrant->y,
+      quadrant->z + quad_length_on_level,
+      corner_point);
+
+    // copy into local struct
+    copy_vertex(vertex_index);
+
+    /*
+     * Corner #6
+     */
+    vertex_index = 6;
+    internal::p4est::functions<dim>::quadrant_coord_to_vertex(
+      forest->connectivity,
+      which_tree,
+      quadrant->x,
+      quadrant->y + quad_length_on_level,
+      quadrant->z + quad_length_on_level,
+      corner_point);
+
+    // copy into local struct
+    copy_vertex(vertex_index);
+
+    /*
+     * Corner #7
+     */
+    vertex_index = 7;
+    internal::p4est::functions<dim>::quadrant_coord_to_vertex(
+      forest->connectivity,
+      which_tree,
+      quadrant->x + quad_length_on_level,
+      quadrant->y + quad_length_on_level,
+      quadrant->z + quad_length_on_level,
+      corner_point);
+
+    // copy into local struct
+    copy_vertex(vertex_index);
+
+
+    are_vertices_initialized = true;
+  }
+#  endif //  P4EST_SEARCH_LOCAL defined
+
 
   /**
    * A data structure that we use to store which cells (indicated by
@@ -763,7 +1342,7 @@ namespace
     // if there are no more cells in our list the current cell can't be
     // flagged for refinement
     if (this_object->current_refine_pointer == this_object->refine_list.end())
-      return false;
+      return 0;
 
     Assert(coarse_cell_index <=
              this_object->current_refine_pointer->p.which_tree,
@@ -772,7 +1351,7 @@ namespace
     // if p4est hasn't yet reached the tree of the next flagged cell the
     // current cell can't be flagged for refinement
     if (coarse_cell_index < this_object->current_refine_pointer->p.which_tree)
-      return false;
+      return 0;
 
     // now we're in the right tree in the forest
     Assert(coarse_cell_index <=
@@ -790,11 +1369,11 @@ namespace
           quadrant, &*this_object->current_refine_pointer))
       {
         ++this_object->current_refine_pointer;
-        return true;
+        return 1;
       }
 
     // p4est cell is not in list
-    return false;
+    return 0;
   }
 
 
@@ -813,7 +1392,7 @@ namespace
     // if there are no more cells in our list the current cell can't be
     // flagged for coarsening
     if (this_object->current_coarsen_pointer == this_object->coarsen_list.end())
-      return false;
+      return 0;
 
     Assert(coarse_cell_index <=
              this_object->current_coarsen_pointer->p.which_tree,
@@ -822,7 +1401,7 @@ namespace
     // if p4est hasn't yet reached the tree of the next flagged cell the
     // current cell can't be flagged for coarsening
     if (coarse_cell_index < this_object->current_coarsen_pointer->p.which_tree)
-      return false;
+      return 0;
 
     // now we're in the right tree in the forest
     Assert(coarse_cell_index <=
@@ -854,11 +1433,11 @@ namespace
             ++this_object->current_coarsen_pointer;
           }
 
-        return true;
+        return 1;
       }
 
     // p4est cell is not in list
-    return false;
+    return 0;
   }
 
 
@@ -874,7 +1453,7 @@ namespace
   {
   public:
     /**
-     * This constructor assumes the cell_weights are already sorted in the
+     * This constructor assumes the @p cell_weights are already sorted in the
      * order that p4est will encounter the cells, and they do not contain
      * ghost cells or artificial cells.
      */
@@ -929,8 +1508,17 @@ namespace
     Assert(this_object->current_pointer < this_object->cell_weights_list.end(),
            ExcInternalError());
 
-    // get the weight, increment the pointer, and return the weight
-    return *this_object->current_pointer++;
+    // Get the weight, increment the pointer, and return the weight. Also
+    // make sure that we don't exceed the 'int' data type that p4est uses
+    // to represent weights
+    const unsigned int weight = *this_object->current_pointer;
+    ++this_object->current_pointer;
+
+    Assert(weight < static_cast<unsigned int>(std::numeric_limits<int>::max()),
+           ExcMessage("p4est uses 'signed int' to represent the partition "
+                      "weights for cells. The weight provided here exceeds "
+                      "the maximum value represented as a 'signed int'."));
+    return static_cast<int>(weight);
   }
 
   template <int dim, int spacedim>
@@ -1270,6 +1858,16 @@ namespace parallel
 
 
     template <int dim, int spacedim>
+    bool
+    Triangulation<dim, spacedim>::are_vertices_communicated_to_p4est() const
+    {
+      return settings &
+             Triangulation<dim, spacedim>::communicate_vertices_to_p4est;
+    }
+
+
+
+    template <int dim, int spacedim>
     void
     Triangulation<dim, spacedim>::execute_transfer(
       const typename dealii::internal::p4est::types<dim>::forest
@@ -1363,32 +1961,6 @@ namespace parallel
     }
 
 
-    template <int dim, int spacedim>
-    bool
-    Triangulation<dim, spacedim>::has_hanging_nodes() const
-    {
-      if (this->n_global_levels() <= 1)
-        return false; // can not have hanging nodes without refined cells
-
-      // if there are any active cells with level less than n_global_levels()-1,
-      // then there is obviously also one with level n_global_levels()-1, and
-      // consequently there must be a hanging node somewhere.
-      //
-      // The problem is that we cannot just ask for the first active cell, but
-      // instead need to filter over locally owned cells.
-      const bool have_coarser_cell =
-        std::any_of(this->begin_active(this->n_global_levels() - 2),
-                    this->end_active(this->n_global_levels() - 2),
-                    [](const CellAccessor<dim, spacedim> &cell) {
-                      return cell.is_locally_owned();
-                    });
-
-      // return true if at least one process has a coarser cell
-      return 0 < Utilities::MPI::max(have_coarser_cell ? 1 : 0,
-                                     this->mpi_communicator);
-    }
-
-
 
     template <int dim, int spacedim>
     void
@@ -1414,6 +1986,12 @@ namespace parallel
     {
       Assert(parallel_forest != nullptr,
              ExcMessage("Can't produce output when no forest is created yet."));
+
+      AssertThrow(are_vertices_communicated_to_p4est(),
+                  ExcMessage(
+                    "To use this function the triangulation's flag "
+                    "Settings::communicate_vertices_to_p4est must be set."));
+
       dealii::internal::p4est::functions<dim>::vtk_write_file(
         parallel_forest, nullptr, file_basename.c_str());
     }
@@ -1477,8 +2055,7 @@ namespace parallel
 
     template <int dim, int spacedim>
     void
-    Triangulation<dim, spacedim>::load(const std::string &filename,
-                                       const bool         autopartition)
+    Triangulation<dim, spacedim>::load(const std::string &filename)
     {
       Assert(
         this->n_cells() > 0,
@@ -1512,7 +2089,7 @@ namespace parallel
       {
         std::string   fname = std::string(filename) + ".info";
         std::ifstream f(fname.c_str());
-        AssertThrow(f, ExcIO());
+        AssertThrow(f.fail() == false, ExcIO());
         std::string firstline;
         getline(f, firstline); // skip first line
         f >> version >> numcpus >> attached_count_fixed >>
@@ -1534,50 +2111,19 @@ namespace parallel
         filename.c_str(),
         this->mpi_communicator,
         0,
-        false,
-        autopartition,
+        0,
+        1,
         0,
         this,
         &connectivity);
 
-      if (numcpus != Utilities::MPI::n_mpi_processes(this->mpi_communicator))
-        {
-          // We are changing the number of CPUs so we need to repartition.
-          // Note that p4est actually distributes the cells between the changed
-          // number of CPUs and so everything works without this call, but
-          // this command changes the distribution for some reason, so we
-          // will leave it in here.
-          if (this->signals.cell_weight.num_slots() == 0)
-            {
-              // no cell weights given -- call p4est's 'partition' without a
-              // callback for cell weights
-              dealii::internal::p4est::functions<dim>::partition(
-                parallel_forest,
-                /* prepare coarsening */ 1,
-                /* weight_callback */ nullptr);
-            }
-          else
-            {
-              // get cell weights for a weighted repartitioning.
-              const std::vector<unsigned int> cell_weights = get_cell_weights();
-
-              PartitionWeights<dim, spacedim> partition_weights(cell_weights);
-
-              // attach (temporarily) a pointer to the cell weights through
-              // p4est's user_pointer object
-              Assert(parallel_forest->user_pointer == this, ExcInternalError());
-              parallel_forest->user_pointer = &partition_weights;
-
-              dealii::internal::p4est::functions<dim>::partition(
-                parallel_forest,
-                /* prepare coarsening */ 1,
-                /* weight_callback */
-                &PartitionWeights<dim, spacedim>::cell_weight);
-
-              // reset the user pointer to its previous state
-              parallel_forest->user_pointer = this;
-            }
-        }
+      // We partition the p4est mesh that it conforms to the requirements of the
+      // deal.II mesh, i.e., partition for coarsening.
+      // This function call is optional.
+      dealii::internal::p4est::functions<dim>::partition(
+        parallel_forest,
+        /* prepare coarsening */ 1,
+        /* weight_callback */ nullptr);
 
       try
         {
@@ -1585,10 +2131,8 @@ namespace parallel
         }
       catch (const typename Triangulation<dim>::DistortedCellList &)
         {
-          // the underlying
-          // triangulation should not
-          // be checking for
-          // distorted cells
+          // the underlying triangulation should not be checking for distorted
+          // cells
           Assert(false, ExcInternalError());
         }
 
@@ -1605,6 +2149,17 @@ namespace parallel
 
       this->update_periodic_face_map();
       this->update_number_cache();
+    }
+
+
+
+    template <int dim, int spacedim>
+    void
+    Triangulation<dim, spacedim>::load(const std::string &filename,
+                                       const bool         autopartition)
+    {
+      (void)autopartition;
+      load(filename);
     }
 
 
@@ -1706,8 +2261,7 @@ namespace parallel
 #  ifndef DOXYGEN
 
     template <>
-    void
-    Triangulation<2, 2>::copy_new_triangulation_to_p4est(
+    void Triangulation<2, 2>::copy_new_triangulation_to_p4est(
       std::integral_constant<int, 2>)
     {
       const unsigned int dim = 2, spacedim = 2;
@@ -1732,13 +2286,7 @@ namespace parallel
       // now create a connectivity object with the right sizes for all
       // arrays. set vertex information only in debug mode (saves a few bytes
       // in optimized mode)
-      const bool set_vertex_info
-#    ifdef DEBUG
-        = true
-#    else
-        = false
-#    endif
-        ;
+      const bool set_vertex_info = this->are_vertices_communicated_to_p4est();
 
       connectivity = dealii::internal::p4est::functions<2>::connectivity_new(
         (set_vertex_info == true ? this->n_vertices() : 0),
@@ -1773,8 +2321,7 @@ namespace parallel
     // TODO: This is a verbatim copy of the 2,2 case. However, we can't just
     // specialize the dim template argument, but let spacedim open
     template <>
-    void
-    Triangulation<2, 3>::copy_new_triangulation_to_p4est(
+    void Triangulation<2, 3>::copy_new_triangulation_to_p4est(
       std::integral_constant<int, 2>)
     {
       const unsigned int dim = 2, spacedim = 3;
@@ -1799,13 +2346,7 @@ namespace parallel
       // now create a connectivity object with the right sizes for all
       // arrays. set vertex information only in debug mode (saves a few bytes
       // in optimized mode)
-      const bool set_vertex_info
-#    ifdef DEBUG
-        = true
-#    else
-        = false
-#    endif
-        ;
+      const bool set_vertex_info = this->are_vertices_communicated_to_p4est();
 
       connectivity = dealii::internal::p4est::functions<2>::connectivity_new(
         (set_vertex_info == true ? this->n_vertices() : 0),
@@ -1838,8 +2379,7 @@ namespace parallel
 
 
     template <>
-    void
-    Triangulation<3, 3>::copy_new_triangulation_to_p4est(
+    void Triangulation<3, 3>::copy_new_triangulation_to_p4est(
       std::integral_constant<int, 3>)
     {
       const int dim = 3, spacedim = 3;
@@ -1869,13 +2409,7 @@ namespace parallel
         std::accumulate(edge_touch_count.begin(), edge_touch_count.end(), 0u);
 
       // now create a connectivity object with the right sizes for all arrays
-      const bool set_vertex_info
-#    ifdef DEBUG
-        = true
-#    else
-        = false
-#    endif
-        ;
+      const bool set_vertex_info = this->are_vertices_communicated_to_p4est();
 
       connectivity = dealii::internal::p4est::functions<3>::connectivity_new(
         (set_vertex_info == true ? this->n_vertices() : 0),
@@ -2000,20 +2534,22 @@ namespace parallel
         for (unsigned int i = 0; i < topological_vertex_numbering.size(); ++i)
           topological_vertex_numbering[i] = i;
         // combine vertices that have different locations (and thus, different
-        // vertex_index) but represent the same topological entity over periodic
-        // boundaries. The vector topological_vertex_numbering contains a linear
-        // map from 0 to n_vertices at input and at output relates periodic
-        // vertices with only one vertex index. The output is used to always
-        // identify the same vertex according to the periodicity, e.g. when
-        // finding the maximum cell level around a vertex.
+        // vertex_index) but represent the same topological entity over
+        // periodic boundaries. The vector topological_vertex_numbering
+        // contains a linear map from 0 to n_vertices at input and at output
+        // relates periodic vertices with only one vertex index. The output is
+        // used to always identify the same vertex according to the
+        // periodicity, e.g. when finding the maximum cell level around a
+        // vertex.
         //
-        // Example: On a 3D cell with vertices numbered from 0 to 7 and periodic
-        // boundary conditions in x direction, the vector
+        // Example: On a 3D cell with vertices numbered from 0 to 7 and
+        // periodic boundary conditions in x direction, the vector
         // topological_vertex_numbering will contain the numbers
         // {0,0,2,2,4,4,6,6} (because the vertex pairs {0,1}, {2,3}, {4,5},
-        // {6,7} belong together, respectively). If periodicity is set in x and
-        // z direction, the output is {0,0,2,2,0,0,2,2}, and if periodicity is
-        // in all directions, the output is simply {0,0,0,0,0,0,0,0}.
+        // {6,7} belong together, respectively). If periodicity is set in x
+        // and z direction, the output is {0,0,2,2,0,0,2,2}, and if
+        // periodicity is in all directions, the output is simply
+        // {0,0,0,0,0,0,0,0}.
         using cell_iterator =
           typename Triangulation<dim, spacedim>::cell_iterator;
         typename std::map<std::pair<cell_iterator, unsigned int>,
@@ -2035,8 +2571,8 @@ namespace parallel
                      v < GeometryInfo<dim - 1>::vertices_per_cell;
                      ++v)
                   {
-                    // take possible non-standard orientation of face on cell[0]
-                    // into account
+                    // take possible non-standard orientation of face on
+                    // cell[0] into account
                     const unsigned int vface0 =
                       GeometryInfo<dim>::standard_to_real_face_vertex(
                         v,
@@ -2202,23 +2738,22 @@ namespace parallel
     bool
     Triangulation<dim, spacedim>::prepare_coarsening_and_refinement()
     {
-      std::vector<bool> flags_before[2];
-      this->save_coarsen_flags(flags_before[0]);
-      this->save_refine_flags(flags_before[1]);
-
       bool         mesh_changed = false;
       unsigned int loop_counter = 0;
+      unsigned int n_changes    = 0;
       do
         {
-          this->dealii::Triangulation<dim, spacedim>::
-            prepare_coarsening_and_refinement();
+          n_changes += this->dealii::Triangulation<dim, spacedim>::
+                         prepare_coarsening_and_refinement();
           this->update_periodic_face_map();
           // enforce 2:1 mesh balance over periodic boundaries
           mesh_changed = enforce_mesh_balance_over_periodic_boundaries(*this);
+          n_changes += mesh_changed;
 
           // We can't be sure that we won't run into a situation where we can
-          // not reconcile mesh smoothing and balancing of periodic faces. As we
-          // don't know what else to do, at least abort with an error message.
+          // not reconcile mesh smoothing and balancing of periodic faces. As
+          // we don't know what else to do, at least abort with an error
+          // message.
           ++loop_counter;
           AssertThrow(
             loop_counter < 32,
@@ -2229,13 +2764,8 @@ namespace parallel
         }
       while (mesh_changed);
 
-      // check if any of the refinement flags were changed during this
-      // function and return that value
-      std::vector<bool> flags_after[2];
-      this->save_coarsen_flags(flags_after[0]);
-      this->save_refine_flags(flags_after[1]);
-      return ((flags_before[0] != flags_after[0]) ||
-              (flags_before[1] != flags_after[1]));
+      // report if we observed changes in any of the sub-functions
+      return n_changes > 0;
     }
 
 
@@ -2349,7 +2879,7 @@ namespace parallel
                   // comes out of this cell.
 
                   typename dealii::internal::p4est::types<dim>::quadrant
-                                                                      p4est_coarse_cell;
+                    p4est_coarse_cell;
                   typename dealii::internal::p4est::types<dim>::tree *tree =
                     init_tree(cell->index());
 
@@ -2443,8 +2973,9 @@ namespace parallel
 
       // fill level_subdomain_ids for geometric multigrid
       // the level ownership of a cell is defined as the owner if the cell is
-      // active or as the owner of child(0) we need this information for all our
-      // ancestors and the same-level neighbors of our own cells (=level ghosts)
+      // active or as the owner of child(0) we need this information for all
+      // our ancestors and the same-level neighbors of our own cells (=level
+      // ghosts)
       if (settings & construct_multigrid_hierarchy)
         {
           // step 1: We set our own ids all the way down and all the others to
@@ -2473,8 +3004,8 @@ namespace parallel
                 }
             }
 
-          // step 2: make sure all the neighbors to our level_cells exist. Need
-          // to look up in p4est...
+          // step 2: make sure all the neighbors to our level_cells exist.
+          // Need to look up in p4est...
           std::vector<std::vector<bool>> marked_vertices(this->n_levels());
           for (unsigned int lvl = 0; lvl < this->n_levels(); ++lvl)
             marked_vertices[lvl] = mark_locally_active_vertices_on_level(lvl);
@@ -2574,6 +3105,119 @@ namespace parallel
       // repartitioning, further refinement/coarsening, and unpacking
       // of stored or transferred data.
       update_cell_relations();
+    }
+
+
+
+    template <int dim, int spacedim>
+    types::subdomain_id
+    Triangulation<dim, spacedim>::find_point_owner_rank(const Point<dim> &p)
+    {
+      // Call the other function
+      std::vector<Point<dim>>          point{p};
+      std::vector<types::subdomain_id> owner = find_point_owner_rank(point);
+
+      return owner[0];
+    }
+
+
+
+    template <int dim, int spacedim>
+    std::vector<types::subdomain_id>
+    Triangulation<dim, spacedim>::find_point_owner_rank(
+      const std::vector<Point<dim>> &points)
+    {
+#  ifndef P4EST_SEARCH_LOCAL
+      (void)points;
+      AssertThrow(
+        false,
+        ExcMessage(
+          "This function is only available if p4est is version 2.2 and higher."));
+      // Just return to satisfy compiler
+      return std::vector<unsigned int>(1,
+                                       dealii::numbers::invalid_subdomain_id);
+#  else
+      // We can only use this function if vertices are communicated to p4est
+      AssertThrow(this->are_vertices_communicated_to_p4est(),
+                  ExcMessage(
+                    "Vertices need to be communicated to p4est to use this "
+                    "function. This must explicitly be turned on in the "
+                    "settings of the triangulation's constructor."));
+
+      // We can only use this function if all manifolds are flat
+      for (const auto &manifold_id : this->get_manifold_ids())
+        {
+          AssertThrow(
+            manifold_id == numbers::flat_manifold_id,
+            ExcMessage(
+              "This function can only be used if the triangulation "
+              "has no other manifold than a Cartesian (flat) manifold attached."));
+        }
+
+      // Create object for callback
+      PartitionSearch<dim> partition_search;
+
+      // Pointer should be this triangulation before we set it to something else
+      Assert(parallel_forest->user_pointer == this, ExcInternalError());
+
+      // re-assign p4est's user pointer
+      parallel_forest->user_pointer = &partition_search;
+
+      //
+      // Copy points into p4est internal array data struct
+      //
+      // pointer to an array of points.
+      sc_array_t *point_sc_array;
+      // allocate memory for a number of dim-dimensional points including their
+      // MPI rank, i.e., dim + 1 fields
+      point_sc_array =
+        sc_array_new_count(sizeof(double[dim + 1]), points.size());
+
+      // now assign the actual value
+      for (size_t i = 0; i < points.size(); ++i)
+        {
+          // alias
+          const Point<dim> &p = points[i];
+          // get a non-const view of the array
+          double *this_sc_point =
+            static_cast<double *>(sc_array_index_ssize_t(point_sc_array, i));
+          // fill this with the point data
+          for (unsigned int d = 0; d < dim; ++d)
+            {
+              this_sc_point[d] = p(d);
+            }
+          this_sc_point[dim] = -1.0; // owner rank
+        }
+
+      dealii::internal::p4est::functions<dim>::search_partition(
+        parallel_forest,
+        /* execute quadrant function when leaving quadrant */
+        static_cast<int>(false),
+        &PartitionSearch<dim>::local_quadrant_fn,
+        &PartitionSearch<dim>::local_point_fn,
+        point_sc_array);
+
+      // copy the points found to an std::array
+      std::vector<types::subdomain_id> owner_rank(
+        points.size(), numbers::invalid_subdomain_id);
+
+      // fill the array
+      for (size_t i = 0; i < points.size(); ++i)
+        {
+          // get a non-const view of the array
+          double *this_sc_point =
+            static_cast<double *>(sc_array_index_ssize_t(point_sc_array, i));
+          owner_rank[i] = static_cast<types::subdomain_id>(this_sc_point[dim]);
+        }
+
+      // reset the internal pointer to this triangulation
+      parallel_forest->user_pointer = this;
+
+      // release the memory (otherwise p4est will complain)
+      sc_array_destroy_null(&point_sc_array);
+
+      return owner_rank;
+#  endif // P4EST_SEARCH_LOCAL defined
     }
 
 
@@ -2681,9 +3325,8 @@ namespace parallel
       // been updated
       this->signals.post_p4est_refinement();
 
-      // before repartitioning the mesh, save a copy of the current positions of
-      // quadrants
-      // only if data needs to be transferred later
+      // before repartitioning the mesh, save a copy of the current positions
+      // of quadrants only if data needs to be transferred later
       std::vector<typename dealii::internal::p4est::types<dim>::gloidx>
         previous_global_first_quadrant;
 
@@ -2699,9 +3342,9 @@ namespace parallel
 
       if (!(settings & no_automatic_repartitioning))
         {
-          // partition the new mesh between all processors. If cell weights have
-          // not been given balance the number of cells.
-          if (this->signals.cell_weight.num_slots() == 0)
+          // partition the new mesh between all processors. If cell weights
+          // have not been given balance the number of cells.
+          if (this->signals.weight.empty())
             dealii::internal::p4est::functions<dim>::partition(
               parallel_forest,
               /* prepare coarsening */ 1,
@@ -2710,6 +3353,15 @@ namespace parallel
             {
               // get cell weights for a weighted repartitioning.
               const std::vector<unsigned int> cell_weights = get_cell_weights();
+
+              // verify that the global sum of weights is larger than 0
+              Assert(Utilities::MPI::sum(std::accumulate(cell_weights.begin(),
+                                                         cell_weights.end(),
+                                                         std::uint64_t(0)),
+                                         this->mpi_communicator) > 0,
+                     ExcMessage(
+                       "The global sum of weights over all active cells "
+                       "is zero. Please verify how you generate weights."));
 
               PartitionWeights<dim, spacedim> partition_weights(cell_weights);
 
@@ -2850,9 +3502,8 @@ namespace parallel
       // signal that repartitioning is going to happen
       this->signals.pre_distributed_repartition();
 
-      // before repartitioning the mesh, save a copy of the current positions of
-      // quadrants
-      // only if data needs to be transferred later
+      // before repartitioning the mesh, save a copy of the current positions
+      // of quadrants only if data needs to be transferred later
       std::vector<typename dealii::internal::p4est::types<dim>::gloidx>
         previous_global_first_quadrant;
 
@@ -2866,7 +3517,7 @@ namespace parallel
                         (parallel_forest->mpisize + 1));
         }
 
-      if (this->signals.cell_weight.num_slots() == 0)
+      if (this->signals.weight.empty())
         {
           // no cell weights given -- call p4est's 'partition' without a
           // callback for cell weights
@@ -2880,10 +3531,19 @@ namespace parallel
           // get cell weights for a weighted repartitioning.
           const std::vector<unsigned int> cell_weights = get_cell_weights();
 
+          // verify that the global sum of weights is larger than 0
+          Assert(Utilities::MPI::sum(std::accumulate(cell_weights.begin(),
+                                                     cell_weights.end(),
+                                                     std::uint64_t(0)),
+                                     this->mpi_communicator) > 0,
+                 ExcMessage(
+                   "The global sum of weights over all active cells "
+                   "is zero. Please verify how you generate weights."));
+
           PartitionWeights<dim, spacedim> partition_weights(cell_weights);
 
-          // attach (temporarily) a pointer to the cell weights through p4est's
-          // user_pointer object
+          // attach (temporarily) a pointer to the cell weights through
+          // p4est's user_pointer object
           Assert(parallel_forest->user_pointer == this, ExcInternalError());
           parallel_forest->user_pointer = &partition_weights;
 
@@ -3144,7 +3804,7 @@ namespace parallel
               const unsigned int     second_dealii_idx_on_face =
                 lower_idx == 0 ? left_to_right[face_pair.orientation.to_ulong()]
                                               [first_dealii_idx_on_face] :
-                                 right_to_left[face_pair.orientation.to_ulong()]
+                                     right_to_left[face_pair.orientation.to_ulong()]
                                               [first_dealii_idx_on_face];
               const unsigned int second_dealii_idx_on_cell =
                 GeometryInfo<dim>::face_to_cell_vertices(
@@ -3199,7 +3859,8 @@ namespace parallel
           Assert(false, ExcInternalError());
         }
 
-      // The range of ghost_owners might have changed so update that information
+      // The range of ghost_owners might have changed so update that
+      // information
       this->update_number_cache();
     }
 
@@ -3286,8 +3947,6 @@ namespace parallel
             other_distributed->coarse_cell_to_p4est_tree_permutation;
           p4est_tree_to_coarse_cell_permutation =
             other_distributed->p4est_tree_to_coarse_cell_permutation;
-          this->cell_attached_data = other_distributed->cell_attached_data;
-          this->data_transfer      = other_distributed->data_transfer;
 
           // create deep copy of connectivity graph
           typename dealii::internal::p4est::types<dim>::connectivity
@@ -3374,66 +4033,23 @@ namespace parallel
                static_cast<unsigned int>(parallel_forest->local_num_quadrants),
              ExcInternalError());
 
-      // Allocate the space for the weights. In fact we do not know yet, how
-      // many cells we own after the refinement (only p4est knows that
-      // at this point). We simply reserve n_active_cells space and if many
-      // more cells are refined than coarsened than additional reallocation
-      // will be done inside get_cell_weights_recursively.
+      // Allocate the space for the weights. We reserve an integer for each
+      // locally owned quadrant on the already refined p4est object.
       std::vector<unsigned int> weights;
-      weights.reserve(this->n_active_cells());
+      weights.reserve(this->local_cell_relations.size());
 
       // Iterate over p4est and Triangulation relations
       // to find refined/coarsened/kept
-      // cells. Then append cell_weight.
+      // cells. Then append weight.
       // Note that we need to follow the p4est ordering
-      // instead of the deal.II ordering to get the cell_weights
+      // instead of the deal.II ordering to get the weights
       // in the same order p4est will encounter them during repartitioning.
       for (const auto &cell_rel : this->local_cell_relations)
         {
           const auto &cell_it     = cell_rel.first;
           const auto &cell_status = cell_rel.second;
 
-          switch (cell_status)
-            {
-              case parallel::distributed::Triangulation<dim,
-                                                        spacedim>::CELL_PERSIST:
-                weights.push_back(1000);
-                weights.back() += this->signals.cell_weight(
-                  cell_it,
-                  parallel::distributed::Triangulation<dim,
-                                                       spacedim>::CELL_PERSIST);
-                break;
-
-              case parallel::distributed::Triangulation<dim,
-                                                        spacedim>::CELL_REFINE:
-              case parallel::distributed::Triangulation<dim,
-                                                        spacedim>::CELL_INVALID:
-                {
-                  // calculate weight of parent cell
-                  unsigned int parent_weight = 1000;
-                  parent_weight += this->signals.cell_weight(
-                    cell_it,
-                    parallel::distributed::Triangulation<dim, spacedim>::
-                      CELL_REFINE);
-                  // assign the weight of the parent cell equally to all
-                  // children
-                  weights.push_back(parent_weight);
-                  break;
-                }
-
-              case parallel::distributed::Triangulation<dim,
-                                                        spacedim>::CELL_COARSEN:
-                weights.push_back(1000);
-                weights.back() += this->signals.cell_weight(
-                  cell_it,
-                  parallel::distributed::Triangulation<dim,
-                                                       spacedim>::CELL_COARSEN);
-                break;
-
-              default:
-                Assert(false, ExcInternalError());
-                break;
-            }
+          weights.push_back(this->signals.weight(cell_it, cell_status));
         }
 
       return weights;
@@ -3522,6 +4138,15 @@ namespace parallel
 
     template <int spacedim>
     void
+    Triangulation<1, spacedim>::load(const std::string &)
+    {
+      Assert(false, ExcNotImplemented());
+    }
+
+
+
+    template <int spacedim>
+    void
     Triangulation<1, spacedim>::load(const std::string &, const bool)
     {
       Assert(false, ExcNotImplemented());
@@ -3549,6 +4174,16 @@ namespace parallel
 
 
     template <int spacedim>
+    bool
+    Triangulation<1, spacedim>::are_vertices_communicated_to_p4est() const
+    {
+      Assert(false, ExcNotImplemented());
+      return false;
+    }
+
+
+
+    template <int spacedim>
     void
     Triangulation<1, spacedim>::update_cell_relations()
     {
@@ -3563,89 +4198,86 @@ namespace parallel
 
 
 
-namespace internal
+namespace parallel
 {
-  namespace parallel
+  namespace distributed
   {
-    namespace distributed
+    template <int dim, int spacedim>
+    TemporarilyMatchRefineFlags<dim, spacedim>::TemporarilyMatchRefineFlags(
+      dealii::Triangulation<dim, spacedim> &tria)
+      : distributed_tria(
+          dynamic_cast<
+            dealii::parallel::distributed::Triangulation<dim, spacedim> *>(
+            &tria))
     {
-      template <int dim, int spacedim>
-      TemporarilyMatchRefineFlags<dim, spacedim>::TemporarilyMatchRefineFlags(
-        Triangulation<dim, spacedim> &tria)
-        : distributed_tria(
-            dynamic_cast<
-              dealii::parallel::distributed::Triangulation<dim, spacedim> *>(
-              &tria))
-      {
 #ifdef DEAL_II_WITH_P4EST
-        if (distributed_tria != nullptr)
-          {
-            // Save the current set of refinement flags, and adjust the
-            // refinement flags to be consistent with the p4est oracle.
-            distributed_tria->save_coarsen_flags(saved_coarsen_flags);
-            distributed_tria->save_refine_flags(saved_refine_flags);
+      if (distributed_tria != nullptr)
+        {
+          // Save the current set of refinement flags, and adjust the
+          // refinement flags to be consistent with the p4est oracle.
+          distributed_tria->save_coarsen_flags(saved_coarsen_flags);
+          distributed_tria->save_refine_flags(saved_refine_flags);
 
-            for (const auto &pair : distributed_tria->local_cell_relations)
-              {
-                const auto &cell   = pair.first;
-                const auto &status = pair.second;
+          for (const auto &pair : distributed_tria->local_cell_relations)
+            {
+              const auto &cell   = pair.first;
+              const auto &status = pair.second;
 
-                switch (status)
-                  {
-                    case dealii::Triangulation<dim, spacedim>::CELL_PERSIST:
-                      // cell remains unchanged
-                      cell->clear_refine_flag();
-                      cell->clear_coarsen_flag();
-                      break;
+              switch (status)
+                {
+                  case dealii::Triangulation<dim, spacedim>::CELL_PERSIST:
+                    // cell remains unchanged
+                    cell->clear_refine_flag();
+                    cell->clear_coarsen_flag();
+                    break;
 
-                    case dealii::Triangulation<dim, spacedim>::CELL_REFINE:
-                      // cell will be refined
-                      cell->clear_coarsen_flag();
-                      cell->set_refine_flag();
-                      break;
+                  case dealii::Triangulation<dim, spacedim>::CELL_REFINE:
+                    // cell will be refined
+                    cell->clear_coarsen_flag();
+                    cell->set_refine_flag();
+                    break;
 
-                    case dealii::Triangulation<dim, spacedim>::CELL_COARSEN:
-                      // children of this cell will be coarsened
-                      for (const auto &child : cell->child_iterators())
-                        {
-                          child->clear_refine_flag();
-                          child->set_coarsen_flag();
-                        }
-                      break;
+                  case dealii::Triangulation<dim, spacedim>::CELL_COARSEN:
+                    // children of this cell will be coarsened
+                    for (const auto &child : cell->child_iterators())
+                      {
+                        child->clear_refine_flag();
+                        child->set_coarsen_flag();
+                      }
+                    break;
 
-                    case dealii::Triangulation<dim, spacedim>::CELL_INVALID:
-                      // do nothing as cell does not exist yet
-                      break;
+                  case dealii::Triangulation<dim, spacedim>::CELL_INVALID:
+                    // do nothing as cell does not exist yet
+                    break;
 
-                    default:
-                      Assert(false, ExcInternalError());
-                      break;
-                  }
-              }
-          }
+                  default:
+                    Assert(false, ExcInternalError());
+                    break;
+                }
+            }
+        }
 #endif
-      }
+    }
 
 
 
-      template <int dim, int spacedim>
-      TemporarilyMatchRefineFlags<dim, spacedim>::~TemporarilyMatchRefineFlags()
-      {
+    template <int dim, int spacedim>
+    TemporarilyMatchRefineFlags<dim, spacedim>::~TemporarilyMatchRefineFlags()
+    {
 #ifdef DEAL_II_WITH_P4EST
-        if (distributed_tria)
-          {
-            // Undo the refinement flags modification.
-            distributed_tria->load_coarsen_flags(saved_coarsen_flags);
-            distributed_tria->load_refine_flags(saved_refine_flags);
-          }
+      if (distributed_tria)
+        {
+          // Undo the refinement flags modification.
+          distributed_tria->load_coarsen_flags(saved_coarsen_flags);
+          distributed_tria->load_refine_flags(saved_refine_flags);
+        }
 #else
-        // pretend that this destructor does something to silence clang-tidy
-        (void)distributed_tria;
+      // pretend that this destructor does something to silence clang-tidy
+      (void)distributed_tria;
 #endif
-      }
-    } // namespace distributed
-  }   // namespace parallel
-} // namespace internal
+    }
+  } // namespace distributed
+} // namespace parallel
 
 
 

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2019 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -202,12 +202,14 @@ namespace PETScWrappers
       /**
        * Dereferencing operator.
        */
-      const Accessor &operator*() const;
+      const Accessor &
+      operator*() const;
 
       /**
        * Dereferencing operator.
        */
-      const Accessor *operator->() const;
+      const Accessor *
+      operator->() const;
 
       /**
        * Comparison. True, if both iterators point to the same matrix
@@ -651,7 +653,7 @@ namespace PETScWrappers
      * returns the number of entries in the sparsity pattern; if any of the
      * entries should happen to be zero, it is counted anyway.
      */
-    size_type
+    std::uint64_t
     n_nonzero_elements() const;
 
     /**
@@ -753,16 +755,6 @@ namespace PETScWrappers
      */
     MatrixBase &
     add(const PetscScalar factor, const MatrixBase &other);
-
-
-    /**
-     * Add the matrix @p other scaled by the factor @p factor to the current
-     * matrix.
-     * @deprecated Use the function with order of arguments reversed instead.
-     */
-    DEAL_II_DEPRECATED
-    MatrixBase &
-    add(const MatrixBase &other, const PetscScalar factor);
 
     /**
      * Matrix-vector multiplication: let <i>dst = M*src</i> with <i>M</i>
@@ -1170,13 +1162,15 @@ namespace PETScWrappers
     }
 
 
-    inline const const_iterator::Accessor &const_iterator::operator*() const
+    inline const const_iterator::Accessor &
+    const_iterator::operator*() const
     {
       return accessor;
     }
 
 
-    inline const const_iterator::Accessor *const_iterator::operator->() const
+    inline const const_iterator::Accessor *
+    const_iterator::operator->() const
     {
       return &accessor;
     }

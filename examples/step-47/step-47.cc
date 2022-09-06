@@ -1,6 +1,6 @@
 /* ---------------------------------------------------------------------
  *
- * Copyright (C) 2019 - 2020 by the deal.II authors
+ * Copyright (C) 2019 - 2021 by the deal.II authors
  *
  * This file is part of the deal.II library.
  *
@@ -316,6 +316,18 @@ namespace Step47
     CopyData(const CopyData &) = default;
 
 
+    CopyData(CopyData &&) = default;
+
+
+    ~CopyData() = default;
+
+
+    CopyData &operator=(const CopyData &) = default;
+
+
+    CopyData &operator=(CopyData &&) = default;
+
+
     struct FaceData
     {
       FullMatrix<double>                   cell_matrix;
@@ -405,12 +417,12 @@ namespace Step47
         {
           for (unsigned int i = 0; i < dofs_per_cell; ++i)
             {
-              const Tensor<2, dim> hessian_i =
+              const Tensor<2, dim> &hessian_i =
                 fe_values.shape_hessian(i, qpoint);
 
               for (unsigned int j = 0; j < dofs_per_cell; ++j)
                 {
-                  const Tensor<2, dim> hessian_j =
+                  const Tensor<2, dim> &hessian_j =
                     fe_values.shape_hessian(j, qpoint);
 
                   copy_data.cell_matrix(i, j) +=
@@ -537,16 +549,19 @@ namespace Step47
           for (unsigned int i = 0; i < n_interface_dofs; ++i)
             {
               const double av_hessian_i_dot_n_dot_n =
-                (fe_interface_values.average_hessian(i, qpoint) * n * n);
+                (fe_interface_values.average_of_shape_hessians(i, qpoint) * n *
+                 n);
               const double jump_grad_i_dot_n =
-                (fe_interface_values.jump_gradient(i, qpoint) * n);
+                (fe_interface_values.jump_in_shape_gradients(i, qpoint) * n);
 
               for (unsigned int j = 0; j < n_interface_dofs; ++j)
                 {
                   const double av_hessian_j_dot_n_dot_n =
-                    (fe_interface_values.average_hessian(j, qpoint) * n * n);
+                    (fe_interface_values.average_of_shape_hessians(j, qpoint) *
+                     n * n);
                   const double jump_grad_j_dot_n =
-                    (fe_interface_values.jump_gradient(j, qpoint) * n);
+                    (fe_interface_values.jump_in_shape_gradients(j, qpoint) *
+                     n);
 
                   copy_data_face.cell_matrix(i, j) +=
                     (-av_hessian_i_dot_n_dot_n       // - {grad^2 v n n }
@@ -629,16 +644,19 @@ namespace Step47
           for (unsigned int i = 0; i < n_dofs; ++i)
             {
               const double av_hessian_i_dot_n_dot_n =
-                (fe_interface_values.average_hessian(i, qpoint) * n * n);
+                (fe_interface_values.average_of_shape_hessians(i, qpoint) * n *
+                 n);
               const double jump_grad_i_dot_n =
-                (fe_interface_values.jump_gradient(i, qpoint) * n);
+                (fe_interface_values.jump_in_shape_gradients(i, qpoint) * n);
 
               for (unsigned int j = 0; j < n_dofs; ++j)
                 {
                   const double av_hessian_j_dot_n_dot_n =
-                    (fe_interface_values.average_hessian(j, qpoint) * n * n);
+                    (fe_interface_values.average_of_shape_hessians(j, qpoint) *
+                     n * n);
                   const double jump_grad_j_dot_n =
-                    (fe_interface_values.jump_gradient(j, qpoint) * n);
+                    (fe_interface_values.jump_in_shape_gradients(j, qpoint) *
+                     n);
 
                   copy_data_face.cell_matrix(i, j) +=
                     (-av_hessian_i_dot_n_dot_n  // - {grad^2 v n n}
@@ -813,8 +831,8 @@ namespace Step47
                               update_values | update_hessians |
                                 update_quadrature_points | update_JxW_values);
 
-      FEValuesExtractors::Scalar scalar(0);
-      const unsigned int         n_q_points = quadrature_formula.size();
+      const FEValuesExtractors::Scalar scalar(0);
+      const unsigned int               n_q_points = quadrature_formula.size();
 
       std::vector<SymmetricTensor<2, dim>> exact_hessians(n_q_points);
       std::vector<Tensor<2, dim>>          hessians(n_q_points);
@@ -835,7 +853,10 @@ namespace Step47
           error_per_cell[cell->active_cell_index()] = std::sqrt(local_error);
         }
 
-      const double error_norm = error_per_cell.l2_norm();
+      const double error_norm =
+        VectorTools::compute_global_error(triangulation,
+                                          error_per_cell,
+                                          VectorTools::L2_norm);
       std::cout << "   Error in the broken H2 seminorm: " << error_norm
                 << std::endl;
     }

@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2020 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -98,8 +98,8 @@ PolyFunction<dim>::value(const Point<dim> &point, const unsigned int) const
 
 template <typename CoefficientType>
 void
-  prepare_symmetric_coefficients(Table<1, CoefficientType> &         coeff,
-                                 const std::vector<CoefficientType> &coeff_1d)
+prepare_symmetric_coefficients(Table<1, CoefficientType> &         coeff,
+                               const std::vector<CoefficientType> &coeff_1d)
 {
   Assert(coeff.size(0) == coeff_1d.size(), ExcInternalError());
 
@@ -109,8 +109,8 @@ void
 
 template <typename CoefficientType>
 void
-  prepare_symmetric_coefficients(Table<2, CoefficientType> &         coeff,
-                                 const std::vector<CoefficientType> &coeff_1d)
+prepare_symmetric_coefficients(Table<2, CoefficientType> &         coeff,
+                               const std::vector<CoefficientType> &coeff_1d)
 {
   for (unsigned int d = 0; d < 2; ++d)
     Assert(coeff.size(d) == coeff_1d.size(), ExcInternalError());
@@ -122,8 +122,8 @@ void
 
 template <typename CoefficientType>
 void
-  prepare_symmetric_coefficients(Table<3, CoefficientType> &         coeff,
-                                 const std::vector<CoefficientType> &coeff_1d)
+prepare_symmetric_coefficients(Table<3, CoefficientType> &         coeff,
+                               const std::vector<CoefficientType> &coeff_1d)
 {
   for (unsigned int d = 0; d < 3; ++d)
     Assert(coeff.size(d) == coeff_1d.size(), ExcInternalError());
@@ -144,7 +144,7 @@ compare(const Table<1, CoefficientType> &coeff1,
   Assert(coeff1.size(0) == coeff2.size(0), ExcInternalError());
 
   typename CoefficientType::value_type linf = 0.;
-  for (unsigned int i = 0; i < coeff1.size(0); i++)
+  for (unsigned int i = 0; i < coeff1.size(0); ++i)
     linf = std::max(linf, std::abs(coeff1(i) - coeff2(i)));
 
   return linf;
@@ -159,8 +159,8 @@ compare(const Table<2, CoefficientType> &coeff1,
     Assert(coeff1.size(d) == coeff2.size(d), ExcInternalError());
 
   typename CoefficientType::value_type linf = 0.;
-  for (unsigned int i = 0; i < coeff1.size(0); i++)
-    for (unsigned int j = 0; j < coeff1.size(1); j++)
+  for (unsigned int i = 0; i < coeff1.size(0); ++i)
+    for (unsigned int j = 0; j < coeff1.size(1); ++j)
       linf = std::max(linf, std::abs(coeff1(i, j) - coeff2(i, j)));
 
   return linf;
@@ -175,9 +175,9 @@ compare(const Table<3, CoefficientType> &coeff1,
     Assert(coeff1.size(d) == coeff2.size(d), ExcInternalError());
 
   typename CoefficientType::value_type linf = 0.;
-  for (unsigned int i = 0; i < coeff1.size(0); i++)
-    for (unsigned int j = 0; j < coeff1.size(1); j++)
-      for (unsigned int k = 0; k < coeff1.size(2); k++)
+  for (unsigned int i = 0; i < coeff1.size(0); ++i)
+    for (unsigned int j = 0; j < coeff1.size(1); ++j)
+      for (unsigned int k = 0; k < coeff1.size(2); ++k)
         linf = std::max(linf, std::abs(coeff1(i, j, k) - coeff2(i, j, k)));
 
   return linf;

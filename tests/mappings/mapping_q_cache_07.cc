@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -20,8 +20,8 @@
 #include <deal.II/fe/fe_system.h>
 #include <deal.II/fe/fe_values.h>
 #include <deal.II/fe/mapping_fe_field.h>
+#include <deal.II/fe/mapping_q1.h>
 #include <deal.II/fe/mapping_q_cache.h>
-#include <deal.II/fe/mapping_q_generic.h>
 
 #include <deal.II/grid/grid_generator.h>
 #include <deal.II/grid/tria.h>
@@ -82,15 +82,14 @@ test(const bool         vector_describes_relative_displacement,
                        vector_describes_relative_displacement);
     DataOutBase::VtkFlags flags;
 
-    DataOut<dim, DoFHandler<dim, spacedim>> data_out;
+    DataOut<dim, spacedim> data_out;
     data_out.set_flags(flags);
     data_out.attach_dof_handler(dof_handler);
 
     data_out.build_patches(
       mapping,
       fe_degree + 1,
-      DataOut<dim,
-              DoFHandler<dim, spacedim>>::CurvedCellRegion::curved_inner_cells);
+      DataOut<dim, spacedim>::CurvedCellRegion::curved_inner_cells);
 
     static unsigned int counter = 0;
 

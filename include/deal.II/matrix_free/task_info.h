@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2011 - 2020 by the deal.II authors
+// Copyright (C) 2011 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -21,18 +21,20 @@
 #include <deal.II/base/config.h>
 
 #include <deal.II/base/exceptions.h>
-#include <deal.II/base/index_set.h>
 #include <deal.II/base/memory_consumption.h>
+#include <deal.II/base/mpi_stub.h>
 #include <deal.II/base/tensor.h>
-#include <deal.II/base/thread_management.h>
 #include <deal.II/base/utilities.h>
 #include <deal.II/base/vectorization.h>
-
-#include <deal.II/lac/dynamic_sparsity_pattern.h>
 
 
 DEAL_II_NAMESPACE_OPEN
 
+
+// forward declaration
+#ifndef DOXYGEN
+class DynamicSparsityPattern;
+#endif
 
 
 namespace internal
@@ -613,6 +615,11 @@ namespace internal
        * Shared-memory MPI communicator
        */
       MPI_Comm communicator_sm;
+
+      /**
+       * Assert that vectors passed to the MatrixFree loops are not ghosted.
+       */
+      bool allow_ghosted_vectors_in_loops;
 
       /**
        * Rank of MPI process

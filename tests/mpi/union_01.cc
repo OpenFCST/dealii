@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -37,7 +37,7 @@ test(const MPI_Comm comm)
     const auto result = Utilities::MPI::compute_set_union(vector, comm);
 
     for (auto i : result)
-      deallog << i << " ";
+      deallog << i << ' ';
     deallog << std::endl;
   }
 
@@ -47,7 +47,7 @@ test(const MPI_Comm comm)
       std::set<unsigned int>(vector.begin(), vector.end()), comm);
 
     for (auto i : result)
-      deallog << i << " ";
+      deallog << i << ' ';
     deallog << std::endl;
   }
 }

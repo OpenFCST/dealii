@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2008 - 2020 by the deal.II authors
+// Copyright (C) 2008 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -42,8 +42,9 @@ class BlockSparseMatrix;
 
 namespace TrilinosWrappers
 {
-  /*! @addtogroup TrilinosWrappers
-   *@{
+  /**
+   * @addtogroup TrilinosWrappers
+   * @{
    */
 
   /**
@@ -218,7 +219,7 @@ namespace TrilinosWrappers
      * Return the total number of nonzero elements of this matrix (summed
      * over all MPI processes).
      */
-    size_type
+    std::uint64_t
     n_nonzero_elements() const;
 
     /**
@@ -347,7 +348,7 @@ namespace TrilinosWrappers
                    int,
                    << "The blocks [" << arg1 << ',' << arg2 << "] and [" << arg3
                    << ',' << arg4 << "] have differing column numbers.");
-    ///@}
+    //** @} */
 
   private:
     /**
@@ -401,7 +402,7 @@ namespace TrilinosWrappers
 
 
 
-  /*@}*/
+  /** @} */
 
   // ------------- inline and template functions -----------------
 

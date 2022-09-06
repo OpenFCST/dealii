@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -163,9 +163,9 @@ namespace Step18
   Tensor<2, 3>
   get_rotation_matrix(const std::vector<Tensor<1, 3>> &grad_u)
   {
-    const Point<3> curl(grad_u[2][1] - grad_u[1][2],
-                        grad_u[0][2] - grad_u[2][0],
-                        grad_u[1][0] - grad_u[0][1]);
+    const Tensor<1, 3> curl({grad_u[2][1] - grad_u[1][2],
+                             grad_u[0][2] - grad_u[2][0],
+                             grad_u[1][0] - grad_u[0][1]});
 
     const double tan_angle = std::sqrt(curl * curl);
     const double angle     = std::atan(tan_angle);
@@ -177,7 +177,7 @@ namespace Step18
         return rot;
       }
 
-    const Point<3> axis = curl / tan_angle;
+    const Tensor<1, 3> axis = curl / tan_angle;
     return Physics::Transformations::Rotations::rotation_matrix_3d(axis,
                                                                    -angle);
   }
@@ -241,7 +241,7 @@ namespace Step18
     const Quadrature<dim> quadrature_formula;
 
 #ifdef HEX
-    MappingQGeneric<dim, dim> mapping;
+    MappingQ<dim, dim> mapping;
 #else
     MappingFE<dim, dim>  mapping;
 #endif
@@ -720,7 +720,7 @@ namespace Step18
     deallog.depth_file(previous_depth);
 
     deallog << "norm: " << distributed_incremental_displacement.linfty_norm()
-            << " " << distributed_incremental_displacement.l1_norm() << " "
+            << ' ' << distributed_incremental_displacement.l1_norm() << ' '
             << distributed_incremental_displacement.l2_norm() << std::endl;
 
     incremental_displacement = distributed_incremental_displacement;
@@ -750,11 +750,11 @@ namespace Step18
       DataComponentInterpretation::DataComponentInterpretation::
         component_is_part_of_vector);
 
-    data_out.add_data_vector(incremental_displacement,
-                             solution_names,
-                             DataOut_DoFData<DoFHandler<dim, dim>, dim, dim>::
-                               DataVectorType::type_automatic,
-                             solution_interpretation);
+    data_out.add_data_vector(
+      incremental_displacement,
+      solution_names,
+      DataOut_DoFData<dim, dim>::DataVectorType::type_automatic,
+      solution_interpretation);
 
 
     Vector<double> norm_of_stress(triangulation.n_active_cells());
@@ -823,7 +823,7 @@ namespace Step18
           deallog << (p == 0 ? ' ' : '+')
                   << (GridTools::count_cells_with_subdomain_association(
                        triangulation, p));
-        deallog << ")" << std::endl;
+        deallog << ')' << std::endl;
 
         setup_system();
 
@@ -833,7 +833,7 @@ namespace Step18
           deallog << (p == 0 ? ' ' : '+')
                   << (DoFTools::count_dofs_with_subdomain_association(
                        dof_handler, p));
-        deallog << ")" << std::endl;
+        deallog << ')' << std::endl;
 
         solve_timestep();
       }
@@ -951,12 +951,12 @@ namespace Step18
                                     quadrature_formula.size());
 
     unsigned int history_index = 0;
-    for (auto &cell : triangulation.active_cell_iterators())
-      if (cell->is_locally_owned())
-        {
-          cell->set_user_pointer(&quadrature_point_history[history_index]);
-          history_index += quadrature_formula.size();
-        }
+    for (auto &cell : triangulation.active_cell_iterators() |
+                        IteratorFilters::LocallyOwnedCell())
+      {
+        cell->set_user_pointer(&quadrature_point_history[history_index]);
+        history_index += quadrature_formula.size();
+      }
 
     Assert(history_index == quadrature_point_history.size(),
            ExcInternalError());
@@ -975,40 +975,39 @@ namespace Step18
     std::vector<std::vector<Tensor<1, dim>>> displacement_increment_grads(
       quadrature_formula.size(), std::vector<Tensor<1, dim>>(dim));
 
-    for (auto &cell : dof_handler.active_cell_iterators())
-      if (cell->is_locally_owned())
-        {
-          PointHistory<dim> *local_quadrature_points_history =
-            reinterpret_cast<PointHistory<dim> *>(cell->user_pointer());
-          Assert(local_quadrature_points_history >=
-                   &quadrature_point_history.front(),
-                 ExcInternalError());
-          Assert(local_quadrature_points_history <=
-                   &quadrature_point_history.back(),
-                 ExcInternalError());
+    for (auto &cell : dof_handler.active_cell_iterators() |
+                        IteratorFilters::LocallyOwnedCell())
+      {
+        PointHistory<dim> *local_quadrature_points_history =
+          reinterpret_cast<PointHistory<dim> *>(cell->user_pointer());
+        Assert(local_quadrature_points_history >=
+                 &quadrature_point_history.front(),
+               ExcInternalError());
+        Assert(local_quadrature_points_history <=
+                 &quadrature_point_history.back(),
+               ExcInternalError());
 
-          fe_values.reinit(cell);
-          fe_values.get_function_gradients(incremental_displacement,
-                                           displacement_increment_grads);
+        fe_values.reinit(cell);
+        fe_values.get_function_gradients(incremental_displacement,
+                                         displacement_increment_grads);
 
-          for (unsigned int q = 0; q < quadrature_formula.size(); ++q)
-            {
-              const SymmetricTensor<2, dim> new_stress =
-                (local_quadrature_points_history[q].old_stress +
-                 (stress_strain_tensor *
-                  get_strain(displacement_increment_grads[q])));
+        for (unsigned int q = 0; q < quadrature_formula.size(); ++q)
+          {
+            const SymmetricTensor<2, dim> new_stress =
+              (local_quadrature_points_history[q].old_stress +
+               (stress_strain_tensor *
+                get_strain(displacement_increment_grads[q])));
 
-              const Tensor<2, dim> rotation =
-                get_rotation_matrix(displacement_increment_grads[q]);
+            const Tensor<2, dim> rotation =
+              get_rotation_matrix(displacement_increment_grads[q]);
 
-              const SymmetricTensor<2, dim> rotated_new_stress =
-                symmetrize(transpose(rotation) *
-                           static_cast<Tensor<2, dim>>(new_stress) * rotation);
+            const SymmetricTensor<2, dim> rotated_new_stress =
+              symmetrize(transpose(rotation) *
+                         static_cast<Tensor<2, dim>>(new_stress) * rotation);
 
-              local_quadrature_points_history[q].old_stress =
-                rotated_new_stress;
-            }
-        }
+            local_quadrature_points_history[q].old_stress = rotated_new_stress;
+          }
+      }
   }
 } // namespace Step18
 

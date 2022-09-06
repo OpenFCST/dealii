@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2020 by the deal.II authors
+// Copyright (C) 2020 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -24,6 +24,7 @@
 #include <deal.II/distributed/tria_base.h>
 
 #include <deal.II/grid/cell_id.h>
+#include <deal.II/grid/filtered_iterator.h>
 #include <deal.II/grid/grid_tools.h>
 #include <deal.II/grid/tria.h>
 
@@ -43,7 +44,7 @@ enum Type
 
 
 template <int dim>
-std::unique_ptr<parallel::Triangulation<dim>>
+std::unique_ptr<parallel::TriangulationBase<dim>>
 create_triangulation(Type type)
 {
   if (type == Type::Shared)
@@ -59,7 +60,7 @@ create_triangulation(Type type)
 
 template <int dim>
 void
-test(parallel::Triangulation<dim> &tria)
+test(parallel::TriangulationBase<dim> &tria)
 {
   // ----- setup -----
   tria.clear();
@@ -78,9 +79,9 @@ test(parallel::Triangulation<dim> &tria)
   {
     std::vector<CellId> local_cell_ids;
     local_cell_ids.reserve(tria.n_active_cells());
-    for (const auto &cell : tria.active_cell_iterators())
-      if (cell->is_locally_owned())
-        local_cell_ids.push_back(cell->id());
+    for (const auto &cell :
+         tria.active_cell_iterators() | IteratorFilters::LocallyOwnedCell())
+      local_cell_ids.push_back(cell->id());
 
     std::vector<std::vector<CellId>> cell_ids_per_processor =
       Utilities::MPI::all_gather(MPI_COMM_WORLD, local_cell_ids);

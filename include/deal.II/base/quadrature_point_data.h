@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2019 by the deal.II authors
+// Copyright (C) 2016 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -38,8 +38,10 @@
 
 DEAL_II_NAMESPACE_OPEN
 
-/*!@addtogroup Quadrature */
-/*@{*/
+/**
+ * @addtogroup Quadrature
+ * @{
+ */
 
 /**
  * A class for storing at each cell represented by iterators of type @p CellIteratorType
@@ -587,7 +589,7 @@ namespace parallel
 
 #endif
 
-/*@}*/
+/** @} */
 
 #ifndef DOXYGEN
 
@@ -620,7 +622,7 @@ CellDataStorage<CellIteratorType, DataType>::initialize(
       // will end with a single same T object stored in each element of the
       // vector:
       const auto it = map.find(key);
-      for (unsigned int q = 0; q < n_q_points; q++)
+      for (unsigned int q = 0; q < n_q_points; ++q)
         it->second[q] = std::make_shared<T>();
     }
 }
@@ -635,7 +637,7 @@ CellDataStorage<CellIteratorType, DataType>::initialize(
   const CellIteratorType &cell_end,
   const unsigned int      number)
 {
-  for (CellIteratorType it = cell_start; it != cell_end; it++)
+  for (CellIteratorType it = cell_start; it != cell_end; ++it)
     if (it->is_locally_owned())
       initialize<T>(it, number);
 }
@@ -651,7 +653,7 @@ CellDataStorage<CellIteratorType, DataType>::erase(const CellIteratorType &cell)
   if (it == map.end())
     return false;
   Assert(&cell->get_triangulation() == tria, ExcTriangulationMismatch());
-  for (unsigned int i = 0; i < it->second.size(); i++)
+  for (unsigned int i = 0; i < it->second.size(); ++i)
     {
       Assert(
         it->second[i].unique(),
@@ -675,7 +677,7 @@ CellDataStorage<CellIteratorType, DataType>::clear()
   while (it != map.end())
     {
       // loop over all objects and see if no one is using them
-      for (unsigned int i = 0; i < it->second.size(); i++)
+      for (unsigned int i = 0; i < it->second.size(); ++i)
         {
           Assert(
             it->second[i].unique(),
@@ -707,7 +709,7 @@ CellDataStorage<CellIteratorType, DataType>::get_data(
   // fully) specialized. Thus, stick with copying of shared pointers even when
   // the T==DataType:
   std::vector<std::shared_ptr<T>> res(it->second.size());
-  for (unsigned int q = 0; q < res.size(); q++)
+  for (unsigned int q = 0; q < res.size(); ++q)
     {
       res[q] = std::dynamic_pointer_cast<T>(it->second[q]);
       Assert(res[q], ExcCellDataTypeMismatch());
@@ -734,7 +736,7 @@ CellDataStorage<CellIteratorType, DataType>::get_data(
   // T==DataType as we need to return shared_ptr<const T> to make sure the user
   // does not modify the content of QP objects
   std::vector<std::shared_ptr<const T>> res(it->second.size());
-  for (unsigned int q = 0; q < res.size(); q++)
+  for (unsigned int q = 0; q < res.size(); ++q)
     {
       res[q] = std::dynamic_pointer_cast<const T>(it->second[q]);
       Assert(res[q], ExcCellDataTypeMismatch());
@@ -760,7 +762,7 @@ CellDataStorage<CellIteratorType, DataType>::try_get_data(
       // shared_ptr<const T> to make sure the user
       // does not modify the content of QP objects
       std::vector<std::shared_ptr<T>> result(it->second.size());
-      for (unsigned int q = 0; q < result.size(); q++)
+      for (unsigned int q = 0; q < result.size(); ++q)
         {
           result[q] = std::dynamic_pointer_cast<T>(it->second[q]);
           Assert(result[q], ExcCellDataTypeMismatch());
@@ -791,7 +793,7 @@ CellDataStorage<CellIteratorType, DataType>::try_get_data(
       // shared_ptr<const T> to make sure the user
       // does not modify the content of QP objects
       std::vector<std::shared_ptr<const T>> result(it->second.size());
-      for (unsigned int q = 0; q < result.size(); q++)
+      for (unsigned int q = 0; q < result.size(); ++q)
         {
           result[q] = std::dynamic_pointer_cast<const T>(it->second[q]);
           Assert(result[q], ExcCellDataTypeMismatch());

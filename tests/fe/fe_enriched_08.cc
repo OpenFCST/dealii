@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2016 - 2020 by the deal.II authors
+// Copyright (C) 2016 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -84,7 +84,7 @@ template <int dim>
 void
 test2cells(const unsigned int p_feq = 2, const unsigned int p_feen = 1)
 {
-  deallog << "2cells: " << dim << " " << p_feq << " " << p_feen << std::endl;
+  deallog << "2cells: " << dim << ' ' << p_feq << ' ' << p_feen << std::endl;
   Triangulation<dim> triangulation;
   {
     Triangulation<dim> triangulationL;
@@ -129,7 +129,7 @@ test2cells(const unsigned int p_feq = 2, const unsigned int p_feen = 1)
   // output to check if all is good:
   std::vector<Vector<double>> shape_functions;
   std::vector<std::string>    names;
-  for (unsigned int s = 0; s < dof_handler.n_dofs(); s++)
+  for (unsigned int s = 0; s < dof_handler.n_dofs(); ++s)
     {
       Vector<double> shape_function;
       shape_function.reinit(dof_handler.n_dofs());
@@ -151,7 +151,7 @@ test2cells(const unsigned int p_feq = 2, const unsigned int p_feen = 1)
       shape_functions.push_back(shape_function);
     }
 
-  DataOut<dim, DoFHandler<dim>> data_out;
+  DataOut<dim> data_out;
   data_out.attach_dof_handler(dof_handler);
 
   // get material ids:
@@ -165,7 +165,7 @@ test2cells(const unsigned int p_feq = 2, const unsigned int p_feen = 1)
     }
   data_out.add_data_vector(fe_index, "fe_index");
 
-  for (unsigned int i = 0; i < shape_functions.size(); i++)
+  for (unsigned int i = 0; i < shape_functions.size(); ++i)
     data_out.add_data_vector(shape_functions[i], names[i]);
 
   data_out.build_patches(patches);

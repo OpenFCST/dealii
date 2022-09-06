@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2004 - 2018 by the deal.II authors
+// Copyright (C) 2004 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -43,7 +43,7 @@ test()
     Mat mm  = m;
     Mat m2m = m2;
 
-    // deallog << mm << " " << m2m << std::endl;
+    // deallog << mm << ' ' << m2m << std::endl;
 
     // forbidden:  m2 = m;
     {
@@ -51,7 +51,7 @@ test()
 
       Mat mm  = m;
       Mat m2m = m2;
-      // deallog << mm << " " << m2m << std::endl;
+      // deallog << mm << ' ' << m2m << std::endl;
     }
   }
 }

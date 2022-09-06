@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 2019 - 2020 by the deal.II authors
+// Copyright (C) 2019 - 2021 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -145,6 +145,13 @@ namespace Utilities
           // internal::FineDoFHandlerView::FineDoFHandlerView::reinit() for mg
           // global coarsening transfer
           fine_dof_handler_view_reinit,
+
+          // GridTools::internal::distributed_compute_point_locations
+          distributed_compute_point_locations,
+
+          // AffineConstraints::make_consistent_in_parallel()
+          affine_constraints_make_consistent_in_parallel_0,
+          affine_constraints_make_consistent_in_parallel_1,
 
         };
       } // namespace Tags

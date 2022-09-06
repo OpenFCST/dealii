@@ -1,6 +1,6 @@
 // ---------------------------------------------------------------------
 //
-// Copyright (C) 1999 - 2020 by the deal.II authors
+// Copyright (C) 1999 - 2022 by the deal.II authors
 //
 // This file is part of the deal.II library.
 //
@@ -16,6 +16,9 @@
 #include <deal.II/base/mpi_compute_index_owner_internal.h>
 #include <deal.II/base/partitioner.h>
 #include <deal.II/base/partitioner.templates.h>
+
+#include <boost/serialization/utility.hpp>
+
 
 DEAL_II_NAMESPACE_OPEN
 
@@ -80,7 +83,7 @@ namespace Utilities
         MPI_Exscan(&local_size,
                    &prefix_sum,
                    1,
-                   Utilities::MPI::internal::mpi_type_id(&prefix_sum),
+                   Utilities::MPI::mpi_type_id_for_type<decltype(prefix_sum)>,
                    MPI_SUM,
                    communicator);
       AssertThrowMPI(ierr);
@@ -281,8 +284,9 @@ namespace Utilities
       // in the static partition (i.e. in the dictionary). This process
       // returns the actual owner of the index.
       ConsensusAlgorithms::Selector<
-        std::pair<types::global_dof_index, types::global_dof_index>,
-        unsigned int>
+        std::vector<
+          std::pair<types::global_dof_index, types::global_dof_index>>,
+        std::vector<unsigned int>>
         consensus_algorithm(process, communicator);
       consensus_algorithm.run();
 
@@ -296,8 +300,8 @@ namespace Utilities
               {
                 Assert(i >= ghost_targets_data.back().first,
                        ExcInternalError(
-                         "Expect result of ConsensusAlgorithmsProcess to be "
-                         "sorted"));
+                         "Expect result of ConsensusAlgorithms::Process to be "
+                         "sorted."));
                 if (i == ghost_targets_data.back().first)
                   ghost_targets_data.back().second++;
                 else
@@ -443,7 +447,7 @@ namespace Utilities
           for (unsigned int p = 0; p < ghost_targets_data.size(); ++p)
             {
               unsigned int last_index = numbers::invalid_unsigned_int - 1;
-              for (unsigned int ii = 0; ii < ghost_targets_data[p].second; ii++)
+              for (unsigned int ii = 0; ii < ghost_targets_data[p].second; ++ii)
                 {
                   const unsigned int i = shift + ii;
                   if (expanded_numbering[i] == last_index + 1)
