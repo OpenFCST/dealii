@@ -141,11 +141,13 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
         text[1] = "****";
         text[2] = "ASCII";
         text[3] = "DATASET UNSTRUCTURED_GRID";
-        vtk_version = text[0].substr(23, 3);
-
+        
         for (unsigned int i = 0; i < 4; ++i)
         {
             getline(in, line);
+            
+            if (i == 0)
+                text[0] = line;
             if (i == 2 || i == 3)
                 AssertThrow(
                     line.compare(text[i]) == 0,
@@ -154,8 +156,12 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
                             "While reading VTK file, failed to find a header line with text <") +
                         text[i] + ">"));
         }
+
+        // Get the version of the VTK file
+        vtk_version = text[0].substr(23, 3);
     }
 
+    
     //-----------------Declaring storage and mappings------------------
 
     std::vector<Point<spacedim>> vertices;
