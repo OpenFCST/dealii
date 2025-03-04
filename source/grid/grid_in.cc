@@ -122,8 +122,6 @@ GridIn<dim, spacedim>::attach_triangulation(Triangulation<dim, spacedim> &t)
   tria = &t;
 }
 
-
-
 template <int dim, int spacedim>
 void
 GridIn<dim, spacedim>::read_vtk(std::istream &in)
@@ -252,7 +250,7 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
             AssertThrow(index1 == 0,
                         ExcMessage("While reading VTK file, the first index in the OFFSETS array should be 0"));
             
-            for (unsigned int p=1; p<n_offsets-1; ++p)
+            for (unsigned int p=1; p<n_offsets; ++p)
             {
                 unsigned int n_points_per_cell_temp;
                 in >> index2;
@@ -263,7 +261,8 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
 
             unsigned int n_cells = cell_types.size();
             AssertThrow(n_points_per_cell.size() == n_cells,
-                        ExcMessage("The number of cells inferred from the OFFSETS array does not match the number of entries in the CELL_TYPES array"));
+                        ExcMessage("The number of cells inferred from the OFFSETS array (" + std::to_string(n_points_per_cell.size())+
+                        ") does not match the number of entries in the CELL_TYPES array ("+std::to_string(n_cells)+")"));
 
             // Now that we now how many points correspond to each cell, we can read the CONNECTIVITY array
             in >> keyword;
@@ -663,12 +662,15 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
                     // (the last number is optional)
                     std::string line;
                     std::getline(in, line);
-                    AssertThrow(
-                        line.substr(1,
-                                    std::min(static_cast<std::size_t>(3),
-                                             line.size() - 1)) == "int",
-                        ExcMessage(
-                            "While reading VTK file, material- and manifold IDs can only have type 'int'."));
+                    // VTK generates MaterialID with type double, but we can
+                    // still store it as an int. Therefore, the assertion below
+                    // was commented out.
+                    // AssertThrow(
+                    //     line.substr(1,
+                    //                 std::min(static_cast<std::size_t>(3),
+                    //                          line.size() - 1)) == "int",
+                    //     ExcMessage(
+                    //         "While reading VTK file, material- and manifold IDs can only have type 'int'."));
 
                     in >> keyword;
                     AssertThrow(
