@@ -161,34 +161,41 @@ template <int dim, int spacedim>
 void
 GridIn<dim, spacedim>::read_vtk(std::istream &in)
 {
-  std::string line;
+    std::string line;
+    std::string vtk_version;
+    // verify that the third and fourth lines match
+    // expectations. the first line is not checked to allow use of
+    // different vtk versions and the second line of the file may
+    // essentially be anything the author of the file chose to
+    // identify what's in there, so we just ensure that we can read it.
+    {
+        std::string text[4];
+        text[0] = "# vtk DataFile Version 3.0";
+        text[1] = "****";
+        text[2] = "ASCII";
+        text[3] = "DATASET UNSTRUCTURED_GRID";
+        
+        for (unsigned int i = 0; i < 4; ++i)
+        {
+            getline(in, line);
+            
+            if (i == 0)
+                text[0] = line;
+            if (i == 2 || i == 3)
+                AssertThrow(
+                    line.compare(text[i]) == 0,
+                    ExcMessage(
+                        std::string(
+                            "While reading VTK file, failed to find a header line with text <") +
+                        text[i] + ">"));
+        }
 
-  // verify that the third and fourth lines match
-  // expectations. the first line is not checked to allow use of
-  // different vtk versions and the second line of the file may
-  // essentially be anything the author of the file chose to
-  // identify what's in there, so we just ensure that we can read it.
-  {
-    std::string text[4];
-    text[0] = "# vtk DataFile Version 3.0";
-    text[1] = "****";
-    text[2] = "ASCII";
-    text[3] = "DATASET UNSTRUCTURED_GRID";
+        // Get the version of the VTK file
+        vtk_version = text[0].substr(23, 3);
+    }
 
-    for (unsigned int i = 0; i < 4; ++i)
-      {
-        getline(in, line);
-        if (i == 2 || i == 3)
-          AssertThrow(
-            line.compare(text[i]) == 0,
-            ExcMessage(
-              std::string(
-                "While reading VTK file, failed to find a header line with text <") +
-              text[i] + ">"));
-      }
-  }
-
-  //-----------------Declaring storage and mappings------------------
+    
+    //-----------------Declaring storage and mappings------------------
 
   std::vector<Point<spacedim>> vertices;
   std::vector<CellData<dim>>   cells;
@@ -226,8 +233,12 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
 
   in >> keyword;
 
-  unsigned int n_geometric_objects = 0;
-  unsigned int n_ints;
+    unsigned int n_geometric_objects = 0;
+    unsigned int n_ints;
+    std::vector<unsigned int> n_points_per_cell;
+
+    bool is_quad_or_hex_mesh = false;
+    bool is_tria_or_tet_mesh = false;
 
   if (keyword == "CELLS")
     {
@@ -253,215 +264,426 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
         in.seekg(oldpos);
       }
 
-      in >> n_geometric_objects;
-      in >> n_ints; // Ignore this, since we don't need it.
-
-      if (dim == 3)
+        if (vtk_version == "5.1") // VTK 5.1 introduced OFFSETS and CONNECTIVITY arrays
         {
-          for (unsigned int count = 0; count < n_geometric_objects; ++count)
+            unsigned int n_offsets;
+            std::string vtktype;
+
+            in >> n_offsets; // n_offsets is the number next to CELLS
+            in >> n_ints; // Ignore this, since we don't need it.
+            in >> keyword;
+            AssertThrow(keyword == "OFFSETS",
+                        ExcMessage("While reading VTK file, failed to find OFFSETS section"));
+            
+            in >> vtktype; // vtktypeint64, vtktypeint32, etc...we do not need this
+            
+            // The OFFSETS array contains the indices in the CONNECTIVITY array where
+            // new cells start
+            unsigned int index1 = 0;
+            unsigned int index2 = 0;
+
+            in >> index1;
+            AssertThrow(index1 == 0,
+                        ExcMessage("While reading VTK file, the first index in the OFFSETS array should be 0"));
+            
+            for (unsigned int p=1; p<n_offsets; ++p)
             {
-              unsigned int n_vertices;
-              in >> n_vertices;
+                unsigned int n_points_per_cell_temp;
+                in >> index2;
+                n_points_per_cell_temp = index2 - index1;
+                n_points_per_cell.push_back(n_points_per_cell_temp);
+                index1 = index2;
+            }
 
-              // VTK_TETRA is 10, VTK_HEXAHEDRON is 12
-              if (cell_types[count] == 10 || cell_types[count] == 12)
+            unsigned int n_cells = cell_types.size();
+            AssertThrow(n_points_per_cell.size() == n_cells,
+                        ExcMessage("The number of cells inferred from the OFFSETS array (" + std::to_string(n_points_per_cell.size())+
+                        ") does not match the number of entries in the CELL_TYPES array ("+std::to_string(n_cells)+")"));
+
+            // Now that we now how many points correspond to each cell, we can read the CONNECTIVITY array
+            in >> keyword;
+            AssertThrow(keyword == "CONNECTIVITY",
+                        ExcMessage("While reading VTK file, failed to find CONNECTIVITY section"));
+
+            in >> vtktype; // vtktypeint64, vtktypeint32, etc...we do not need this
+            if (dim == 3)
+            {
+                for (unsigned int count = 0; count < n_points_per_cell.size(); ++count)
                 {
-                  // we assume that the file contains first all cells,
-                  // and only then any faces or lines
-                  AssertThrow(subcelldata.boundary_quads.empty() &&
-                                subcelldata.boundary_lines.empty(),
-                              ExcNotImplemented());
+                    unsigned int n_vertices = n_points_per_cell[count];
 
-                  cells.emplace_back(n_vertices);
+                    // VTK_TETRA is 10, VTK_HEXAHEDRON is 12
+                    if (cell_types[count] == 10 || cell_types[count] == 12)
+                    {
+                        if (cell_types[count] == 10)
+                            is_tria_or_tet_mesh = true;
+                        if (cell_types[count] == 12)
+                            is_quad_or_hex_mesh = true;
 
-                  for (unsigned int j = 0; j < n_vertices;
-                       j++) // loop to feed data
+                        // we assume that the file contains first all cells,
+                        // and only then any faces or lines
+                        AssertThrow(subcelldata.boundary_quads.size() == 0 &&
+                                    subcelldata.boundary_lines.size() == 0,
+                                    ExcNotImplemented());
+
+                        cells.emplace_back(n_vertices);
+
+                        for (unsigned int j = 0; j < n_vertices; j++) // loop to feed data
+                            in >> cells.back().vertices[j];
+
+                        // Hexahedra need a permutation to go from VTK numbering
+                        // to deal numbering
+                        if (cell_types[count] == 12)
+                        {
+                            std::swap(cells.back().vertices[2], cells.back().vertices[3]);
+                            std::swap(cells.back().vertices[6], cells.back().vertices[7]);
+                        }
+
+                        cells.back().material_id = 0;
+                    }
+                    // VTK_TRIANGLE is 5, VTK_QUAD is 9
+                    else if (cell_types[count] == 5 || cell_types[count] == 9)
+                    {
+                        if (cell_types[count] == 5)
+                            is_tria_or_tet_mesh = true;
+                        if (cell_types[count] == 9)
+                            is_quad_or_hex_mesh = true;
+
+                        // we assume that the file contains first all cells,
+                        // then all faces, and finally all lines
+                        AssertThrow(subcelldata.boundary_lines.size() == 0,
+                                    ExcNotImplemented());
+
+                        subcelldata.boundary_quads.emplace_back(n_vertices);
+
+                        for (unsigned int j = 0; j < n_vertices; j++) // loop to feed the data to the boundary
+                            in >> subcelldata.boundary_quads.back().vertices[j];
+
+                        subcelldata.boundary_quads.back().material_id = 0;
+                    }
+                    // VTK_LINE is 3
+                    else if (cell_types[count] == 3)
+                    {
+                        subcelldata.boundary_lines.emplace_back(n_vertices);
+
+                        for (unsigned int j = 0; j < n_vertices; j++) // loop to feed the data to the boundary
+                            in >> subcelldata.boundary_lines.back().vertices[j];
+
+                        subcelldata.boundary_lines.back().material_id = 0;
+                    }
+                    else
+                        AssertThrow(false,
+                                    ExcMessage("While reading VTK file, unknown cell type encountered"));
+                }
+            }
+            else if (dim == 2)
+            {
+                for (unsigned int count = 0; count < n_points_per_cell.size(); ++count)
+                {
+                    unsigned int n_vertices = n_points_per_cell[count];
+                    
+                    // VTK_TRIANGLE is 5, VTK_QUAD is 9
+                    if (cell_types[count] == 5 || cell_types[count] == 9)
+                    {
+                        // we assume that the file contains first all cells,
+                        // and only then any faces
+                        AssertThrow(subcelldata.boundary_lines.size() == 0,
+                                    ExcNotImplemented());
+
+                        if (cell_types[count] == 5)
+                            is_tria_or_tet_mesh = true;
+                        if (cell_types[count] == 9)
+                            is_quad_or_hex_mesh = true;
+
+                        cells.emplace_back(n_vertices);
+
+                        for (unsigned int j = 0; j < n_vertices; j++) // loop to feed data
+                            in >> cells.back().vertices[j];
+
+                        // Quadrilaterals need a permutation to go from VTK numbering
+                        // to deal numbering
+                        if (cell_types[count] == 9)
+                        {
+                            // Like Hexahedra - the last two vertices need to be
+                            // flipped
+                            std::swap(cells.back().vertices[2], cells.back().vertices[3]);
+                        }
+
+                        cells.back().material_id = 0;
+                    }
+                    // VTK_LINE is 3
+                    else if (cell_types[count] == 3)
+                    {
+                        // If this is encountered, the pointer comes out of the loop
+                        // and starts processing boundaries.
+                        subcelldata.boundary_lines.emplace_back(n_vertices);
+
+                        for (unsigned int j = 0; j < n_vertices; j++) // loop to feed the data to the boundary
+                            in >> subcelldata.boundary_lines.back().vertices[j];
+
+                        subcelldata.boundary_lines.back().material_id = 0;
+                    }
+                    else
+                        AssertThrow(false,
+                                    ExcMessage("While reading VTK file, unknown cell type encountered"));
+                }
+            }
+            else if (dim == 1)
+            {
+                for (unsigned int count = 0; count < n_points_per_cell.size(); ++count)
+                {
+                    unsigned int n_vertices = n_points_per_cell[count];
+                    
+                    AssertThrow(cell_types[count] == 3 && n_vertices == 2,
+                                ExcMessage("While reading VTK file, unknown cell type encountered"));
+                    cells.emplace_back(n_vertices);
+
+                    for (unsigned int j = 0; j < n_vertices; ++j) // loop to feed data
+                        in >> cells.back().vertices[j];
+
+                    cells.back().material_id = 0;
+                }
+            }
+            else
+                AssertThrow(false,
+                            ExcMessage("The number of dimensions is not 1, 2, or 3"));
+        }
+        else if (vtk_version == "3.0")
+        {
+            in >> n_geometric_objects;
+            in >> n_ints; // Ignore this, since we don't need it.
+
+            if (dim == 3)
+            {
+                for (unsigned int count = 0; count < n_geometric_objects; ++count)
+                {
+                    unsigned int n_vertices;
+                    in >> n_vertices;
+
+                    // VTK_TETRA is 10, VTK_HEXAHEDRON is 12
+                    if (cell_types[count] == 10 || cell_types[count] == 12)
+                    {
+                        if (cell_types[count] == 10)
+                            is_tria_or_tet_mesh = true;
+                        if (cell_types[count] == 12)
+                            is_quad_or_hex_mesh = true;
+
+                        // we assume that the file contains first all cells,
+                        // and only then any faces or lines
+                        AssertThrow(subcelldata.boundary_quads.size() == 0 &&
+                                    subcelldata.boundary_lines.size() == 0,
+                                    ExcNotImplemented());
+
+                        cells.emplace_back(n_vertices);
+
+                        for (unsigned int j = 0; j < n_vertices;
+                            j++) // loop to feed data
+                            in >> cells.back().vertices[j];
+
+                        // Hexahedra need a permutation to go from VTK numbering
+                        // to deal numbering
+                        if (cell_types[count] == 12)
+                        {
+                            std::swap(cells.back().vertices[2],
+                                        cells.back().vertices[3]);
+                            std::swap(cells.back().vertices[6],
+                                        cells.back().vertices[7]);
+                        }
+
+                        cells.back().material_id = 0;
+                    }
+                    // VTK_TRIANGLE is 5, VTK_QUAD is 9
+                    else if (cell_types[count] == 5 || cell_types[count] == 9)
+                    {
+                        if (cell_types[count] == 5)
+                            is_tria_or_tet_mesh = true;
+                        if (cell_types[count] == 9)
+                            is_quad_or_hex_mesh = true;
+
+                        // we assume that the file contains first all cells,
+                        // then all faces, and finally all lines
+                        AssertThrow(subcelldata.boundary_lines.size() == 0,
+                                    ExcNotImplemented());
+
+                        subcelldata.boundary_quads.emplace_back(n_vertices);
+
+                        for (unsigned int j = 0; j < n_vertices;
+                            j++) // loop to feed the data to the boundary
+                            in >> subcelldata.boundary_quads.back().vertices[j];
+
+                        subcelldata.boundary_quads.back().material_id = 0;
+                    }
+                    // VTK_LINE is 3
+                    else if (cell_types[count] == 3)
+                    {
+                        subcelldata.boundary_lines.emplace_back(n_vertices);
+
+                        for (unsigned int j = 0; j < n_vertices;
+                            j++) // loop to feed the data to the boundary
+                            in >> subcelldata.boundary_lines.back().vertices[j];
+
+                        subcelldata.boundary_lines.back().material_id = 0;
+                    }
+                    else
+                    AssertThrow(
+                    false,
+                    ExcMessage(
+                        "While reading VTK file, unknown cell type encountered"));
+                }
+            }
+            else if (dim == 2)
+            {
+                for (unsigned int count = 0; count < n_geometric_objects; ++count)
+                {
+                unsigned int n_vertices;
+                in >> n_vertices;
+
+                // VTK_TRIANGLE is 5, VTK_QUAD is 9
+                if (cell_types[count] == 5 || cell_types[count] == 9)
+                    {
+                    // we assume that the file contains first all cells,
+                    // and only then any faces
+                    AssertThrow(subcelldata.boundary_lines.empty(),
+                                ExcNotImplemented());
+
+                            if (cell_types[count] == 5)
+                                is_tria_or_tet_mesh = true;
+                            if (cell_types[count] == 9)
+                                is_quad_or_hex_mesh = true;
+
+                            cells.emplace_back(n_vertices);
+
+                    for (unsigned int j = 0; j < n_vertices;
+                        j++) // loop to feed data
+                        in >> cells.back().vertices[j];
+
+                    // Quadrilaterals need a permutation to go from VTK numbering
+                    // to deal numbering
+                    if (cell_types[count] == 9)
+                        {
+                        // Like Hexahedra - the last two vertices need to be
+                        // flipped
+                        std::swap(cells.back().vertices[2],
+                                    cells.back().vertices[3]);
+                        }
+
+                    cells.back().material_id = 0;
+                    }
+                // VTK_LINE is 3
+                else if (cell_types[count] == 3)
+                    {
+                    // If this is encountered, the pointer comes out of the loop
+                    // and starts processing boundaries.
+                    subcelldata.boundary_lines.emplace_back(n_vertices);
+
+                    for (unsigned int j = 0; j < n_vertices;
+                        j++) // loop to feed the data to the boundary
+                        {
+                        in >> subcelldata.boundary_lines.back().vertices[j];
+                        }
+
+                    subcelldata.boundary_lines.back().material_id = 0;
+                    }
+
+                else
+                    AssertThrow(
+                    false,
+                    ExcMessage(
+                        "While reading VTK file, unknown cell type encountered"));
+                }
+            }
+            else if (dim == 1)
+            {
+                for (unsigned int count = 0; count < n_geometric_objects; ++count)
+                {
+                unsigned int type;
+                in >> type;
+
+                AssertThrow(
+                    cell_types[count] == 3 && type == 2,
+                    ExcMessage(
+                    "While reading VTK file, unknown cell type encountered"));
+                cells.emplace_back(type);
+
+                for (unsigned int j = 0; j < type; ++j) // loop to feed data
                     in >> cells.back().vertices[j];
 
-                  // Hexahedra need a permutation to go from VTK numbering
-                  // to deal numbering
-                  if (cell_types[count] == 12)
-                    {
-                      std::swap(cells.back().vertices[2],
-                                cells.back().vertices[3]);
-                      std::swap(cells.back().vertices[6],
-                                cells.back().vertices[7]);
-                    }
-
-                  cells.back().material_id = 0;
+                cells.back().material_id = 0;
                 }
-              // VTK_TRIANGLE is 5, VTK_QUAD is 9
-              else if (cell_types[count] == 5 || cell_types[count] == 9)
-                {
-                  // we assume that the file contains first all cells,
-                  // then all faces, and finally all lines
-                  AssertThrow(subcelldata.boundary_lines.empty(),
-                              ExcNotImplemented());
-
-                  subcelldata.boundary_quads.emplace_back(n_vertices);
-
-                  for (unsigned int j = 0; j < n_vertices;
-                       j++) // loop to feed the data to the boundary
-                    in >> subcelldata.boundary_quads.back().vertices[j];
-
-                  subcelldata.boundary_quads.back().material_id = 0;
-                }
-              // VTK_LINE is 3
-              else if (cell_types[count] == 3)
-                {
-                  subcelldata.boundary_lines.emplace_back(n_vertices);
-
-                  for (unsigned int j = 0; j < n_vertices;
-                       j++) // loop to feed the data to the boundary
-                    in >> subcelldata.boundary_lines.back().vertices[j];
-
-                  subcelldata.boundary_lines.back().material_id = 0;
-                }
-
-              else
-                AssertThrow(
-                  false,
-                  ExcMessage(
-                    "While reading VTK file, unknown cell type encountered"));
             }
-        }
-      else if (dim == 2)
-        {
-          for (unsigned int count = 0; count < n_geometric_objects; ++count)
-            {
-              unsigned int n_vertices;
-              in >> n_vertices;
-
-              // VTK_TRIANGLE is 5, VTK_QUAD is 9
-              if (cell_types[count] == 5 || cell_types[count] == 9)
-                {
-                  // we assume that the file contains first all cells,
-                  // and only then any faces
-                  AssertThrow(subcelldata.boundary_lines.empty(),
-                              ExcNotImplemented());
-
-                  cells.emplace_back(n_vertices);
-
-                  for (unsigned int j = 0; j < n_vertices;
-                       j++) // loop to feed data
-                    in >> cells.back().vertices[j];
-
-                  // Quadrilaterals need a permutation to go from VTK numbering
-                  // to deal numbering
-                  if (cell_types[count] == 9)
-                    {
-                      // Like Hexahedra - the last two vertices need to be
-                      // flipped
-                      std::swap(cells.back().vertices[2],
-                                cells.back().vertices[3]);
-                    }
-
-                  cells.back().material_id = 0;
-                }
-              // VTK_LINE is 3
-              else if (cell_types[count] == 3)
-                {
-                  // If this is encountered, the pointer comes out of the loop
-                  // and starts processing boundaries.
-                  subcelldata.boundary_lines.emplace_back(n_vertices);
-
-                  for (unsigned int j = 0; j < n_vertices;
-                       j++) // loop to feed the data to the boundary
-                    {
-                      in >> subcelldata.boundary_lines.back().vertices[j];
-                    }
-
-                  subcelldata.boundary_lines.back().material_id = 0;
-                }
-
-              else
-                AssertThrow(
-                  false,
-                  ExcMessage(
-                    "While reading VTK file, unknown cell type encountered"));
-            }
-        }
-      else if (dim == 1)
-        {
-          for (unsigned int count = 0; count < n_geometric_objects; ++count)
-            {
-              unsigned int type;
-              in >> type;
-
-              AssertThrow(
-                cell_types[count] == 3 && type == 2,
-                ExcMessage(
-                  "While reading VTK file, unknown cell type encountered"));
-              cells.emplace_back(type);
-
-              for (unsigned int j = 0; j < type; ++j) // loop to feed data
-                in >> cells.back().vertices[j];
-
-              cells.back().material_id = 0;
-            }
-        }
-      else
-        AssertThrow(false,
+            else
+            AssertThrow(false,
                     ExcMessage(
                       "While reading VTK file, failed to find CELLS section"));
 
-      // Processing the CELL_TYPES section
+        // Processing the CELL_TYPES section
 
-      in >> keyword;
+        in >> keyword;
 
-      AssertThrow(
-        keyword == "CELL_TYPES",
-        ExcMessage(std::string(
-          "While reading VTK file, missing CELL_TYPES section. Found <" +
-          keyword + "> instead.")));
+        AssertThrow(
+            keyword == "CELL_TYPES",
+            ExcMessage(std::string(
+            "While reading VTK file, missing CELL_TYPES section. Found <" +
+            keyword + "> instead.")));
 
-      in >> n_ints;
-      AssertThrow(
-        n_ints == n_geometric_objects,
-        ExcMessage("The VTK reader found a CELL_DATA statement "
-                   "that lists a total of " +
-                   Utilities::int_to_string(n_ints) +
-                   " cell data objects, but this needs to "
-                   "equal the number of cells (which is " +
-                   Utilities::int_to_string(cells.size()) +
-                   ") plus the number of quads (" +
-                   Utilities::int_to_string(subcelldata.boundary_quads.size()) +
-                   " in 3d or the number of lines (" +
-                   Utilities::int_to_string(subcelldata.boundary_lines.size()) +
-                   ") in 2d."));
+        in >> n_ints;
 
-      int tmp_int;
-      for (unsigned int i = 0; i < n_ints; ++i)
-        in >> tmp_int;
+        bool condition;
+            if (vtk_version == "5.1")
+                condition = n_ints == n_points_per_cell.size();
+            else if (vtk_version == "3.0")
+                condition = n_ints == n_geometric_objects;
+        AssertThrow(
+            condition,
+            ExcMessage("The VTK reader found a CELL_DATA statement "
+                    "that lists a total of " +
+                    Utilities::int_to_string(n_ints) +
+                    " cell data objects, but this needs to "
+                    "equal the number of cells (which is " +
+                    Utilities::int_to_string(cells.size()) +
+                    ") plus the number of quads (" +
+                    Utilities::int_to_string(subcelldata.boundary_quads.size()) +
+                    " in 3d or the number of lines (" +
+                    Utilities::int_to_string(subcelldata.boundary_lines.size()) +
+                    ") in 2d."));
+
+        int tmp_int;
+        for (unsigned int i = 0; i < n_ints; ++i)
+            in >> tmp_int;
 
 
       // Processing the CELL_DATA and FIELD_DATA sections
 
-      // Ignore everything up to CELL_DATA
-      while (in >> keyword)
-        {
-          if (keyword == "CELL_DATA")
+        // Ignore everything up to CELL_DATA
+        while (in >> keyword)
             {
-              unsigned int n_ids;
-              in >> n_ids;
+            if (keyword == "CELL_DATA")
+                {
+                unsigned int n_ids;
+                in >> n_ids;
 
-              AssertThrow(
-                n_ids == n_geometric_objects,
-                ExcMessage(
-                  "The VTK reader found a CELL_DATA statement "
-                  "that lists a total of " +
-                  Utilities::int_to_string(n_ids) +
-                  " cell data objects, but this needs to "
-                  "equal the number of cells (which is " +
-                  Utilities::int_to_string(cells.size()) +
-                  ") plus the number of quads (" +
-                  Utilities::int_to_string(subcelldata.boundary_quads.size()) +
-                  " in 3d or the number of lines (" +
-                  Utilities::int_to_string(subcelldata.boundary_lines.size()) +
-                  ") in 2d."));
+                bool condition;
+                if (vtk_version == "5.1")
+                    condition = n_ids == n_points_per_cell.size();
+                else if (vtk_version == "3.0")
+                    condition = n_ids == n_geometric_objects;
+                AssertThrow(
+                    condition,
+                    ExcMessage(
+                    "The VTK reader found a CELL_DATA statement "
+                    "that lists a total of " +
+                    Utilities::int_to_string(n_ids) +
+                    " cell data objects, but this needs to "
+                    "equal the number of cells (which is " +
+                    Utilities::int_to_string(cells.size()) +
+                    ") plus the number of quads (" +
+                    Utilities::int_to_string(subcelldata.boundary_quads.size()) +
+                    " in 3d or the number of lines (" +
+                    Utilities::int_to_string(subcelldata.boundary_lines.size()) +
+                    ") in 2d."));
 
-              const std::vector<std::string> data_sets{"MaterialID",
-                                                       "ManifoldID"};
+                const std::vector<std::string> data_sets{"MaterialID",
+                                                        "ManifoldID"};
 
               in >> keyword;
               for (unsigned int i = 0; i < data_sets.size(); ++i)
@@ -528,7 +750,7 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
                         }
 
                       if (dim == 3)
-                        {
+                        {   
                           for (auto &boundary_quad : subcelldata.boundary_quads)
                             {
                               int id;
@@ -609,8 +831,13 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
                   in >> section_name;
                   in >> temp;
                   in >> n_ids;
-                  AssertThrow(
-                    n_ids == n_geometric_objects,
+                bool condition;
+                if (vtk_version == "5.1")
+                    condition = n_ids == n_points_per_cell.size();
+                else if (vtk_version == "3.0")
+                    condition = n_ids == n_geometric_objects;
+                AssertThrow(
+                    condition,
                     ExcMessage(
                       "The VTK reader found a FIELD statement "
                       "that lists a total of " +
@@ -651,8 +878,8 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
     AssertThrow(false,
                 ExcMessage(
                   "While reading VTK file, failed to find CELLS section"));
+    }
 }
-
 template <int dim, int spacedim>
 const std::map<std::string, Vector<double>> &
 GridIn<dim, spacedim>::get_cell_data() const
