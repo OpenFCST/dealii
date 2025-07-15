@@ -239,7 +239,7 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
 
     bool is_quad_or_hex_mesh = false;
     bool is_tria_or_tet_mesh = false;
-
+    
   if (keyword == "CELLS")
     {
       // jump to the `CELL_TYPES` section and read in cell types
@@ -615,7 +615,7 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
             AssertThrow(false,
                     ExcMessage(
                       "While reading VTK file, failed to find CELLS section"));
-
+        }
         // Processing the CELL_TYPES section
 
         in >> keyword;
@@ -711,12 +711,12 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
                       // (the last number is optional)
                       std::string line;
                       std::getline(in, line);
-                      AssertThrow(
-                        line.substr(1,
-                                    std::min(static_cast<std::size_t>(3),
-                                             line.size() - 1)) == "int",
-                        ExcMessage(
-                          "While reading VTK file, material- and manifold IDs can only have type 'int'."));
+                    //   AssertThrow(
+                    //     line.substr(1,
+                    //                 std::min(static_cast<std::size_t>(3),
+                    //                          line.size() - 1)) == "int",
+                    //     ExcMessage(
+                    //       "While reading VTK file, material- and manifold IDs can only have type 'int'."));
 
                       in >> keyword;
                       AssertThrow(
@@ -878,7 +878,7 @@ GridIn<dim, spacedim>::read_vtk(std::istream &in)
     AssertThrow(false,
                 ExcMessage(
                   "While reading VTK file, failed to find CELLS section"));
-    }
+    
 }
 template <int dim, int spacedim>
 const std::map<std::string, Vector<double>> &
